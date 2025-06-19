@@ -1,9 +1,9 @@
-import { ProviderResponse } from '@/types/ai-router.types';
+import { ProviderResponse } from "@/types/ai-router.types";
 
 export abstract class BaseProviderService {
   constructor(
     protected readonly name: string,
-    protected readonly costPer1K: number
+    protected readonly costPer1K: number,
   ) {}
 
   abstract makeRequest(prompt: string): Promise<ProviderResponse>;
@@ -12,16 +12,17 @@ export abstract class BaseProviderService {
     try {
       console.log(`[AI Router] Trying provider: ${this.name}`);
       const result = await this.makeRequest(prompt);
-      
+
       if (result.success) {
         console.log(`[AI Router] Used provider: ${this.name}`);
       }
-      
+
       return result;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
       console.warn(`[AI Router] Provider ${this.name} failed:`, errorMessage);
-      
+
       return {
         success: false,
         error: errorMessage,

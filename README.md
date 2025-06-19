@@ -53,7 +53,7 @@ Beacon is an interactive event chatbot app designed to enhance the attendee expe
 
 - [Node.js](https://nodejs.org/) (v20 or higher recommended)
 - [npm](https://www.npmjs.com/) (comes with Node.js)
-- (Optional) [Docker](https://www.docker.com/) 
+- (Optional) [Docker](https://www.docker.com/)
 
 ### Install Dependencies
 

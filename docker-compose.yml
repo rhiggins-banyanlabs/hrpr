@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   client:
@@ -9,10 +9,10 @@ services:
       - "3000:3000"
     volumes:
       - ./client:/app
-      - /app/node_modules   # Ensures host node_modules don’t overwrite container's
+      - /app/node_modules # Ensures host node_modules don’t overwrite container's
     environment:
       - NODE_ENV=development
-      - CHOKIDAR_USEPOLLING=true   # Important for file change detection in Docker
+      - CHOKIDAR_USEPOLLING=true # Important for file change detection in Docker
       - CHOKIDAR_INTERVAL=1000
     stdin_open: true
     tty: true

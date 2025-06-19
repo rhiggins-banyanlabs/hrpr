@@ -1,13 +1,19 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { AIRouterRequest, AIRouterResponse, Strategy } from '@/types/ai-router.types';
-import { ValidationUtils } from '@/utils/validation.utils';
-import { ResponseUtils } from '@/utils/response.utils';
-import { AIRouterService } from '@/services/ai-router.service';
+import { NextRequest, NextResponse } from "next/server";
+import {
+  AIRouterRequest,
+  AIRouterResponse,
+  Strategy,
+} from "@/types/ai-router.types";
+import { ValidationUtils } from "@/utils/validation.utils";
+import { ResponseUtils } from "@/utils/response.utils";
+import { AIRouterService } from "@/services/ai-router.service";
 
-export async function POST(req: NextRequest): Promise<NextResponse<AIRouterResponse>> {
+export async function POST(
+  req: NextRequest,
+): Promise<NextResponse<AIRouterResponse>> {
   try {
     const body: AIRouterRequest = await req.json();
-    const { prompt, strategy = 'balanced' } = body;
+    const { prompt, strategy = "balanced" } = body;
 
     // Validate input
     const promptError = ValidationUtils.validatePrompt(prompt);
@@ -21,7 +27,9 @@ export async function POST(req: NextRequest): Promise<NextResponse<AIRouterRespo
     }
 
     // Ensure strategy is valid type
-    const validStrategy = ValidationUtils.isValidStrategy(strategy) ? strategy : 'balanced';
+    const validStrategy = ValidationUtils.isValidStrategy(strategy)
+      ? strategy
+      : "balanced";
 
     // Route the request
     const aiRouter = new AIRouterService();
@@ -29,7 +37,11 @@ export async function POST(req: NextRequest): Promise<NextResponse<AIRouterRespo
 
     return ResponseUtils.createSuccessResponse(result);
   } catch (error) {
-    console.error('[AI Router] Unexpected error:', error);
-    return ResponseUtils.createErrorResponse('Internal server error', 'balanced', 500);
+    console.error("[AI Router] Unexpected error:", error);
+    return ResponseUtils.createErrorResponse(
+      "Internal server error",
+      "balanced",
+      500,
+    );
   }
 }

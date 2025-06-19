@@ -13,15 +13,16 @@ export interface AIRouterResponse {
   logs: LogEntry[];
   strategy: string;
   error?: string;
-  cost?: number;              // ← Add this
-  tokensUsed?: {              // ← Add this
+  cost?: number; // ← Add this
+  tokensUsed?: {
+    // ← Add this
     input: number;
     output: number;
     total: number;
   };
 }
 
-export type Strategy = 'cheap' | 'quality' | 'balanced';
+export type Strategy = "cheap" | "quality" | "balanced";
 
 export interface AIRouterRequest {
   prompt: string;
@@ -32,6 +33,6 @@ export interface ProviderResponse {
   success: boolean;
   data?: string;
   error?: string;
-  inputTokens?: number;    // ← Add this
-  outputTokens?: number;   // ← Add this
+  inputTokens?: number; // ← Add this
+  outputTokens?: number; // ← Add this
 }
