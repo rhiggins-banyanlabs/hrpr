@@ -8,11 +8,11 @@ interface SuggestedQuestionsProps {
 
 const questions = [
   "What is AIDA and how does it work?",
-  "Can you show me a live demo of AIDA?",
-  "What makes AIDA different from other AI assistants?",
+  "Can you tell me about the technology behind AIDA?",
+  "What time is the keynote?",
   "How could AIDA help my organization?",
-  "Is AIDA customizable for different industries?",
-  "Tell me about the technology behind AIDA."
+  "Can you tell me about the conference?",
+  "What speakers are at the conference?"
 ];
 
 export const SuggestedQuestions = ({ onSelect }: SuggestedQuestionsProps) => {
