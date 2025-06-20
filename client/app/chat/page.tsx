@@ -9,6 +9,8 @@ import { ChatMessages } from "@/components/ChatMessages";
 import { ChatInput } from "@/components/ChatInput";
 import VoiceInput from "@/components/VoiceInput";
 import { OpenAIVoice } from "@/types/voice.types";
+import Waves from "@/components/waves";
+import { SuggestedQuestions } from "@/components/SuggestedQuestions";
 
 export default function ChatPage() {
   const router = useRouter();
@@ -121,11 +123,24 @@ export default function ChatPage() {
     
     await sendMessage(message);
   }, [sendMessage, isVoiceInputActive]);
+  
 
   return (
     <div className="relative h-screen w-screen overflow-hidden flex flex-col bg-black">
       {/* Removed Waves component as requested */}
-
+      <Waves
+        lineColor="rgba(79, 70, 229, 0.6)"
+        backgroundColor="black"
+        waveSpeedX={0.02}
+        waveSpeedY={0.01}
+        waveAmpX={40}
+        waveAmpY={20}
+        friction={0.9}
+        tension={0.01}
+        maxCursorMove={120}
+        xGap={12}
+        yGap={36}
+      />
       {/* Header */}
       <div className="relative z-10 flex items-center justify-between p-4 bg-black/20 backdrop-blur-sm border-b border-indigo-500/20">
         <button

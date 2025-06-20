@@ -1,7 +1,7 @@
-// components/ChatInput.tsx
 import { useState, useCallback, useEffect } from 'react';
 import { VoiceSelector } from "@/components/VoiceSelector";
 import { MicrophoneButton } from "@/components/MicrophoneButton";
+import { SuggestedQuestions } from "@/components/SuggestedQuestions";
 import { OpenAIVoice } from "@/types/voice.types";
 
 interface ChatInputProps {
@@ -9,8 +9,8 @@ interface ChatInputProps {
   isProcessing: boolean;
   isVoiceInputActive: boolean;
   onVoiceInputToggle: () => void;
-  selectedVoice: OpenAIVoice; // Changed from string to OpenAIVoice
-  onVoiceChange: (voice: OpenAIVoice) => void; // Changed from string to OpenAIVoice
+  selectedVoice: OpenAIVoice;
+  onVoiceChange: (voice: OpenAIVoice) => void;
   voiceTranscript?: string;
 }
 
@@ -25,7 +25,6 @@ export const ChatInput = ({
 }: ChatInputProps) => {
   const [input, setInput] = useState("");
 
-  // Update input when voice transcript changes
   useEffect(() => {
     if (isVoiceInputActive && voiceTranscript) {
       setInput(voiceTranscript);
@@ -41,8 +40,15 @@ export const ChatInput = ({
     onSubmit(message);
   }, [input, isProcessing, onSubmit]);
 
+  // New: handle suggested question click
+  const handleSuggestedClick = (question: string) => {
+    setInput("");
+    onSubmit(question);
+  };
+
   return (
     <div className="relative z-10 p-4 bg-black/20 backdrop-blur-sm border-t border-indigo-500/20">
+
       {/* Mobile Voice Selector */}
       <div className="md:hidden mb-3 flex justify-center">
         <VoiceSelector 
@@ -50,6 +56,9 @@ export const ChatInput = ({
           onVoiceChange={onVoiceChange}
         />
       </div>
+
+      {/* Suggested Questions */}
+      <SuggestedQuestions onSelect={handleSuggestedClick} />
 
       <form onSubmit={handleSubmit} className="flex gap-2">
         <input
@@ -81,7 +90,6 @@ export const ChatInput = ({
         </button>
       </form>
 
-      {/* Voice Input Status */}
       {isVoiceInputActive && (
         <div className="mt-2 text-green-400 text-sm animate-pulse text-center">
           🎤 Listening... (auto-sends after 2 seconds of silence)
