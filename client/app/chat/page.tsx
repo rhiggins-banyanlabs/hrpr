@@ -2,15 +2,13 @@
 
 import { useEffect, useRef, useCallback, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useVoice } from "@/hooks/useVoice";
-import { useChat } from "@/hooks/useChat";
+import { useOptimizedVoice } from "@/hooks/useOptimizedVoice"; // Use optimized TTS
+import { useChat } from "@/hooks/useChat"; // Your existing chat hook
 import { VoiceSelector } from "@/components/VoiceSelector";
 import { ChatMessages } from "@/components/ChatMessages";
 import { ChatInput } from "@/components/ChatInput";
 import VoiceInput from "@/components/VoiceInput";
-import { OpenAIVoice } from "@/types/voice.types";
 import Waves from "@/components/waves";
-import { SuggestedQuestions } from "@/components/SuggestedQuestions";
 
 export default function ChatPage() {
   const router = useRouter();
@@ -21,7 +19,7 @@ export default function ChatPage() {
   const [voiceTranscript, setVoiceTranscript] = useState("");
   
   // Your existing hooks (keeping your separation of concerns)
-  const { speakText, isSpeaking, selectedVoice, setSelectedVoice, unlockAudio } = useVoice();
+  const { speakText, isSpeaking, selectedVoice, setSelectedVoice, unlockAudio } = useOptimizedVoice();
   
   const {
     messages,
@@ -39,7 +37,7 @@ export default function ChatPage() {
   const hasPlayedIntroRef = useRef(false);
   const isProcessingVoiceQueryRef = useRef(false);
 
-  console.log("🏗️ Chat page component rendered - messages:", messages.length);
+  console.log("🏗️ Optimized Chat page - messages:", messages.length);
 
   // Voice handlers (keeping your exact pattern)
   const handleVoiceTranscript = useCallback((transcript: string, isInterim: boolean) => {
@@ -123,11 +121,9 @@ export default function ChatPage() {
     
     await sendMessage(message);
   }, [sendMessage, isVoiceInputActive]);
-  
 
   return (
     <div className="relative h-screen w-screen overflow-hidden flex flex-col bg-black">
-      {/* Removed Waves component as requested */}
       <Waves
         lineColor="rgba(79, 70, 229, 0.6)"
         backgroundColor="black"
@@ -141,6 +137,7 @@ export default function ChatPage() {
         xGap={12}
         yGap={36}
       />
+
       {/* Header */}
       <div className="relative z-10 flex items-center justify-between p-4 bg-black/20 backdrop-blur-sm border-b border-indigo-500/20">
         <button
@@ -169,6 +166,7 @@ export default function ChatPage() {
         <div className="md:hidden w-16"></div>
       </div>
 
+
       {/* Messages - Using your separated component */}
       <ChatMessages 
         messages={messages}
@@ -195,6 +193,7 @@ export default function ChatPage() {
         isListening={isVoiceInputActive}
         onListeningChange={setIsVoiceInputActive}
       />
+
     </div>
   );
 }

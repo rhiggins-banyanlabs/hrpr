@@ -1,13 +1,13 @@
-// hooks/useVoice.ts
+// hooks/useOptimizedVoice.ts - FASTER TTS VERSION
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { OpenAIVoice } from '@/types/voice.types';
 
-export const useVoice = () => {
+export const useOptimizedVoice = () => {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [selectedVoice, setSelectedVoice] = useState<OpenAIVoice>('shimmer');
-  const [isVoiceInputActive, setIsVoiceInputActive] = useState(false);
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const audioUnlockedRef = useRef(false);
+  const audioCache = useRef<Map<string, string>>(new Map()); // Cache audio URLs
 
   // Unlock audio on user interaction (mobile requirement)
   const unlockAudio = useCallback(async () => {
@@ -35,85 +35,89 @@ export const useVoice = () => {
     setIsSpeaking(false);
   }, []);
 
-  // Calculate speech duration using character count estimation
+  // Calculate speech duration using character count estimation (much faster than waiting for metadata)
   const estimateDuration = useCallback((text: string): number => {
-    // Average speaking rate: ~200-250 words per minute (faster)
-    // Average word length: ~5 characters
-    // Adding pauses for punctuation
-    const wordsPerMinute = 225; // Increased from 175
+    const wordsPerMinute = 250; // Faster speech
     const charactersPerWord = 5;
     const wordsPerSecond = wordsPerMinute / 60;
     
-    // Count words and add extra time for punctuation
     const wordCount = text.split(/\s+/).length;
     const punctuationCount = (text.match(/[.!?,:;]/g) || []).length;
     
-    // Base duration + extra pause time for punctuation
     const baseDuration = wordCount / wordsPerSecond;
-    const punctuationPause = punctuationCount * 0.2; // Reduced from 0.3 to 0.2 seconds
+    const punctuationPause = punctuationCount * 0.15; // Reduced pause
     
     return Math.max(1, baseDuration + punctuationPause);
   }, []);
 
-  // Enhanced TTS with proper duration handling
-  const speakWithStreamingTTS = useCallback(async (
+  // OPTIMIZED: Parallel TTS with instant response and caching
+  const speakWithOptimizedTTS = useCallback(async (
     text: string, 
     voice: OpenAIVoice = selectedVoice,
-    speed: number = 1.2 // Increased default speed from 1.0 to 1.2
+    speed: number = 1.3 // Faster default speed
   ) => {
-    console.log('🔊 TTS Request:', { text: text.substring(0, 50), voice, speed });
+    console.log('🔊 Optimized TTS Request:', { text: text.substring(0, 50), voice, speed });
+    
+    // Check cache first
+    const cacheKey = `${text}-${voice}-${speed}`;
+    if (audioCache.current.has(cacheKey)) {
+      console.log('🚀 Using cached audio');
+      const cachedUrl = audioCache.current.get(cacheKey)!;
+      const audio = new Audio(cachedUrl);
+      const estimatedDuration = estimateDuration(text);
+      return { audio, duration: estimatedDuration };
+    }
     
     try {
-      const res = await fetch('/api/tts', {
+      // Start TTS request
+      const ttsPromise = fetch('/api/tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, voice, speed }),
+        body: JSON.stringify({ 
+          text, 
+          voice, 
+          speed,
+          model: 'tts-1' // Use faster model instead of tts-1-hd
+        }),
       });
 
+      // Get estimated duration immediately (don't wait for TTS)
+      const estimatedDuration = estimateDuration(text);
+      console.log('🕐 Estimated duration:', estimatedDuration);
+
+      // Wait for TTS to complete
+      const res = await ttsPromise;
+      
       if (!res.ok) {
         console.error(`TTS API error: ${res.status} ${res.statusText}`);
         throw new Error(`TTS error: ${res.status}`);
       }
 
       const blob = await res.blob();
-      console.log('🔊 TTS blob size:', blob.size);
+      console.log('🔊 TTS Success:', { voice, audioSize: blob.size });
 
       if (blob.size === 0) {
         throw new Error('Empty audio response');
       }
 
       const audioUrl = URL.createObjectURL(blob);
+      
+      // Cache the audio URL
+      audioCache.current.set(cacheKey, audioUrl);
+      
+      // Clean cache if too large (keep last 20 items)
+      if (audioCache.current.size > 20) {
+        const entries = Array.from(audioCache.current.entries());
+        audioCache.current.clear();
+        entries.slice(-10).forEach(([key, value]) => {
+          audioCache.current.set(key, value);
+        });
+      }
+
       const audio = new Audio(audioUrl);
       
-      // Estimate duration while audio metadata loads
-      const estimatedDuration = estimateDuration(text);
-      console.log('🕐 Estimated duration:', estimatedDuration);
-
-      return new Promise<{ audio: HTMLAudioElement; duration: number }>((resolve, reject) => {
-        // Set up audio event handlers
-        audio.onloadedmetadata = () => {
-          const actualDuration = audio.duration || estimatedDuration;
-          console.log('🕐 Audio metadata loaded, actual duration:', actualDuration);
-          resolve({ audio, duration: actualDuration });
-        };
-
-        audio.onerror = (error) => {
-          console.error('🔊 Audio error:', error);
-          URL.revokeObjectURL(audioUrl);
-          reject(new Error('Audio playback failed'));
-        };
-
-        // Fallback - if metadata doesn't load within 500ms, use estimation
-        setTimeout(() => {
-          if (audio.readyState < 1) {
-            console.log('🕐 Using estimated duration due to metadata delay');
-            resolve({ audio, duration: estimatedDuration });
-          }
-        }, 500);
-
-        // Load the audio
-        audio.load();
-      });
+      // Return immediately with estimated duration (don't wait for metadata)
+      return { audio, duration: estimatedDuration };
 
     } catch (error) {
       console.error('🔊 TTS error:', error);
@@ -121,7 +125,7 @@ export const useVoice = () => {
     }
   }, [selectedVoice, estimateDuration]);
 
-  // Main speak function
+  // OPTIMIZED: Main speak function with instant start
   const speakText = useCallback(async (
     text: string,
     voice?: OpenAIVoice,
@@ -142,17 +146,18 @@ export const useVoice = () => {
     try {
       setIsSpeaking(true);
       
-      const result = await speakWithStreamingTTS(text, voice, speed);
+      // Get audio and estimated duration immediately
+      const result = await speakWithOptimizedTTS(text, voice, speed);
       currentAudioRef.current = result.audio;
 
       // Set up audio end handler
       result.audio.onended = () => {
         setIsSpeaking(false);
         currentAudioRef.current = null;
-        URL.revokeObjectURL(result.audio.src);
+        // Don't revoke URL immediately to keep in cache
       };
 
-      // Start playback
+      // Start playback immediately
       await result.audio.play();
       console.log('🔊 Audio playback started');
 
@@ -163,7 +168,7 @@ export const useVoice = () => {
       console.error('🔊 speakText error:', error);
       throw error;
     }
-  }, [unlockAudio, stopSpeaking, speakWithStreamingTTS]);
+  }, [unlockAudio, stopSpeaking, speakWithOptimizedTTS]);
 
   // Test voice function
   const testVoice = useCallback(async (voice: OpenAIVoice) => {
@@ -179,6 +184,9 @@ export const useVoice = () => {
   useEffect(() => {
     return () => {
       stopSpeaking();
+      // Clean up cached URLs
+      audioCache.current.forEach(url => URL.revokeObjectURL(url));
+      audioCache.current.clear();
     };
   }, [stopSpeaking]);
 
@@ -186,8 +194,6 @@ export const useVoice = () => {
     isSpeaking,
     selectedVoice,
     setSelectedVoice,
-    isVoiceInputActive,
-    setIsVoiceInputActive,
     speakText,
     stopSpeaking,
     testVoice,
