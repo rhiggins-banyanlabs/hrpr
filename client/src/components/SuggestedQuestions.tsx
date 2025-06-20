@@ -34,7 +34,9 @@ export const SuggestedQuestions = ({ onSelect }: SuggestedQuestionsProps) => {
             transform 
             hover:scale-105 
             active:scale-95 
-            hover:bg-white/10"
+            hover:bg-white/10
+            cursor-pointer
+            "
         >
           {question}
         </button>

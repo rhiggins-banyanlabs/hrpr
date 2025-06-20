@@ -145,7 +145,7 @@ export default function ChatPage() {
       <div className="relative z-10 flex items-center justify-between p-4 bg-black/20 backdrop-blur-sm border-b border-indigo-500/20">
         <button
           onClick={handleBackToHome}
-          className="text-indigo-400 hover:text-indigo-300 transition-colors"
+          className="text-indigo-400 hover:text-indigo-300 transition-colors cursor-pointer"
         >
           ← Back to Home
         </button>

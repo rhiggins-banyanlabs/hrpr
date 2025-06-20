@@ -48,7 +48,7 @@ export const VoiceButton: React.FC<VoiceButtonProps> = ({
     <button
       onClick={onToggle}
       disabled={connieDetected}
-      className={`group relative flex items-center justify-center gap-3 bg-gradient-to-r from-indigo-600 via-purple-600 to-blue-500 text-white py-4 px-8 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 ${
+      className={`group relative flex items-center justify-center gap-3 bg-gradient-to-r from-indigo-600 via-purple-600 to-blue-500 text-white py-4 px-8 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer ${
         connieDetected ? "opacity-70 cursor-not-allowed" : "hover:scale-105"
       }`}
     >

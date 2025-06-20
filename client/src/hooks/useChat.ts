@@ -1,4 +1,4 @@
-// hooks/useChat.ts
+// hooks/useChat.ts - OPTIMIZED VERSION
 import { useState, useRef, useCallback } from 'react';
 
 interface Message {
@@ -8,6 +8,10 @@ interface Message {
   timestamp: Date;
   isTyping?: boolean;
 }
+
+// Response cache for faster repeated questions
+const responseCache = new Map<string, { response: string; timestamp: number }>();
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 export const useChat = ({ speakText, unlockAudio }: { 
   speakText?: (text: string) => Promise<any>;
@@ -21,62 +25,47 @@ export const useChat = ({ speakText, unlockAudio }: {
   const mountedRef = useRef(true);
   const hasIntroSentRef = useRef(false);
 
-  console.log('🏠 useChat render - messages:', messages.length, messages.map(m => `${m.sender}: ${m.text.substring(0, 20)}...`));
+  console.log('🏠 useChat render - messages:', messages.length);
 
   mountedRef.current = true;
 
-  // Enhanced typing effect with voice synchronization
+  // OPTIMIZED: Faster typing effect
   const showTypingEffect = async (text: string, withVoice: boolean = false) => {
-    console.log('🔤 Starting typing effect for:', text.substring(0, 30));
+    console.log('🔤 Fast typing effect for:', text.substring(0, 30));
     
     if (withVoice && speakText) {
-      console.log('🔊 Starting voice and showing thinking dots...');
-      
-      // Show thinking dots while voice loads
+      console.log('🔊 Starting voice...');
       setIsBotThinking(true);
       setIsBotTyping(false);
       setTypingBotMsg(null);
       
-      // Start voice and get the audio object
-      const voiceResult = await speakText(text);
+      // Start voice in parallel with typing preparation
+      const voicePromise = speakText(text);
       
-      // Stop thinking dots, prepare for typing
+      // Don't wait for voice metadata - start typing immediately
       setIsBotThinking(false);
       setIsBotTyping(true);
       setTypingBotMsg('');
       
-      if (voiceResult && voiceResult.audio) {
-        // Wait for the audio to actually start playing
-        await new Promise<void>((resolve) => {
-          const audio = voiceResult.audio;
-          
-          const onPlay = () => {
-            console.log('🎵 Audio playing - starting typing');
-            audio.removeEventListener('play', onPlay);
-            resolve();
-          };
-          
-          audio.addEventListener('play', onPlay);
-          
-          // Fallback timeout
-          setTimeout(() => {
-            console.log('⏰ Audio timeout - starting typing anyway');
-            audio.removeEventListener('play', onPlay);
-            resolve();
-          }, 100);
-        });
-      }
+      // Wait minimal time for voice to start
+      setTimeout(async () => {
+        try {
+          await voicePromise;
+        } catch (error) {
+          console.log('🔊 Voice failed, continuing with typing:', error);
+        }
+      }, 50);
+      
     } else {
-      // No voice, start typing immediately
       setIsBotTyping(true);
       setTypingBotMsg('');
     }
     
-    // Start typing animation
+    // OPTIMIZED: Much faster typing (30ms instead of 50ms)
     return new Promise<void>((resolve) => {
       let currentText = '';
       let charIndex = 0;
-      const charDelay = 50; // Faster typing
+      const charDelay = 30; // Faster typing
       
       const typeNextChar = () => {
         if (charIndex < text.length) {
@@ -85,8 +74,7 @@ export const useChat = ({ speakText, unlockAudio }: {
           charIndex++;
           setTimeout(typeNextChar, charDelay);
         } else {
-          // Finished typing
-          console.log('✅ Typing effect completed');
+          console.log('✅ Fast typing completed');
           setIsBotTyping(false);
           setTypingBotMsg(null);
           resolve();
@@ -97,11 +85,10 @@ export const useChat = ({ speakText, unlockAudio }: {
     });
   };
 
-  // CRITICAL FIX: Use callback that maintains proper state
+  // OPTIMIZED: Check cache first, shorter prompts, parallel processing
   const sendMessage = useCallback(async (text: string) => {
-    console.log('📨 ===== SEND MESSAGE STARTED =====');
-    console.log('📨 Message text:', text);
-    console.log('📨 Current messages before send:', messages.length);
+    console.log('📨 ===== OPTIMIZED SEND MESSAGE =====');
+    const startTime = performance.now();
     
     if (isProcessingRef.current || !text.trim()) {
       console.log('⏹️ Skipping - already processing or empty text');
@@ -116,11 +103,11 @@ export const useChat = ({ speakText, unlockAudio }: {
     isProcessingRef.current = true;
     console.log('🔒 Set processing to true');
 
-    // Unlock audio for voice playback
-    await unlockAudio();
+    // OPTIMIZATION 1: Pre-unlock audio (don't await)
+    unlockAudio().catch(console.error);
 
     try {
-      // Create user message
+      // OPTIMIZATION 2: Create and add user message immediately
       const userMsg: Message = {
         id: `user_${Date.now()}`,
         sender: "user",
@@ -128,56 +115,74 @@ export const useChat = ({ speakText, unlockAudio }: {
         timestamp: new Date(),
       };
 
-      console.log('👤 Creating user message:', userMsg);
-
-      // CRITICAL: Add user message first and wait for state update
-      await new Promise<void>((resolve) => {
-        setMessages(prevMessages => {
-          const newMessages = [...prevMessages, userMsg];
-          console.log('👤 ✅ USER MESSAGE ADDED TO STATE');
-          console.log('👤 Previous count:', prevMessages.length);
-          console.log('👤 New count:', newMessages.length);
-          console.log('👤 User message:', userMsg.text);
-          setTimeout(resolve, 0); // Ensure state update completes
-          return newMessages;
-        });
+      console.log('👤 Adding user message immediately');
+      setMessages(prevMessages => {
+        const newMessages = [...prevMessages, userMsg];
+        console.log('👤 ✅ USER MESSAGE ADDED - Count:', newMessages.length);
+        return newMessages;
       });
+
+      // OPTIMIZATION 3: Check cache first
+      const cacheKey = text.toLowerCase().trim();
+      const cached = responseCache.get(cacheKey);
+      const now = Date.now();
       
-      console.log('👤 User message state update completed');
-      
-      // Show thinking dots
-      console.log('🤔 Starting thinking state...');
+      if (cached && (now - cached.timestamp) < CACHE_DURATION) {
+        console.log('🚀 CACHE HIT! Using cached response');
+        
+        // Use cached response immediately
+        const botMsg: Message = {
+          id: `connie_${Date.now()}`,
+          sender: "connie",
+          text: cached.response,
+          timestamp: new Date(),
+        };
+
+        // Show fast typing effect
+        await showTypingEffect(cached.response, true);
+        
+        setMessages(prevMessages => [...prevMessages, botMsg]);
+        
+        const totalTime = performance.now() - startTime;
+        console.log(`🚀 CACHED RESPONSE TIME: ${totalTime.toFixed(0)}ms`);
+        return;
+      }
+
+      // Show thinking dots for API call
       setIsBotThinking(true);
 
-      // Create conference-specific prompt
-      const conniePrompt = `You are Connie, a helpful and friendly conference assistant. You help attendees with conference information including schedules, speakers, locations, food, networking events, and general conference amenities.
+      // OPTIMIZATION 4: Much shorter, optimized prompt
+      const conniePrompt = `You're Connie, a friendly conference assistant.
 
-Conference Context:
-- Main sessions: 9 AM - 5 PM daily
-- Networking breaks: 11 AM and 3 PM  
-- Keynote: 2 PM in main auditorium
-- Lunch: 12 PM - 1 PM in main dining hall
-- Location: Grand Convention Center, 123 Conference Ave
-- Multiple floors with different session tracks
-- Food options include vegetarian, vegan, and gluten-free
-- Coffee and snacks available throughout the day
+Conference Info:
+- Sessions: 9 AM-5 PM
+- Breaks: 11 AM, 3 PM
+- Keynote: 2 PM main auditorium
+- Lunch: 12-1 PM dining hall
+- Location: Grand Convention Center
 
-User Question: ${text}
+Question: ${text}
 
-Provide a helpful, friendly response as Connie. Be conversational and personable while being informative. Keep responses under 500 characters.`;
+Give a helpful, conversational response under 300 characters.`;
 
-      // Get bot response
-      console.log('🌐 Fetching bot response...');
+      // OPTIMIZATION 5: Start API call with optimized settings
+      console.log('🌐 Fast API call...');
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
       
       const response = await fetch('/api/ai-router', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           prompt: conniePrompt,
-          strategy: 'balanced'
+          strategy: 'fast', // Use fast strategy if available
+          maxTokens: 150,   // Limit tokens for faster response
+          temperature: 0.7  // Lower temperature for faster generation
         }),
+        signal: controller.signal
       });
 
+      clearTimeout(timeoutId);
       const data = await response.json();
       
       if (!response.ok) {
@@ -188,8 +193,28 @@ Provide a helpful, friendly response as Connie. Be conversational and personable
         throw new Error('No response received from AI router');
       }
 
-      console.log('✅ Got bot response:', data.response.substring(0, 50) + '...');
+      const apiTime = performance.now() - startTime;
+      console.log(`🌐 API Response time: ${apiTime.toFixed(0)}ms`);
 
+      // OPTIMIZATION 6: Cache the response
+      responseCache.set(cacheKey, {
+        response: data.response,
+        timestamp: now
+      });
+
+      // Clean old cache entries (keep cache size manageable)
+      if (responseCache.size > 50) {
+        const entries = Array.from(responseCache.entries());
+        entries.sort((a, b) => b[1].timestamp - a[1].timestamp);
+        responseCache.clear();
+        entries.slice(0, 30).forEach(([key, value]) => {
+          responseCache.set(key, value);
+        });
+      }
+
+      // OPTIMIZATION 7: Start typing immediately (don't wait for voice)
+      const typingPromise = showTypingEffect(data.response, true);
+      
       // Create bot message
       const botMsg: Message = {
         id: `connie_${Date.now()}`,
@@ -198,29 +223,25 @@ Provide a helpful, friendly response as Connie. Be conversational and personable
         timestamp: new Date(),
       };
 
-      console.log('🤖 Created bot message');
-
-      // Show typing effect with voice
-      console.log('🎭 Starting typing effect...');
-      await showTypingEffect(data.response, true);
+      // Wait for typing to complete, then add message
+      await typingPromise;
       
-      // Add bot message to state
-      console.log('💬 Adding bot message to state...');
       setMessages(prevMessages => {
         const newMessages = [...prevMessages, botMsg];
-        console.log('💬 ✅ BOT MESSAGE ADDED TO STATE');
-        console.log('💬 Final message count:', newMessages.length);
+        console.log('💬 ✅ BOT MESSAGE ADDED - Count:', newMessages.length);
         return newMessages;
       });
 
-      console.log('🤖 Response generated by:', data.provider);
+      const totalTime = performance.now() - startTime;
+      console.log(`🚀 TOTAL RESPONSE TIME: ${totalTime.toFixed(0)}ms`);
+      console.log('🤖 Response by:', data.provider);
 
     } catch (err) {
       console.error('❌ Error in sendMessage:', err);
       
       const errorMessage = err instanceof Error 
-        ? `Sorry, I'm having trouble connecting right now. ${err.message}` 
-        : "Sorry, there was an error processing your message. Please try again.";
+        ? `Sorry, I'm having trouble connecting. ${err.message}` 
+        : "Sorry, there was an error. Please try again.";
         
       const errorMsg: Message = {
         id: `error_${Date.now()}`,
@@ -232,19 +253,18 @@ Provide a helpful, friendly response as Connie. Be conversational and personable
       setMessages(prevMessages => [...prevMessages, errorMsg]);
     } finally {
       if (mountedRef.current) {
-        console.log('🧹 Cleaning up...');
         setIsBotThinking(false);
         setIsBotTyping(false);
         setTypingBotMsg(null);
       }
       isProcessingRef.current = false;
-      console.log('🏁 ===== SEND MESSAGE COMPLETED =====');
+      console.log('🏁 ===== OPTIMIZED SEND COMPLETED =====');
     }
-  }, [speakText, unlockAudio]); // Remove messages dependency to prevent stale closures
+  }, [speakText, unlockAudio]);
 
-  // Send bot message directly (for intro)
+  // OPTIMIZED: Faster intro message
   const sendBotMessage = useCallback(async (text: string) => {
-    console.log('🤖 sendBotMessage called:', text.substring(0, 30));
+    console.log('🤖 Fast sendBotMessage:', text.substring(0, 30));
     
     const botMsg: Message = {
       id: `bot_${Date.now()}`,
@@ -253,35 +273,31 @@ Provide a helpful, friendly response as Connie. Be conversational and personable
       timestamp: new Date(),
     };
     
-    // Apply typing effect with voice
+    // Fast typing effect
     await showTypingEffect(text, true);
     
-    // Add to messages
     setMessages(prevMessages => {
       const newMessages = [...prevMessages, botMsg];
-      console.log('🤖 ✅ INTRO MESSAGE ADDED TO STATE');
-      console.log('🤖 Message count:', newMessages.length);
+      console.log('🤖 ✅ INTRO MESSAGE ADDED');
       return newMessages;
     });
   }, [speakText]);
 
-  // Send intro message with proper tracking
   const sendIntroMessage = useCallback(() => {
     console.log('🚀 sendIntroMessage called');
-    console.log('🚀 hasIntroSentRef:', hasIntroSentRef.current);
     
     if (!hasIntroSentRef.current) {
       console.log('🚀 ✅ Sending intro message');
       hasIntroSentRef.current = true;
       
-      const introText = "Hi, I'm Connie, your personal conference assistant. What would you like to ask me? If you need help coming up with a question, there are some suggestions you can choose from below.";
+      // OPTIMIZED: Shorter intro message
+      const introText = "Hi! I'm Connie, your conference assistant. What can I help you with?";
       sendBotMessage(introText);
     } else {
       console.log('🚀 ❌ Intro already sent, skipping');
     }
   }, [sendBotMessage]);
 
-  // Stop typing function
   const stopTyping = useCallback(() => {
     setIsBotTyping(false);
     setTypingBotMsg(null);

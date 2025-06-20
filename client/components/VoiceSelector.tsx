@@ -55,7 +55,7 @@ export const VoiceSelector: React.FC<VoiceSelectorProps> = ({
       {/* Voice Selector Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-4 py-2 bg-gray-800/50 text-white rounded-xl hover:bg-gray-700/50 transition-all duration-300 border border-indigo-500/30"
+        className="flex items-center gap-2 px-4 py-2 bg-gray-800/50 text-white rounded-xl hover:bg-gray-700/50 transition-all duration-300 border border-indigo-500/30 cursor-pointer"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"

@@ -69,7 +69,7 @@ export default function Home() {
             <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-indigo-400/70 via-purple-500/70 to-blue-400/70">
               Connie
             </h1>
-            <p className="text-sm sm:text-base mt-2 text-transparent bg-clip-text bg-gradient-to-r from-indigo-300/70 via-purple-300/70 to-blue-300/70">
+            <p className="text-sm sm:text-base mt-2 text-transparent bg-clip-text bg-gradient-to-r from-indigo-300/70 via-purple-300/70 to-blue-300/70 ">
               Sleep Mode - Say "Hey Connie" to wake
             </p>
           </div>
@@ -116,7 +116,7 @@ export default function Home() {
 
               <button
                 onClick={sleepActions.exitSleepMode}
-                className="flex items-center gap-2 px-4 py-2 bg-purple-600/50 text-white rounded-xl hover:bg-purple-600/70 transition-all duration-300"
+                className="flex items-center gap-2 px-4 py-2 bg-purple-600/50 text-white rounded-xl hover:bg-purple-600/70 transition-all duration-300 cursor-pointer"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"

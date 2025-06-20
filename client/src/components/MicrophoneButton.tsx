@@ -23,7 +23,7 @@ export const MicrophoneButton: React.FC<MicrophoneButtonProps> = ({
   const buttonState = getButtonState();
 
   const getButtonStyles = () => {
-    const baseStyles = "p-2 rounded-lg transition-all duration-200 flex items-center justify-center";
+    const baseStyles = "p-2 rounded-lg transition-all duration-200 flex items-center justify-center cursor-pointer";
     
     switch (buttonState) {
       case 'recording':
