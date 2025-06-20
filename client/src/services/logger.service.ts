@@ -1,9 +1,14 @@
-import { LogEntry, Strategy } from '@/types/ai-router.types';
+import { LogEntry, Strategy } from "@/types/ai-router.types";
 
 export class LoggerService {
   private logs: LogEntry[] = [];
 
-  addSuccessLog(provider: string, duration: number, costPer1K: number, strategy: Strategy): void {
+  addSuccessLog(
+    provider: string,
+    duration: number,
+    costPer1K: number,
+    strategy: Strategy,
+  ): void {
     this.logs.push({
       provider,
       duration,
