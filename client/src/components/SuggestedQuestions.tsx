@@ -4,6 +4,8 @@ import React from "react";
 
 interface SuggestedQuestionsProps {
   onSelect: (question: string) => void;
+  isConversationStarted: boolean;
+  isConnieSpeaking?: boolean; // New prop
 }
 
 const questions = [
@@ -15,14 +17,20 @@ const questions = [
   "What speakers are at the conference?"
 ];
 
-export const SuggestedQuestions = ({ onSelect }: SuggestedQuestionsProps) => {
+export const SuggestedQuestions = ({ onSelect, isConversationStarted, isConnieSpeaking = false }: SuggestedQuestionsProps) => {
+  // Don't render anything if conversation has started
+  if (isConversationStarted) {
+    return null;
+  }
+
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-4">
       {questions.map((question, idx) => (
         <button
           key={idx}
           onClick={() => onSelect(question)}
-          className="
+          disabled={isConnieSpeaking} // Disable buttons while Connie is speaking
+          className={`
             bg-gradient-to-br from-blue-500/60 via-indigo-500/60 to-purple-500/60
             backdrop-blur-md
             border border-indigo-400/60
@@ -36,7 +44,11 @@ export const SuggestedQuestions = ({ onSelect }: SuggestedQuestionsProps) => {
             active:scale-95 
             hover:bg-white/10
             cursor-pointer
-            "
+            disabled:opacity-50
+            disabled:cursor-not-allowed
+            disabled:hover:scale-100
+            ${isConnieSpeaking ? 'pointer-events-none' : ''}
+            `}
         >
           {question}
         </button>
