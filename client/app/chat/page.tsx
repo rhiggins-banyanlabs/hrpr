@@ -45,6 +45,23 @@ export default function ChatPage() {
     setVoiceTranscript(transcript);
   }, []);
 
+  // Format message: capitalize first letter and add question mark if needed
+  const formatMessage = (message: string) => {
+    const trimmed = message.trim();
+    if (!trimmed) return trimmed;
+    
+    // Capitalize first letter
+    const capitalized = trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+    
+    // Add question mark if it doesn't already end with punctuation
+    const endsWithPunctuation = /[.!?]$/.test(capitalized);
+    const formatted = endsWithPunctuation ? capitalized : capitalized + '?';
+    
+    console.log('🔧 Main page formatting message:', { original: message, formatted });
+    
+    return formatted;
+  };
+
   const handleVoiceInput = useCallback(async (text: string) => {
     console.log('🎤 ===== VOICE INPUT HANDLER CALLED =====');
     console.log('🎤 Received text:', text);
@@ -54,14 +71,16 @@ export default function ChatPage() {
       return;
     }
     
-    console.log('🎤 ✅ Voice input completed:', text);
+    // Format the voice input message
+    const formattedText = formatMessage(text);
+    console.log('🎤 ✅ Voice input formatted:', formattedText);
     
     setIsVoiceInputActive(false);
     setVoiceTranscript('');
     
-    // Call your useChat sendMessage function
-    console.log('🎤 📞 Calling sendMessage with voice input');
-    await sendMessage(text.trim());
+    // Call your useChat sendMessage function with formatted text
+    console.log('🎤 📞 Calling sendMessage with formatted voice input');
+    await sendMessage(formattedText);
   }, [sendMessage]);
 
   const handleVoiceInputToggle = useCallback(() => {
@@ -114,11 +133,14 @@ export default function ChatPage() {
 
   // Handle message submission
   const handleMessageSubmit = useCallback(async (message: string) => {
+    console.log('🔧 Main page handleMessageSubmit received:', message);
+    
     // Stop voice input if active
     if (isVoiceInputActive) {
       setIsVoiceInputActive(false);
     }
     
+    // Don't format here - the formatting should already be done in ChatInput
     await sendMessage(message);
   }, [sendMessage, isVoiceInputActive]);
 
@@ -184,6 +206,7 @@ export default function ChatPage() {
         selectedVoice={selectedVoice}
         onVoiceChange={setSelectedVoice}
         voiceTranscript={voiceTranscript}
+        isConnieSpeaking={isSpeaking} // Add this line - use the isSpeaking from your voice hook
       />
 
       {/* Voice Input Component - Your working demo component */}
