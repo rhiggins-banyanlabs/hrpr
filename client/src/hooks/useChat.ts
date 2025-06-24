@@ -1,6 +1,7 @@
-// hooks/useChat.ts - FIXED VERSION (Your original logic restored)
+// hooks/useChat.ts - Enhanced version with storage integration
 import { useState, useRef, useCallback } from 'react';
 import { CacheService } from '@/services/cache.service';
+import { ChatStorageService } from '@/lib/supabase/chatStorage';
 
 interface Message {
   id: string;
@@ -10,10 +11,19 @@ interface Message {
   isTyping?: boolean;
 }
 
-export const useChat = ({ speakText, unlockAudio }: { 
+interface UseChatProps {
   speakText?: (text: string) => Promise<any>;
   unlockAudio: () => Promise<void>;
-}) => {
+  sessionId?: string | null; // Add session ID prop
+  selectedVoice?: string; // Add selected voice prop
+}
+
+export const useChat = ({ 
+  speakText, 
+  unlockAudio,
+  sessionId,
+  selectedVoice
+}: UseChatProps) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isBotTyping, setIsBotTyping] = useState(false);
   const [isBotThinking, setIsBotThinking] = useState(false);
@@ -22,32 +32,28 @@ export const useChat = ({ speakText, unlockAudio }: {
   const mountedRef = useRef(true);
   const hasIntroSentRef = useRef(false);
 
-  console.log('🏠 useChat render - messages:', messages.length, messages.map(m => `${m.sender}: ${m.text.substring(0, 20)}...`));
+  console.log('🏠 useChat render - messages:', messages.length, 'sessionId:', sessionId);
 
   mountedRef.current = true;
 
-  // RESTORED: Your original typing effect with voice synchronization
+  // Your existing typing effect function
   const showTypingEffect = async (text: string, withVoice: boolean = false) => {
     console.log('🔤 Starting typing effect for:', text.substring(0, 30));
     
     if (withVoice && speakText) {
       console.log('🔊 Starting voice and showing thinking dots...');
       
-      // Show thinking dots while voice loads
       setIsBotThinking(true);
       setIsBotTyping(false);
       setTypingBotMsg(null);
       
-      // Start voice and get the audio object
       const voiceResult = await speakText(text);
       
-      // Stop thinking dots, prepare for typing
       setIsBotThinking(false);
       setIsBotTyping(true);
       setTypingBotMsg('');
       
       if (voiceResult && voiceResult.audio) {
-        // RESTORED: Wait for the audio to actually start playing
         await new Promise<void>((resolve) => {
           const audio = voiceResult.audio;
           
@@ -59,27 +65,22 @@ export const useChat = ({ speakText, unlockAudio }: {
           
           audio.addEventListener('play', onPlay);
           
-          // Fallback timeout
           setTimeout(() => {
             console.log('⏰ Fallback timeout - starting typing anyway');
             audio.removeEventListener('play', onPlay);
             resolve();
           }, 100);
         });
-      } else {
-        console.log('⚠️ No audio object returned, starting typing immediately');
       }
     } else {
-      // No voice, start typing immediately
       setIsBotTyping(true);
       setTypingBotMsg('');
     }
     
-    // RESTORED: Your original typing speed
     return new Promise<void>((resolve) => {
       let currentText = '';
       let charIndex = 0;
-      const charDelay = 50; // Back to your original 50ms timing
+      const charDelay = 50;
       
       const typeNextChar = () => {
         if (charIndex < text.length) {
@@ -88,7 +89,6 @@ export const useChat = ({ speakText, unlockAudio }: {
           charIndex++;
           setTimeout(typeNextChar, charDelay);
         } else {
-          // Finished typing
           console.log('✅ Typing effect completed');
           setIsBotTyping(false);
           setTypingBotMsg(null);
@@ -100,68 +100,27 @@ export const useChat = ({ speakText, unlockAudio }: {
     });
   };
 
-  // Enhanced sendMessage with OPTIONAL caching (preserves your original logic)
-  const sendMessage = useCallback(async (text: string) => {
+  // Enhanced sendMessage with storage
+  const sendMessage = useCallback(async (text: string, isVoiceInput: boolean = false) => {
     console.log('📨 ===== SEND MESSAGE STARTED =====');
     console.log('📨 Message text:', text);
-    console.log('📨 Current messages before send:', messages.length);
+    console.log('📨 Session ID:', sessionId);
+    console.log('📨 Is voice input:', isVoiceInput);
     
     if (isProcessingRef.current || !text.trim()) {
       console.log('⏹️ Skipping - already processing or empty text');
       return;
     }
 
-    if (!mountedRef.current) {
-      console.log('⚠️ Component unmounted, skipping send');
+    if (!sessionId) {
+      console.error('❌ No session ID available - cannot save messages');
       return;
     }
 
     isProcessingRef.current = true;
-    console.log('🔒 Set processing to true');
-
-    // Unlock audio for voice playback
     await unlockAudio();
 
     try {
-      // OPTIONAL: Check cache first (can be disabled)
-      const cachedResult = CacheService.getCachedResponse(text, 'balanced');
-      if (cachedResult) {
-        console.log('🚀 Using cached response');
-        
-        // Add user message
-        const userMsg: Message = {
-          id: `user_${Date.now()}`,
-          sender: "user",
-          text: text.trim(),
-          timestamp: new Date(),
-        };
-
-        setMessages(prevMessages => {
-          const newMessages = [...prevMessages, userMsg];
-          console.log('👤 ✅ USER MESSAGE ADDED TO STATE');
-          return newMessages;
-        });
-
-        // Create cached bot message
-        const botMsg: Message = {
-          id: `connie_${Date.now()}`,
-          sender: "connie",
-          text: cachedResult.response,
-          timestamp: new Date(),
-        };
-
-        // Show typing effect with voice (your original sync)
-        await showTypingEffect(cachedResult.response, true);
-        
-        setMessages(prevMessages => {
-          const newMessages = [...prevMessages, botMsg];
-          console.log('💬 ✅ CACHED BOT MESSAGE ADDED TO STATE');
-          return newMessages;
-        });
-
-        return;
-      }
-
       // Create user message
       const userMsg: Message = {
         id: `user_${Date.now()}`,
@@ -170,28 +129,28 @@ export const useChat = ({ speakText, unlockAudio }: {
         timestamp: new Date(),
       };
 
-      console.log('👤 Creating user message:', userMsg);
+      // Add user message to UI
+      setMessages(prevMessages => [...prevMessages, userMsg]);
+      
+      // Save user message to database
+      console.log('💾 Saving user message to database...');
+      await ChatStorageService.saveMessage(
+        sessionId,
+        'user',
+        text.trim(),
+        {
+          isVoiceInput,
+          metadata: {
+            timestamp: new Date().toISOString()
+          }
+        }
+      );
+      console.log('✅ User message saved to database');
 
-      // Add user message first
-      await new Promise<void>((resolve) => {
-        setMessages(prevMessages => {
-          const newMessages = [...prevMessages, userMsg];
-          console.log('👤 ✅ USER MESSAGE ADDED TO STATE');
-          console.log('👤 Previous count:', prevMessages.length);
-          console.log('👤 New count:', newMessages.length);
-          console.log('👤 User message:', userMsg.text);
-          setTimeout(resolve, 0);
-          return newMessages;
-        });
-      });
-      
-      console.log('👤 User message state update completed');
-      
       // Show thinking dots
-      console.log('🤔 Starting thinking state...');
       setIsBotThinking(true);
 
-      // RESTORED: Your original prompt
+      // Your existing prompt
       const conniePrompt = `You are Connie, a helpful and friendly conference assistant. You help attendees with conference information including schedules, speakers, locations, food, networking events, and general conference amenities.
 
 Conference Context:
@@ -209,8 +168,6 @@ User Question: ${text}
 Provide a helpful, friendly response as Connie. Be conversational and personable while being informative. Keep responses under 500 characters.`;
 
       // Get bot response
-      console.log('🌐 Fetching bot response...');
-      
       const response = await fetch('/api/ai-router', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -232,18 +189,6 @@ Provide a helpful, friendly response as Connie. Be conversational and personable
 
       console.log('✅ Got bot response:', data.response.substring(0, 50) + '...');
 
-      // Cache the successful response
-      if (data.response) {
-        CacheService.setCachedResponse(
-          text,
-          'balanced',
-          data.response,
-          data.provider || 'unknown',
-          data.cost,
-          data.tokensUsed
-        );
-      }
-
       // Create bot message
       const botMsg: Message = {
         id: `connie_${Date.now()}`,
@@ -252,22 +197,29 @@ Provide a helpful, friendly response as Connie. Be conversational and personable
         timestamp: new Date(),
       };
 
-      console.log('🤖 Created bot message');
-
-      // RESTORED: Your original typing effect with voice sync
-      console.log('🎭 Starting typing effect...');
+      // Show typing effect with voice
       await showTypingEffect(data.response, true);
       
-      // Add bot message to state
-      console.log('💬 Adding bot message to state...');
-      setMessages(prevMessages => {
-        const newMessages = [...prevMessages, botMsg];
-        console.log('💬 ✅ BOT MESSAGE ADDED TO STATE');
-        console.log('💬 Final message count:', newMessages.length);
-        return newMessages;
-      });
-
-      console.log('🤖 Response generated by:', data.provider);
+      // Add bot message to UI
+      setMessages(prevMessages => [...prevMessages, botMsg]);
+      
+      // Save bot message to database
+      console.log('💾 Saving bot message to database...');
+      await ChatStorageService.saveMessage(
+        sessionId,
+        'connie',
+        data.response,
+        {
+          selectedVoice,
+          metadata: {
+            timestamp: new Date().toISOString(),
+            provider: data.provider,
+            cost: data.cost,
+            tokensUsed: data.tokensUsed
+          }
+        }
+      );
+      console.log('✅ Bot message saved to database');
 
     } catch (err) {
       console.error('❌ Error in sendMessage:', err);
@@ -286,7 +238,6 @@ Provide a helpful, friendly response as Connie. Be conversational and personable
       setMessages(prevMessages => [...prevMessages, errorMsg]);
     } finally {
       if (mountedRef.current) {
-        console.log('🧹 Cleaning up...');
         setIsBotThinking(false);
         setIsBotTyping(false);
         setTypingBotMsg(null);
@@ -294,11 +245,12 @@ Provide a helpful, friendly response as Connie. Be conversational and personable
       isProcessingRef.current = false;
       console.log('🏁 ===== SEND MESSAGE COMPLETED =====');
     }
-  }, [speakText, unlockAudio]);
+  }, [speakText, unlockAudio, sessionId, selectedVoice]);
 
-  // Send bot message directly (for intro)
-  const sendBotMessage = useCallback(async (text: string) => {
+  // Send bot message directly (for intro) with storage
+  const sendBotMessage = useCallback(async (text: string, isIntro: boolean = false) => {
     console.log('🤖 sendBotMessage called:', text.substring(0, 30));
+    console.log('🤖 Session ID:', sessionId);
     
     const botMsg: Message = {
       id: `bot_${Date.now()}`,
@@ -307,34 +259,49 @@ Provide a helpful, friendly response as Connie. Be conversational and personable
       timestamp: new Date(),
     };
     
-    // Apply typing effect with voice (your original sync)
+    // Apply typing effect with voice
     await showTypingEffect(text, true);
     
     // Add to messages
-    setMessages(prevMessages => {
-      const newMessages = [...prevMessages, botMsg];
-      console.log('🤖 ✅ INTRO MESSAGE ADDED TO STATE');
-      console.log('🤖 Message count:', newMessages.length);
-      return newMessages;
-    });
-  }, [speakText]);
+    setMessages(prevMessages => [...prevMessages, botMsg]);
+    
+    // Save to database if session exists
+    if (sessionId) {
+      console.log('💾 Saving bot message to database...');
+      await ChatStorageService.saveMessage(
+        sessionId,
+        'connie',
+        text,
+        {
+          selectedVoice,
+          metadata: {
+            timestamp: new Date().toISOString(),
+            isIntroMessage: isIntro
+          }
+        }
+      );
+      console.log('✅ Bot message saved to database');
+    } else {
+      console.warn('⚠️ No session ID - bot message not saved to database');
+    }
+  }, [speakText, sessionId, selectedVoice]);
 
   // Send intro message with proper tracking
   const sendIntroMessage = useCallback(() => {
     console.log('🚀 sendIntroMessage called');
     console.log('🚀 hasIntroSentRef:', hasIntroSentRef.current);
+    console.log('🚀 Session ID:', sessionId);
     
-    if (!hasIntroSentRef.current) {
+    if (!hasIntroSentRef.current && sessionId) {
       console.log('🚀 ✅ Sending intro message');
       hasIntroSentRef.current = true;
       
-      // RESTORED: Your original greeting message
       const introText = "Hi, I'm Connie, your personal conference assistant. What would you like to ask me? If you need help coming up with a question, there are some suggestions you can choose from below.";
-      sendBotMessage(introText);
+      sendBotMessage(introText, true);
     } else {
-      console.log('🚀 ❌ Intro already sent, skipping');
+      console.log('🚀 ❌ Intro already sent or no session, skipping');
     }
-  }, [sendBotMessage]);
+  }, [sendBotMessage, sessionId]);
 
   // Stop typing function
   const stopTyping = useCallback(() => {

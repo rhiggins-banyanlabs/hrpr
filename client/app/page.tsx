@@ -4,6 +4,7 @@ import { VoiceButton } from "@/components/VoiceButton";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { useSleepMode } from "@/hooks/useSleepMode";
+import { useChatStorage } from "@/hooks/useChatStorage"; // NEW IMPORT
 import Waves from "@/components/waves";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -11,16 +12,17 @@ import { useState } from "react";
 export default function Home() {
   const router = useRouter();
   const [mode, setMode] = useState<'normal' | 'sleep'>('normal');
+  const { startNewSession } = useChatStorage(); // NEW HOOK
 
-  const handleConnieDetected = (query: string) => {
+  const handleConnieDetected = async (query: string) => {
     console.log("🏠 HOME: handleConnieDetected called with query:", query || "no query");
     
     try {
-      // Always navigate to chat when Connie is detected
-      // The chat page will handle whether it's a greeting or a question
+      // Don't create session here - let the chat page handle it
+      // This prevents creating sessions that immediately get ended
       const encodedQuery = query ? encodeURIComponent(query) : encodeURIComponent("hey connie");
       
-      console.log("🏠 HOME: Navigating to chat with encoded query:", encodedQuery);
+      console.log("🏠 HOME: Navigating to chat with query:", encodedQuery);
       router.push(`/chat?query=${encodedQuery}`);
       
     } catch (error) {
@@ -67,7 +69,7 @@ export default function Home() {
         <div className="relative z-10 flex flex-col items-center justify-center gap-8 px-4">
           <div className="text-center mb-2">
             <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-indigo-400/70 via-purple-500/70 to-blue-400/70">
-              Connie
+              CONNIE
             </h1>
             <p className="text-sm sm:text-base mt-2 text-transparent bg-clip-text bg-gradient-to-r from-indigo-300/70 via-purple-300/70 to-blue-300/70 ">
               Sleep Mode - Say "Hey Connie" to wake
@@ -164,8 +166,8 @@ export default function Home() {
 
       <div className="relative z-10 flex flex-col items-center justify-center gap-8 px-4">
         <div className="text-center mb-2">
-          <h1 className="text-5xl sm:text-6xl md:text-7xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-500 to-blue-400">
-            Connie
+          <h1 className="text-5xl sm:text-6xl md:text-7xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-500 to-blue-400 mt-4">
+            CONNIE
           </h1>
           <p className="text-lg sm:text-xl mt-2 text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 via-purple-300 to-blue-300">
             Your AI Event Assistant
