@@ -1,9 +1,11 @@
+// app/chat/page.tsx - Updated with proper storage integration
 "use client";
 
 import { useEffect, useRef, useCallback, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useOptimizedVoice } from "@/hooks/useOptimizedVoice"; // Use optimized TTS
-import { useChat } from "@/hooks/useChat"; // Your existing chat hook
+import { useOptimizedVoice } from "@/hooks/useOptimizedVoice";
+import { useChat } from "@/hooks/useChat";
+import { useChatStorage } from "@/hooks/useChatStorage";
 import { VoiceSelector } from "@/components/VoiceSelector";
 import { ChatMessages } from "@/components/ChatMessages";
 import { ChatInput } from "@/components/ChatInput";
@@ -14,13 +16,23 @@ export default function ChatPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
-  // Voice input state (matching your original pattern)
+  // Chat storage hook - UPDATED with loadSession and endSession
+  const { 
+    currentSession, 
+    startNewSession, 
+    logEvent,
+    loadSession,  // ADD THIS
+    endSession    // ADD THIS
+  } = useChatStorage();
+  
+  // Voice input state
   const [isVoiceInputActive, setIsVoiceInputActive] = useState(false);
   const [voiceTranscript, setVoiceTranscript] = useState("");
   
-  // Your existing hooks (keeping your separation of concerns)
+  // Your existing hooks
   const { speakText, isSpeaking, selectedVoice, setSelectedVoice, unlockAudio } = useOptimizedVoice();
   
+  // Pass session ID and selectedVoice to useChat
   const {
     messages,
     isBotTyping,
@@ -31,36 +43,37 @@ export default function ChatPage() {
     isProcessing,
     sendIntroMessage,
     stopTyping
-  } = useChat({ speakText, unlockAudio });
+  } = useChat({ 
+    speakText, 
+    unlockAudio,
+    sessionId: currentSession?.id || null,
+    selectedVoice
+  });
 
   // Refs for initialization
   const hasPlayedIntroRef = useRef(false);
   const isProcessingVoiceQueryRef = useRef(false);
+  const sessionInitializedRef = useRef(false); // RENAMED from hasInitializedSessionRef
 
-  console.log("🏗️ Optimized Chat page - messages:", messages.length);
+  console.log("🏗️ Chat page - messages:", messages.length, "session:", currentSession?.id);
 
-  // Voice handlers (keeping your exact pattern)
-  const handleVoiceTranscript = useCallback((transcript: string, isInterim: boolean) => {
-    console.log('🎤 Voice transcript update:', transcript);
-    setVoiceTranscript(transcript);
-  }, []);
-
-  // Format message: capitalize first letter and add question mark if needed
+  // Format message helper
   const formatMessage = (message: string) => {
     const trimmed = message.trim();
     if (!trimmed) return trimmed;
     
-    // Capitalize first letter
     const capitalized = trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
-    
-    // Add question mark if it doesn't already end with punctuation
     const endsWithPunctuation = /[.!?]$/.test(capitalized);
     const formatted = endsWithPunctuation ? capitalized : capitalized + '?';
     
-    console.log('🔧 Main page formatting message:', { original: message, formatted });
-    
     return formatted;
   };
+
+  // Voice handlers
+  const handleVoiceTranscript = useCallback((transcript: string, isInterim: boolean) => {
+    console.log('🎤 Voice transcript update:', transcript);
+    setVoiceTranscript(transcript);
+  }, []);
 
   const handleVoiceInput = useCallback(async (text: string) => {
     console.log('🎤 ===== VOICE INPUT HANDLER CALLED =====');
@@ -71,17 +84,23 @@ export default function ChatPage() {
       return;
     }
     
-    // Format the voice input message
     const formattedText = formatMessage(text);
     console.log('🎤 ✅ Voice input formatted:', formattedText);
     
     setIsVoiceInputActive(false);
     setVoiceTranscript('');
     
-    // Call your useChat sendMessage function with formatted text
-    console.log('🎤 📞 Calling sendMessage with formatted voice input');
-    await sendMessage(formattedText);
-  }, [sendMessage]);
+    // Log voice input event
+    if (currentSession) {
+      await logEvent('voice_input', {
+        transcript_length: text.length,
+        formatted_text: formattedText
+      });
+    }
+    
+    // Send message with voice flag
+    await sendMessage(formattedText, true);
+  }, [sendMessage, currentSession, logEvent]);
 
   const handleVoiceInputToggle = useCallback(() => {
     console.log('🎤 🔄 Voice input toggle called, current state:', isVoiceInputActive);
@@ -91,21 +110,61 @@ export default function ChatPage() {
     }
   }, [isVoiceInputActive]);
 
-  // Send intro message on mount
+  // UPDATED: Initialize session from URL or create new one
   useEffect(() => {
-    if (!hasPlayedIntroRef.current) {
+    const initializeSession = async () => {
+      // Prevent multiple initializations
+      if (sessionInitializedRef.current) return;
+      
+      const sessionId = searchParams.get('session');
+      const query = searchParams.get('query');
+      
+      if (sessionId && !currentSession) {
+        // Try to load existing session
+        console.log("📝 Loading session from URL:", sessionId);
+        const loaded = await loadSession(sessionId);
+        if (loaded) {
+          sessionInitializedRef.current = true;
+        }
+      } else if (!currentSession && !sessionId) {
+        // Create a new session only if we don't have one
+        console.log("📝 Creating new chat session");
+        const newSession = await startNewSession({
+          source: query ? 'voice_activation' : 'direct_navigation',
+          initial_query: query || null,
+          timestamp: new Date().toISOString()
+        });
+        
+        if (newSession) {
+          sessionInitializedRef.current = true;
+          
+          // Update URL to include session ID
+          const newSearchParams = new URLSearchParams(searchParams.toString());
+          newSearchParams.set('session', newSession.id);
+          router.replace(`/chat?${newSearchParams.toString()}`);
+        }
+      }
+    };
+    
+    initializeSession();
+  }, [searchParams, currentSession, startNewSession, loadSession, router]);
+
+  // Send intro message after session is ready
+  useEffect(() => {
+    if (!hasPlayedIntroRef.current && currentSession?.id) {
       hasPlayedIntroRef.current = true;
+      console.log("🎯 Session ready, sending intro message");
       setTimeout(() => {
         sendIntroMessage();
       }, 500);
     }
-  }, [sendIntroMessage]);
+  }, [currentSession, sendIntroMessage]);
 
-  // Handle voice query from URL
+  // Handle voice query from URL after session is ready
   useEffect(() => {
     const query = searchParams.get('query');
     
-    if (query && !isProcessingVoiceQueryRef.current) {
+    if (query && !isProcessingVoiceQueryRef.current && currentSession?.id) {
       isProcessingVoiceQueryRef.current = true;
       console.log("🔍 Processing voice query:", query);
       
@@ -119,29 +178,37 @@ export default function ChatPage() {
 
         if (!isJustGreeting) {
           console.log("🔍 Processing actual question:", query);
-          sendMessage(query);
+          sendMessage(query, true); // Mark as voice input
         }
       }, 2000);
     }
-  }, [searchParams, sendMessage]);
+  }, [searchParams, sendMessage, currentSession]);
 
-  // Handle back to home
+  // UPDATED: Handle back to home - DON'T end the session
   const handleBackToHome = useCallback(() => {
     stopTyping();
+    // Don't end session here - let it stay active
+    // Sessions should only end when explicitly closed or on page unload
     router.push("/");
   }, [router, stopTyping]);
+
+  // NEW: Add a proper session end handler (optional - for an "End Chat" button if you want one)
+  const handleEndChat = useCallback(async () => {
+    if (currentSession?.id) {
+      await endSession();
+      router.push("/");
+    }
+  }, [currentSession, endSession, router]);
 
   // Handle message submission
   const handleMessageSubmit = useCallback(async (message: string) => {
     console.log('🔧 Main page handleMessageSubmit received:', message);
     
-    // Stop voice input if active
     if (isVoiceInputActive) {
       setIsVoiceInputActive(false);
     }
     
-    // Don't format here - the formatting should already be done in ChatInput
-    await sendMessage(message);
+    await sendMessage(message, false); // Mark as text input
   }, [sendMessage, isVoiceInputActive]);
 
   return (
@@ -188,8 +255,7 @@ export default function ChatPage() {
         <div className="md:hidden w-16"></div>
       </div>
 
-
-      {/* Messages - Using your separated component */}
+      {/* Messages */}
       <ChatMessages 
         messages={messages}
         isThinking={isBotThinking}
@@ -197,7 +263,7 @@ export default function ChatPage() {
         typingBotMsg={typingBotMsg}
       />
 
-      {/* Input - Using your separated component */}
+      {/* Input */}
       <ChatInput
         onSubmit={handleMessageSubmit}
         isProcessing={isProcessing}
@@ -206,10 +272,10 @@ export default function ChatPage() {
         selectedVoice={selectedVoice}
         onVoiceChange={setSelectedVoice}
         voiceTranscript={voiceTranscript}
-        isConnieSpeaking={isSpeaking} // Add this line - use the isSpeaking from your voice hook
+        isConnieSpeaking={isSpeaking}
       />
 
-      {/* Voice Input Component - Your working demo component */}
+      {/* Voice Input Component */}
       <VoiceInput
         onSpeechEnd={handleVoiceInput}
         onTranscriptUpdate={handleVoiceTranscript}
@@ -217,6 +283,12 @@ export default function ChatPage() {
         onListeningChange={setIsVoiceInputActive}
       />
 
+      {/* Debug info (remove in production) */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="absolute bottom-20 right-4 text-xs text-gray-500 bg-black/50 p-2 rounded">
+          Session: {currentSession?.id?.substring(0, 8) || 'None'}
+        </div>
+      )}
     </div>
   );
 }
