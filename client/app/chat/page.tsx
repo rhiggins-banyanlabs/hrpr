@@ -1,4 +1,4 @@
-// app/chat/page.tsx - Updated with proper storage integration
+// app/chat/page.tsx - FIXED VERSION with proper session management
 "use client";
 
 import { useEffect, useRef, useCallback, useState } from "react";
@@ -16,23 +16,23 @@ export default function ChatPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
-  // Chat storage hook - UPDATED with loadSession and endSession
+  // Chat storage hook
   const { 
     currentSession, 
     startNewSession, 
     logEvent,
-    loadSession,  // ADD THIS
-    endSession    // ADD THIS
+    loadSession,
+    endSession
   } = useChatStorage();
   
   // Voice input state
   const [isVoiceInputActive, setIsVoiceInputActive] = useState(false);
   const [voiceTranscript, setVoiceTranscript] = useState("");
   
-  // Your existing hooks
+  // Voice hooks
   const { speakText, isSpeaking, selectedVoice, setSelectedVoice, unlockAudio } = useOptimizedVoice();
   
-  // Pass session ID and selectedVoice to useChat
+  // Chat hook - gets session ID from storage
   const {
     messages,
     isBotTyping,
@@ -50,12 +50,12 @@ export default function ChatPage() {
     selectedVoice
   });
 
-  // Refs for initialization
+  // Refs for state management - FIXED to prevent duplicate initialization
   const hasPlayedIntroRef = useRef(false);
   const isProcessingVoiceQueryRef = useRef(false);
-  const sessionInitializedRef = useRef(false); // RENAMED from hasInitializedSessionRef
+  const initializationAttemptedRef = useRef(false); // Track if we've tried to initialize
 
-  console.log("🏗️ Chat page - messages:", messages.length, "session:", currentSession?.id);
+  console.log("🏗️ Chat page render - messages:", messages.length, "session:", currentSession?.id);
 
   // Format message helper
   const formatMessage = (message: string) => {
@@ -110,25 +110,42 @@ export default function ChatPage() {
     }
   }, [isVoiceInputActive]);
 
-  // UPDATED: Initialize session from URL or create new one
+  // FIXED: Proper session initialization with duplicate prevention
   useEffect(() => {
     const initializeSession = async () => {
-      // Prevent multiple initializations
-      if (sessionInitializedRef.current) return;
+      // Prevent multiple initialization attempts
+      if (initializationAttemptedRef.current) {
+        console.log('🔒 Session initialization already attempted, skipping');
+        return;
+      }
+
+      initializationAttemptedRef.current = true;
       
       const sessionId = searchParams.get('session');
       const query = searchParams.get('query');
       
-      if (sessionId && !currentSession) {
-        // Try to load existing session
-        console.log("📝 Loading session from URL:", sessionId);
+      console.log('🎯 Initializing session - sessionId from URL:', sessionId, 'query:', query);
+      console.log('🎯 Current session state:', currentSession?.id);
+      
+      // If we already have a session, don't create another one
+      if (currentSession?.id) {
+        console.log("✅ Session already exists, no need to initialize:", currentSession.id);
+        return;
+      }
+      
+      if (sessionId) {
+        // Try to load existing session from URL
+        console.log("📝 Loading existing session from URL:", sessionId);
         const loaded = await loadSession(sessionId);
-        if (loaded) {
-          sessionInitializedRef.current = true;
+        
+        if (!loaded) {
+          console.log("❌ Failed to load session from URL, but NOT creating new one");
+          // Don't create a new session if loading fails - just continue without session
+          // The user can refresh or start a new chat
         }
-      } else if (!currentSession && !sessionId) {
-        // Create a new session only if we don't have one
-        console.log("📝 Creating new chat session");
+      } else {
+        // Only create a new session if there's no session ID in URL
+        console.log("📝 No session ID in URL, creating new chat session");
         const newSession = await startNewSession({
           source: query ? 'voice_activation' : 'direct_navigation',
           initial_query: query || null,
@@ -136,8 +153,6 @@ export default function ChatPage() {
         });
         
         if (newSession) {
-          sessionInitializedRef.current = true;
-          
           // Update URL to include session ID
           const newSearchParams = new URLSearchParams(searchParams.toString());
           newSearchParams.set('session', newSession.id);
@@ -147,27 +162,34 @@ export default function ChatPage() {
     };
     
     initializeSession();
-  }, [searchParams, currentSession, startNewSession, loadSession, router]);
+  }, [searchParams]); // FIXED: Minimal dependencies to prevent re-runs
 
-  // Send intro message after session is ready
+  // Send intro message after session is ready - FIXED to prevent duplicates
   useEffect(() => {
     if (!hasPlayedIntroRef.current && currentSession?.id) {
       hasPlayedIntroRef.current = true;
-      console.log("🎯 Session ready, sending intro message");
+      console.log("🎯 Session ready, sending intro message to session:", currentSession.id);
+      
+      // Small delay to ensure session is fully ready
       setTimeout(() => {
         sendIntroMessage();
       }, 500);
     }
-  }, [currentSession, sendIntroMessage]);
+  }, [currentSession?.id, sendIntroMessage]); // FIXED: Only depend on session ID
 
-  // Handle voice query from URL after session is ready
+  // Handle voice query from URL - FIXED to prevent duplicates
   useEffect(() => {
     const query = searchParams.get('query');
     
-    if (query && !isProcessingVoiceQueryRef.current && currentSession?.id) {
+    if (query && 
+        !isProcessingVoiceQueryRef.current && 
+        currentSession?.id && 
+        hasPlayedIntroRef.current) { // Wait for intro to be sent first
+      
       isProcessingVoiceQueryRef.current = true;
       console.log("🔍 Processing voice query:", query);
       
+      // Wait for intro message to complete
       setTimeout(() => {
         const isJustGreeting = !query || 
                               query.toLowerCase() === 'hey connie' ||
@@ -179,20 +201,20 @@ export default function ChatPage() {
         if (!isJustGreeting) {
           console.log("🔍 Processing actual question:", query);
           sendMessage(query, true); // Mark as voice input
+        } else {
+          console.log("🔍 Just a greeting, intro message is sufficient");
         }
-      }, 2000);
+      }, 2000); // Wait for intro to complete
     }
-  }, [searchParams, sendMessage, currentSession]);
+  }, [searchParams, sendMessage, currentSession?.id, hasPlayedIntroRef.current]);
 
-  // UPDATED: Handle back to home - DON'T end the session
+  // Handle back to home
   const handleBackToHome = useCallback(() => {
     stopTyping();
-    // Don't end session here - let it stay active
-    // Sessions should only end when explicitly closed or on page unload
     router.push("/");
   }, [router, stopTyping]);
 
-  // NEW: Add a proper session end handler (optional - for an "End Chat" button if you want one)
+  // Handle explicit session end
   const handleEndChat = useCallback(async () => {
     if (currentSession?.id) {
       await endSession();
@@ -286,7 +308,9 @@ export default function ChatPage() {
       {/* Debug info (remove in production) */}
       {process.env.NODE_ENV === 'development' && (
         <div className="absolute bottom-20 right-4 text-xs text-gray-500 bg-black/50 p-2 rounded">
-          Session: {currentSession?.id?.substring(0, 8) || 'None'}
+          <div>Session: {currentSession?.id?.substring(0, 8) || 'None'}</div>
+          <div>Active: {currentSession?.is_active ? 'Yes' : 'No'}</div>
+          <div>Messages: {messages.length}</div>
         </div>
       )}
     </div>
