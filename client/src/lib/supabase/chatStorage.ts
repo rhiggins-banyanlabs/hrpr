@@ -1,12 +1,16 @@
 import { createClient } from '@supabase/supabase-js';
 
+
 // Initialize Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// Types matching your database schema
+// =============================================
+// EXISTING CHAT TYPES
+// =============================================
+
 export interface ChatSession {
   id: string;
   user_id?: string;
@@ -41,7 +45,35 @@ export interface ChatAnalytics {
   created_at: string;
 }
 
-// Chat storage service
+// =============================================
+// NEW CONFERENCE TYPES
+// =============================================
+
+export interface Speaker {
+  id: string;
+  name: string;
+  title: string;
+  company: string;
+  bio?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EventSession {
+  id: string;
+  time: string;
+  title: string;
+  speaker: string;
+  description?: string;
+  location?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// =============================================
+// EXISTING CHAT STORAGE SERVICE
+// =============================================
+
 export class ChatStorageService {
   // Create a new chat session when "Hey Connie" is detected
   static async createChatSession(metadata?: Record<string, any>): Promise<ChatSession | null> {
@@ -165,6 +197,48 @@ export class ChatStorageService {
     }
   }
 
+  // ADD THESE METHODS TO YOUR EXISTING ChatStorageService CLASS
+// (Don't replace anything, just add these methods at the end of the ChatStorageService class)
+
+  // Add these methods to your existing ChatStorageService class:
+  
+  // Get all chat sessions (for admin panel)
+  static async getAllSessions(): Promise<ChatSession[]> {
+    try {
+      const { data: sessions, error } = await supabase
+        .from('chat_sessions')
+        .select('*')
+        .order('session_started_at', { ascending: false });
+
+      if (error) throw error;
+      return sessions || [];
+    } catch (error) {
+      console.error('Error fetching all sessions:', error);
+      return [];
+    }
+  }
+
+  // Get all analytics (for admin panel)
+  static async getAllAnalytics(): Promise<ChatAnalytics[]> {
+    try {
+      const { data: analytics, error } = await supabase
+        .from('chat_analytics')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return analytics || [];
+    } catch (error) {
+      console.error('Error fetching analytics:', error);
+      return [];
+    }
+  }
+
+  // Alias method for admin panel compatibility
+  static async getMessages(sessionId: string): Promise<Message[]> {
+    return this.getSessionMessages(sessionId);
+  }
+
   // Log analytics events
   static async logAnalyticsEvent(
     sessionId: string,
@@ -181,6 +255,186 @@ export class ChatStorageService {
         });
     } catch (error) {
       console.error('Error logging analytics event:', error);
+    }
+  }
+}
+
+// =============================================
+// NEW CONFERENCE STORAGE SERVICE
+// =============================================
+
+export class ConferenceStorageService {
+  // ===== SPEAKER METHODS =====
+  
+  static async getAllSpeakers(): Promise<Speaker[]> {
+    try {
+      const { data: speakers, error } = await supabase
+        .from('speakers')
+        .select('*')
+        .order('name');
+
+      if (error) throw error;
+      return speakers || [];
+    } catch (error) {
+      console.error('Error fetching speakers:', error);
+      return [];
+    }
+  }
+
+  static async createSpeaker(speaker: Omit<Speaker, 'id' | 'created_at' | 'updated_at'>): Promise<Speaker | null> {
+    try {
+      const { data, error } = await supabase
+        .from('speakers')
+        .insert([speaker])
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error creating speaker:', error);
+      return null;
+    }
+  }
+
+  static async updateSpeaker(id: string, updates: Partial<Omit<Speaker, 'id' | 'created_at' | 'updated_at'>>): Promise<Speaker | null> {
+    try {
+      const updateData = {
+        ...updates,
+        updated_at: new Date().toISOString()
+      };
+
+      const { data, error } = await supabase
+        .from('speakers')
+        .update(updateData)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error updating speaker:', error);
+      return null;
+    }
+  }
+
+  static async deleteSpeaker(id: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('speakers')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      return true;
+    } catch (error) {
+      console.error('Error deleting speaker:', error);
+      return false;
+    }
+  }
+
+  // ===== SESSION METHODS =====
+
+  static async getAllSessions(): Promise<EventSession[]> {
+    try {
+      const { data: sessions, error } = await supabase
+        .from('event_sessions')
+        .select('*')
+        .order('time');
+
+      if (error) throw error;
+      return sessions || [];
+    } catch (error) {
+      console.error('Error fetching sessions:', error);
+      return [];
+    }
+  }
+
+  static async createSession(session: Omit<EventSession, 'id' | 'created_at' | 'updated_at'>): Promise<EventSession | null> {
+    try {
+      const { data, error } = await supabase
+        .from('event_sessions')
+        .insert([session])
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error creating session:', error);
+      return null;
+    }
+  }
+
+  static async updateSession(id: string, updates: Partial<Omit<EventSession, 'id' | 'created_at' | 'updated_at'>>): Promise<EventSession | null> {
+    try {
+      const updateData = {
+        ...updates,
+        updated_at: new Date().toISOString()
+      };
+
+      const { data, error } = await supabase
+        .from('event_sessions')
+        .update(updateData)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error updating session:', error);
+      return null;
+    }
+  }
+
+  static async deleteSession(id: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('event_sessions')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      return true;
+    } catch (error) {
+      console.error('Error deleting session:', error);
+      return false;
+    }
+  }
+
+  // ===== UTILITY METHODS =====
+
+  static async getSpeakerByName(name: string): Promise<Speaker | null> {
+    try {
+      const { data, error } = await supabase
+        .from('speakers')
+        .select('*')
+        .eq('name', name)
+        .single();
+
+      if (error) return null;
+      return data;
+    } catch (error) {
+      console.error('Error fetching speaker by name:', error);
+      return null;
+    }
+  }
+
+  static async getSessionsBySpeaker(speakerName: string): Promise<EventSession[]> {
+    try {
+      const { data: sessions, error } = await supabase
+        .from('event_sessions')
+        .select('*')
+        .eq('speaker', speakerName)
+        .order('time');
+
+      if (error) throw error;
+      return sessions || [];
+    } catch (error) {
+      console.error('Error fetching sessions by speaker:', error);
+      return [];
     }
   }
 }
