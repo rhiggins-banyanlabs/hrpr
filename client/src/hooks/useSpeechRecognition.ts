@@ -12,6 +12,7 @@ export interface SpeechRecognitionActions {
   startListening: () => void;
   stopListening: () => void;
   toggleListening: () => void;
+  resetStates: () => void;
 }
 
 export const useSpeechRecognition = (
@@ -240,6 +241,15 @@ export const useSpeechRecognition = (
     }
   }, [isNavigating]);
 
+  const resetStates = () => {
+    setListening(false);
+    setTranscript("");
+    setPermissionError(null);
+    setIsNavigating(false);
+    connieDetectedRef.current = false;
+    isNavigatingRef.current = false;
+  };
+
   const toggleListening = useCallback(() => {
     if (listening) {
       stopListening();
@@ -297,6 +307,7 @@ export const useSpeechRecognition = (
       startListening,
       stopListening,
       toggleListening,
+      resetStates,
     }
   ];
 };
