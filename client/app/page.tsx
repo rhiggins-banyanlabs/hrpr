@@ -8,6 +8,7 @@ import { useChatStorage } from "@/hooks/useChatStorage"; // NEW IMPORT
 import Waves from "@/components/waves";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { MorphingText } from "@/components/MorphingText";
 
 export default function Home() {
   const router = useRouter();
@@ -115,7 +116,7 @@ export default function Home() {
                 </svg>
                 {sleepState.isListening ? 'Listening...' : 'Start Listening'}
               </button>
-
+                    
               <button
                 onClick={sleepActions.exitSleepMode}
                 className="flex items-center gap-2 px-4 py-2 bg-purple-600/50 text-white rounded-xl hover:bg-purple-600/70 transition-all duration-300 cursor-pointer"
@@ -164,7 +165,7 @@ export default function Home() {
         yGap={36}
       />
 
-      <div className="relative z-10 flex flex-col items-center justify-center gap-8 px-4">
+      <div className="relative z-10 flex flex-col items-center justify-center gap-4">
         <div className="text-center mb-2">
           <h1 className="text-5xl sm:text-6xl md:text-7xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-500 to-blue-400 mt-4">
             CONNIE
@@ -173,13 +174,23 @@ export default function Home() {
             Your AI Event Assistant
           </p>
         </div>
-
+      
         <VoiceOrb
           listening={speechState.listening}
           connieDetected={speechState.connieDetected}
           isNavigating={speechState.isNavigating}
         />
-
+        <MorphingText
+            texts={[
+              "What is AIDA and how does it work?",
+              "Can you tell me about the technology behind AIDA?",
+              "What time is the keynote?",
+              "How could AIDA help my organization?",
+              "Can you tell me about the conference?",
+              "What speakers are at the conference?"
+            ]}
+            className="-my-4 w-screen"
+          />
         <div className="flex flex-col items-center gap-6">
           <VoiceButton
             listening={speechState.listening}
@@ -194,7 +205,6 @@ export default function Home() {
               <span className="text-lg font-bold">"Hey Connie"</span> for all your conference needs!
             </p>
          
-            
             {/* Sleep Mode Button */}
             <button
               onClick={sleepActions.enterSleepMode}
