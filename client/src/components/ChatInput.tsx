@@ -89,13 +89,6 @@ export const ChatInput = ({
         />
       </div>
 
-      {/* Suggested Questions */}
-      <SuggestedQuestions 
-        onSelect={handleSuggestedClick} 
-        isConversationStarted={isConversationStarted}
-        isConnieSpeaking={isConnieSpeaking} // Pass the prop down
-      />
-
       <form onSubmit={handleSubmit} className="flex gap-2">
         <input
           type="text"

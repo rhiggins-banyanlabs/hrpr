@@ -92,8 +92,14 @@ export const VoiceSelector: React.FC<VoiceSelectorProps> = ({
 
       {/* Voice Options Dropdown */}
       {isOpen && (
-        <div className="absolute top-full left-0 mt-2 w-80 bg-gray-900/95 backdrop-blur-sm rounded-xl border border-indigo-500/30 shadow-xl z-50">
-          <div className="p-4">
+        <div className="absolute top-full -left-10 mt-2
+        bg-gray-900/95 backdrop-blur-sm     
+        rounded-xl border border-indigo-500/30
+        shadow-xl z-50
+        w-60         
+        max-h-48   
+        overflow-y-auto">
+          <div className="p-4 ">
             <h3 className="text-white font-semibold mb-3">Choose Connie's Voice</h3>
             <div className="space-y-2">
               {Object.values(OPENAI_VOICES).map((voice) => (
