@@ -2,7 +2,6 @@
 import { useEffect, useRef, useCallback, useState } from "react"
 import { useOptimizedVoice } from "@/hooks/useOptimizedVoice"
 import { useChat } from "@/hooks/useChat"
-import { useChatStorage } from "@/hooks/useChatStorage"
 import { VoiceSelector } from "@/components/VoiceSelector"
 import { ChatMessages } from "@/components/ChatMessages"
 import { ChatInput } from "@/components/ChatInput"
@@ -12,9 +11,10 @@ import { Square, RotateCcw } from "lucide-react"
 
 interface CompactChatProps {
   onClose: () => void
+  sessionId: string | null
 }
 
-export function CompactChat({ onClose }: CompactChatProps) {
+export function CompactChat({ onClose, sessionId }: CompactChatProps) {
   // Voice input state
   const [isVoiceInputActive, setIsVoiceInputActive] = useState(false)
   const [voiceTranscript, setVoiceTranscript] = useState("")
@@ -26,13 +26,10 @@ export function CompactChat({ onClose }: CompactChatProps) {
   const lastMessageRef = useRef<string>("")
   const messageCountRef = useRef(0)
 
-  // Chat storage hook
-  const { currentSession, startNewSession, logEvent, loadSession, endSession } = useChatStorage()
-
   // Voice hooks
   const { speakText, isSpeaking, selectedVoice, setSelectedVoice, unlockAudio } = useOptimizedVoice()
 
-  // Chat hook - gets session ID from storage
+  // Chat hook - now uses the combined version
   const {
     messages,
     isBotTyping,
@@ -46,11 +43,11 @@ export function CompactChat({ onClose }: CompactChatProps) {
   } = useChat({
     speakText,
     unlockAudio,
-    sessionId: currentSession?.id || null,
+    sessionId,
     selectedVoice,
   })
 
-  console.log("🏗️ Compact Chat render - messages:", messages.length, "session:", currentSession?.id)
+  console.log("🏗️ Compact Chat render - messages:", messages.length, "session:", sessionId)
 
   // Format message helper
   const formatMessage = (message: string) => {
@@ -109,18 +106,10 @@ export function CompactChat({ onClose }: CompactChatProps) {
       setIsVoiceInputActive(false)
       setVoiceTranscript("")
 
-      // Log voice input event
-      if (currentSession) {
-        await logEvent("voice_input", {
-          transcript_length: text.length,
-          formatted_text: formattedText,
-        })
-      }
-
       // Send message with voice flag
       await sendMessage(formattedText, true)
     },
-    [sendMessage, currentSession, logEvent, isSpeaking, isDuplicateMessage],
+    [sendMessage, isSpeaking, isDuplicateMessage],
   )
 
   const handleVoiceInputToggle = useCallback(() => {
@@ -138,49 +127,35 @@ export function CompactChat({ onClose }: CompactChatProps) {
     }
   }, [isVoiceInputActive, isSpeaking])
 
-  // Initialize session when component mounts - IMPROVED
+  // Send intro message after session is ready
   useEffect(() => {
-    const initializeSession = async () => {
-      console.log("🎯 CompactChat mounted - initializing session")
-      console.log("🎯 Current session state:", currentSession?.id)
+    const sendIntro = async () => {
+      console.log("🎯 Intro message effect triggered:", {
+        hasPlayedIntro: hasPlayedIntroRef.current,
+        sessionId,
+        messagesCount: messages.length
+      })
+      
+      // Only send intro if we have a session and haven't sent it yet
+      if (!hasPlayedIntroRef.current && sessionId) {
+        hasPlayedIntroRef.current = true
+        console.log("🎯 Session ready, sending intro message to session:", sessionId)
 
-      // Always create a new session when chat opens
-      try {
-        console.log("📝 Creating new chat session for CompactChat")
-        const newSession = await startNewSession({
-          source: "chat_open",
-          initial_query: null,
-          timestamp: new Date().toISOString(),
-        })
+        // Wait a moment to ensure the session is fully ready
+        await new Promise(resolve => setTimeout(resolve, 500))
 
-        if (newSession) {
-          console.log("✅ New session created successfully:", newSession.id)
-        } else {
-          console.error("❌ Failed to create new session")
+        console.log("🎯 Sending intro message now")
+        try {
+          await sendIntroMessage()
+          console.log("🎯 Intro message sent successfully")
+        } catch (error) {
+          console.error("🎯 Error sending intro message:", error)
         }
-      } catch (error) {
-        console.error("❌ Error creating session:", error)
       }
     }
 
-    initializeSession()
-  }, [startNewSession]) // Depend on startNewSession to ensure it's available
-
-  // Send intro message after session is ready - IMPROVED
-  useEffect(() => {
-    if (!hasPlayedIntroRef.current && currentSession?.id && currentSession.is_active) {
-      hasPlayedIntroRef.current = true
-      console.log("🎯 Session ready and active, sending intro message to session:", currentSession.id)
-
-      // Delay to ensure session is fully ready
-      const timer = setTimeout(() => {
-        console.log("🎯 Sending intro message now")
-        sendIntroMessage()
-      }, 1000) // Increased delay
-
-      return () => clearTimeout(timer)
-    }
-  }, [currentSession?.id, currentSession?.is_active, sendIntroMessage])
+    sendIntro()
+  }, [sessionId, sendIntroMessage])
 
   // Aggressive thinking state timeout - force clear after 15 seconds
   useEffect(() => {
@@ -210,7 +185,7 @@ export function CompactChat({ onClose }: CompactChatProps) {
   useEffect(() => {
     if (messages.length > 0) {
       const lastMessage = messages[messages.length - 1]
-      if (lastMessage.sender === "connie" && !isBotTyping && !isProcessing && !isBotThinking) {
+      if (lastMessage.sender === 'connie' && !isBotTyping && !isProcessing && !isBotThinking) {
         console.log("🤖 Bot message completed, ensuring all states are clear")
         isProcessingVoiceQueryRef.current = false
 
@@ -245,14 +220,8 @@ export function CompactChat({ onClose }: CompactChatProps) {
     return () => {
       console.log("🧹 CompactChat unmounting, stopping any ongoing typing")
       handleForceStop()
-
-      // End session when chat closes
-      if (currentSession?.id) {
-        console.log("🔚 Ending session on unmount:", currentSession.id)
-        endSession()
-      }
     }
-  }, [handleForceStop, currentSession?.id, endSession])
+  }, [handleForceStop])
 
   // Handle message submission
   const handleMessageSubmit = useCallback(
@@ -279,17 +248,32 @@ export function CompactChat({ onClose }: CompactChatProps) {
     handleForceStop()
   }, [handleForceStop])
 
+  // Show loading if no session
+  if (!sessionId) {
+    return (
+      <div className="flex flex-col h-full bg-black/30 backdrop-blur-3xl border border-indigo-500/20 rounded-2xl shadow-2xl shadow-indigo-500/5 overflow-hidden">
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-400 mx-auto mb-4"></div>
+            <p className="text-indigo-200">Creating session...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   // Add this right before the return statement for debugging
   console.log("🤖 Bot States:", {
     isBotTyping,
     isBotThinking,
     isProcessing,
     isSpeaking,
-    typingBotMsg: typingBotMsg?.length || 0,
+    typingBotMsg: typingBotMsg,
+    typingBotMsgLength: typingBotMsg?.length || 0,
     hasTimeout: !!thinkingTimeoutRef.current,
     messageCount: messageCountRef.current,
     lastMessage: lastMessageRef.current.substring(0, 50),
-    sessionActive: currentSession?.is_active,
+    sessionId,
   })
 
   return (
@@ -316,13 +300,24 @@ export function CompactChat({ onClose }: CompactChatProps) {
           <div className="hidden md:block">
             <VoiceSelector selectedVoice={selectedVoice} onVoiceChange={setSelectedVoice} />
           </div>
+          <Button
+            onClick={onClose}
+            size="sm"
+            variant="outline"
+            className="!border-indigo-400 text-indigo-400 hover:bg-indigo-500/10 hover:text-indigo-200 bg-transparent backdrop-blur-sm text-sm h-8 px-3"
+          >
+            <Square className="h-3 w-3" />
+          </Button>
         </div>
       </div>
 
       {/* Messages - Takes remaining space */}
       <div className="flex-1 overflow-hidden">
         <ChatMessages
-          messages={messages}
+          messages={messages.map(msg => ({
+            ...msg,
+            sender: msg.sender
+          }))}
           isThinking={isBotThinking}
           isBotTyping={isBotTyping}
           typingBotMsg={typingBotMsg}
