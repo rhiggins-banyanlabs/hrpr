@@ -99,4 +99,5 @@ export interface LatLngLiteral {
     | 'museum' 
     | 'parking' 
     | 'subway_station' 
-    | 'transit_station';
+    | 'transit_station'
+    | 'lodging';

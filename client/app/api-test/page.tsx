@@ -12,10 +12,11 @@ export default function ApiTest() {
   const [geocodeError, setGeocodeError] = useState<string>('');
 
   // Nearby places test state
-  const [latitude, setLatitude] = useState<string>('37.7749');
-  const [longitude, setLongitude] = useState<string>('-122.4194');
+  const [latitude, setLatitude] = useState<string>('39.7432'); // Default to Denver Convention Center
+  const [longitude, setLongitude] = useState<string>('-104.9959'); // Default to Denver Convention Center
   const [radius, setRadius] = useState<string>('1500');
   const [placeType, setPlaceType] = useState<PlaceType>('restaurant');
+  const [keyword, setKeyword] = useState<string>(''); // Added keyword state
   const [nearbyResults, setNearbyResults] = useState<NearbySearchResponse | null>(null);
   const [nearbyLoading, setNearbyLoading] = useState<boolean>(false);
   const [nearbyError, setNearbyError] = useState<string>('');
@@ -66,16 +67,26 @@ export default function ApiTest() {
     setNearbyResults(null);
     
     try {
+      // Prepare params object
+      const params: Record<string, string> = {
+        lat: latitude,
+        lng: longitude,
+        radius
+      };
+      
+      // Only add type if it's not empty
+      if (placeType) {
+        params.type = placeType;
+      }
+      
+      // Add keyword if provided
+      if (keyword.trim()) {
+        params.keyword = keyword.trim();
+      }
+      
       // Make a GET request to the nearby places API
-      console.log('Testing nearby places API with params:', { lat: latitude, lng: longitude, radius, type: placeType });
-      const response = await axios.get<NearbySearchResponse>('/api/nearby-places', {
-        params: {
-          lat: latitude,
-          lng: longitude,
-          radius,
-          type: placeType
-        }
-      });
+      console.log('Testing nearby places API with params:', params);
+      const response = await axios.get<NearbySearchResponse>('/api/nearby-places', { params });
       
       console.log('Nearby places API response:', response.data);
       setNearbyResults(response.data);
@@ -87,6 +98,17 @@ export default function ApiTest() {
     } finally {
       setNearbyLoading(false);
     }
+  };
+
+  // Set default to Denver landmarks
+  const setDenverConventionCenter = () => {
+    setLatitude('39.7432');
+    setLongitude('-104.9959');
+  };
+
+  const setHyattRegency = () => {
+    setLatitude('39.7435');
+    setLongitude('-104.9954');
   };
 
   return (
@@ -204,6 +226,40 @@ export default function ApiTest() {
         {/* Nearby Places API Test */}
         <div style={{ border: '1px solid #ddd', borderRadius: '8px', padding: '20px' }}>
           <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '16px' }}>Test Nearby Places API</h2>
+          
+          {/* Quick set buttons for conference locations */}
+          <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+            <button
+              onClick={setDenverConventionCenter}
+              style={{
+                padding: '6px 12px',
+                backgroundColor: '#9c27b0',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '14px'
+              }}
+            >
+              Set Denver Convention Center
+            </button>
+            
+            <button
+              onClick={setHyattRegency}
+              style={{
+                padding: '6px 12px',
+                backgroundColor: '#2196f3',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '14px'
+              }}
+            >
+              Set Hyatt Regency Hotel
+            </button>
+          </div>
+          
           <form onSubmit={testNearbyPlacesApi}>
             <div style={{ marginBottom: '15px' }}>
               <label htmlFor="latitude" style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
@@ -293,6 +349,27 @@ export default function ApiTest() {
               </select>
             </div>
             
+            {/* Added keyword search field */}
+            <div style={{ marginBottom: '15px' }}>
+              <label htmlFor="keyword" style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+                Keyword Search: <span style={{ fontWeight: 'normal', fontSize: '14px', color: '#666' }}>(e.g., "sushi", "coffee", "italian")</span>
+              </label>
+              <input
+                id="keyword"
+                type="text"
+                value={keyword}
+                onChange={(e) => setKeyword(e.target.value)}
+                placeholder="Enter search term (optional)"
+                style={{ 
+                  width: '100%', 
+                  padding: '8px', 
+                  borderRadius: '4px', 
+                  border: '1px solid #ccc',
+                  fontSize: '16px'
+                }}
+              />
+            </div>
+            
             <button
               type="submit"
               disabled={nearbyLoading}
@@ -321,6 +398,7 @@ export default function ApiTest() {
               <div style={{ marginBottom: '12px' }}>
                 <p style={{ margin: '4px 0' }}><strong>Status:</strong> {nearbyResults.status}</p>
                 <p style={{ margin: '4px 0' }}><strong>Places found:</strong> {nearbyResults.results?.length || 0}</p>
+                {keyword && <p style={{ margin: '4px 0' }}><strong>Search keyword:</strong> "{keyword}"</p>}
               </div>
               
               {nearbyResults.results && nearbyResults.results.length > 0 ? (
@@ -335,7 +413,8 @@ export default function ApiTest() {
                           marginBottom: '8px',
                           backgroundColor: '#f9f9f9',
                           borderRadius: '4px',
-                          border: '1px solid #eee'
+                          border: '1px solid #eee',
+                          color: 'black'
                         }}
                       >
                         <h5 style={{ fontWeight: 'bold', margin: '0 0 8px 0' }}>{index + 1}. {place.name}</h5>
@@ -346,12 +425,22 @@ export default function ApiTest() {
                             <strong>Open now:</strong> {place.opening_hours.open_now ? '✅ Yes' : '❌ No'}
                           </p>
                         )}
+                        <p style={{ margin: '4px 0' }}>
+                          <a 
+                            href={`https://www.google.com/maps/search/?api=1&query=${place.geometry.location.lat},${place.geometry.location.lng}&query_place_id=${place.place_id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: '#3367d6', textDecoration: 'none' }}
+                          >
+                            View on Google Maps
+                          </a>
+                        </p>
                       </div>
                     ))}
                   </div>
                   
                   <details style={{ marginTop: '16px' }}>
-                    <summary style={{ cursor: 'pointer', fontWeight: 'bold', padding: '8px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
+                    <summary style={{ cursor: 'pointer', fontWeight: 'bold', padding: '8px', backgroundColor: '#f5f5f5', borderRadius: '4px', color: 'black' }}>
                       View Full JSON Response
                     </summary>
                     <div style={{ 
@@ -361,7 +450,8 @@ export default function ApiTest() {
                       borderRadius: '4px',
                       overflowX: 'auto',
                       maxHeight: '300px',
-                      overflowY: 'auto'
+                      overflowY: 'auto',
+                      color: 'black'
                     }}>
                       <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                         {JSON.stringify(nearbyResults, null, 2)}
