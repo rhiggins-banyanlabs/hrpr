@@ -1,5 +1,6 @@
 "use client"
 import { useEffect, useRef } from "react"
+import { FeedbackButtons } from "@/components/FeedbackButtons"
 
 interface Message {
   id: string
@@ -7,6 +8,7 @@ interface Message {
   sender: "user" | "connie"
   timestamp: Date
   isTyping?: boolean
+  isIntro?: boolean // Add this to identify intro messages
 }
 
 interface ChatMessagesProps {
@@ -14,6 +16,7 @@ interface ChatMessagesProps {
   isThinking: boolean
   isBotTyping?: boolean
   typingBotMsg?: string | null
+  sessionId?: string // Add sessionId prop
 }
 
 export const ChatMessages = ({
@@ -21,6 +24,7 @@ export const ChatMessages = ({
   isThinking = false,
   isBotTyping = false,
   typingBotMsg = null,
+  sessionId,
 }: ChatMessagesProps) => {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -74,8 +78,18 @@ export const ChatMessages = ({
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 via-purple-500 to-indigo-700 flex items-center justify-center text-white font-bold shadow-lg flex-shrink-0">
                   <span className="text-sm">C</span>
                 </div>
-                <div className="bg-gradient-to-br from-indigo-500/20 via-purple-500/20 to-indigo-700/20 backdrop-blur-md border border-indigo-400/40 text-white px-5 py-3 rounded-2xl max-w-xs lg:max-w-md shadow-2xl">
-                  <div className="font-medium whitespace-pre-wrap text-sm">{message.text}</div>
+                <div>
+                  <div className="bg-gradient-to-br from-indigo-500/20 via-purple-500/20 to-indigo-700/20 backdrop-blur-md border border-indigo-400/40 text-white px-5 py-3 rounded-2xl max-w-xs lg:max-w-md shadow-2xl">
+                    <div className="font-medium whitespace-pre-wrap text-sm">{message.text}</div>
+                  </div>
+                  {/* Add feedback buttons for Connie's messages */}
+                  {sessionId && (
+                    <FeedbackButtons 
+                      messageId={message.id} 
+                      sessionId={sessionId}
+                      isIntroMessage={message.isIntro}
+                    />
+                  )}
                 </div>
               </div>
             </div>
