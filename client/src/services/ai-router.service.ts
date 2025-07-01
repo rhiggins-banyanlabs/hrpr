@@ -1,19 +1,112 @@
-// src/services/ai-router.service.ts - ENHANCED VERSION WITH YOUR TYPES
+// src/services/ai-router.service.ts - UPDATED VERSION with no hardcoded data
 import { AIRouterResponse, Strategy, LogEntry } from "@/types/ai-router.types";
 import { LoggerService } from "./logger.service";
 import { ProviderFactory } from "./providers/provider-factory.service";
-import { CacheService } from "./cache.service"; // NEW: Add cache service
+import { CacheService } from "./cache.service";
+import { ConferenceStorageService } from '@/lib/supabase/chatStorage'; // NEW: Add conference data
 import {
   getStrategyOrder,
   calculateProviderCost,
   PROVIDER_COSTS_DETAILED,
 } from "@/config/ai-providers.config";
 
+interface Speaker {
+  id: string;
+  name: string;
+  title: string;
+  company: string;
+  bio?: string;
+  image?: string;
+}
+
+interface Session {
+  id: string;
+  title: string;
+  description?: string;
+  time: string;
+  speaker: string;
+  location?: string;
+  type?: string;
+}
+
 export class AIRouterService {
   private logger: LoggerService;
+  private speakers: Speaker[] = [];
+  private sessions: Session[] = [];
+  private lastDataFetch: number = 0;
+  private dataFreshDuration: number = 5 * 60 * 1000; // 5 minutes
 
   constructor() {
     this.logger = new LoggerService();
+  }
+
+  /**
+   * NEW: Fetch fresh conference data from Supabase (only when needed)
+   */
+  private async ensureConferenceData(): Promise<void> {
+    const now = Date.now();
+    
+    // Only fetch if data is stale or missing
+    if (now - this.lastDataFetch < this.dataFreshDuration && this.speakers.length > 0) {
+      return;
+    }
+
+    try {
+      console.log('🔄 Fetching fresh conference data for AI routing...');
+      
+      const [speakersResult, sessionsResult] = await Promise.all([
+        ConferenceStorageService.getAllSpeakers(),
+        ConferenceStorageService.getAllSessions()
+      ]);
+
+      this.speakers = speakersResult || [];
+      this.sessions = sessionsResult || [];
+      this.lastDataFetch = now;
+
+      console.log(`✅ AI Router loaded ${this.speakers.length} speakers and ${this.sessions.length} sessions`);
+      
+    } catch (error) {
+      console.error('❌ Error fetching conference data for AI router:', error);
+      this.speakers = [];
+      this.sessions = [];
+    }
+  }
+
+  /**
+   * NEW: Create enhanced prompt with real conference data
+   */
+  private async createConferenceAwarePrompt(originalPrompt: string): Promise<string> {
+    await this.ensureConferenceData();
+
+    let enhancedPrompt = originalPrompt;
+
+    // Add conference context if we have data
+    if (this.speakers.length > 0 || this.sessions.length > 0) {
+      enhancedPrompt += '\n\nCONFERENCE CONTEXT:';
+      
+      if (this.speakers.length > 0) {
+        enhancedPrompt += '\nSpeakers: ';
+        enhancedPrompt += this.speakers.map(s => `${s.name} (${s.title}${s.company ? ` at ${s.company}` : ''})`).join(', ');
+      }
+      
+      if (this.sessions.length > 0) {
+        enhancedPrompt += '\nSessions: ';
+        this.sessions.forEach(session => {
+          const startTime = new Date(session.time).toLocaleTimeString('en-US', {
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+          });
+          enhancedPrompt += `${startTime}: ${session.title} by ${session.speaker}${session.location ? ` (${session.location})` : ''}; `;
+        });
+      }
+
+      enhancedPrompt += '\n\nPlease use this REAL conference information in your response. Do not make up any schedules, speakers, or locations that are not listed above.';
+    } else {
+      enhancedPrompt += '\n\nIMPORTANT: No conference data is currently available. Inform the user to check with conference organizers for specific information about speakers, schedules, and locations.';
+    }
+
+    return enhancedPrompt;
   }
 
   async routeRequest(
@@ -34,9 +127,7 @@ export class AIRouterService {
         'instant-cache',
         duration,
         0, // No cost for instant responses
-        strategy,
-        0, // No input tokens
-        0  // No output tokens
+        strategy
       );
 
       return {
@@ -69,9 +160,7 @@ export class AIRouterService {
         `${cachedResult.provider}-cached`,
         duration,
         cachedResult.cost ? (cachedResult.cost * 1000) : 0, // Convert back to per-1K format for your logger
-        strategy,
-        cachedResult.tokensUsed?.input || 0,
-        cachedResult.tokensUsed?.output || 0
+        strategy
       );
 
       return {
@@ -97,12 +186,21 @@ export class AIRouterService {
     const providerOrder = this.getOptimizedProviderOrder(strategy);
     console.log(`[AI Router] Optimized provider order for ${strategy}:`, providerOrder);
 
-    // Estimate token usage for cost calculation
-    const estimatedInputTokens = Math.ceil(prompt.length / 4);
+    // NEW: Create conference-aware prompt
+    const conferenceAwarePrompt = await this.createConferenceAwarePrompt(prompt);
+    const usingConferenceData = conferenceAwarePrompt !== prompt;
+
+    // Estimate token usage for cost calculation (use enhanced prompt length)
+    const estimatedInputTokens = Math.ceil(conferenceAwarePrompt.length / 4);
     const estimatedOutputTokens = this.getOptimizedOutputTokens(strategy, estimatedInputTokens);
 
     const failedProviders: string[] = [];
     const optimizations: string[] = [];
+
+    // Add optimization flags
+    if (usingConferenceData) {
+      optimizations.push('conference-data-injection');
+    }
 
     for (const providerName of providerOrder) {
       try {
@@ -111,8 +209,8 @@ export class AIRouterService {
         const provider = ProviderFactory.getProvider(providerName);
         
         // OPTIMIZATION 4: Create optimized prompt and options based on strategy
-        const optimizedPrompt = this.optimizePromptForStrategy(prompt, strategy);
-        if (optimizedPrompt !== prompt) {
+        const optimizedPrompt = this.optimizePromptForStrategy(conferenceAwarePrompt, strategy);
+        if (optimizedPrompt !== conferenceAwarePrompt) {
           optimizations.push('prompt-optimization');
         }
 
@@ -135,9 +233,7 @@ export class AIRouterService {
             provider.getName(),
             duration,
             actualCost,
-            strategy,
-            actualInputTokens,
-            actualOutputTokens,
+            strategy
           );
 
           const response: AIRouterResponse = {
@@ -158,7 +254,7 @@ export class AIRouterService {
           // OPTIMIZATION 5: Cache successful responses for future use
           if (result.data && actualCost > 0) {
             CacheService.setCachedResponse(
-              prompt,
+              prompt, // Cache with original prompt, not enhanced one
               strategy,
               result.data,
               provider.getName(),
@@ -246,20 +342,20 @@ export class AIRouterService {
   }
 
   /**
-   * OPTIMIZATION: Create optimized prompts based on strategy
+   * OPTIMIZATION: Create optimized prompts based on strategy (UPDATED to preserve conference data)
    */
   private optimizePromptForStrategy(prompt: string, strategy: Strategy): string {
     if (strategy === 'cheap') {
-      // For cheap responses, add instruction to be brief
-      return `${prompt}\n\nPlease provide a brief, direct response (under 200 characters).`;
+      // For cheap responses, add instruction to be brief (but preserve conference context)
+      return `${prompt}\n\nPlease provide a brief, direct response using the conference information above (under 200 characters).`;
     }
     
     if (strategy === 'balanced') {
       // For balanced, ask for concise but complete responses
-      return `${prompt}\n\nPlease provide a helpful, concise response (under 300 characters).`;
+      return `${prompt}\n\nPlease provide a helpful, concise response using the conference information above (under 300 characters).`;
     }
     
-    // For quality, use original prompt
+    // For quality, use prompt as-is (already has conference data)
     return prompt;
   }
 
@@ -291,9 +387,10 @@ export class AIRouterService {
       }];
     }
 
-    // Use your existing cost estimation logic
+    // Use enhanced prompt for more accurate cost estimation
+    const conferenceAwarePrompt = await this.createConferenceAwarePrompt(prompt);
     const providerOrder = getStrategyOrder(strategy);
-    const estimatedInputTokens = Math.ceil(prompt.length / 4);
+    const estimatedInputTokens = Math.ceil(conferenceAwarePrompt.length / 4);
     const estimatedOutputTokens = this.getOptimizedOutputTokens(strategy, estimatedInputTokens);
 
     return providerOrder
@@ -375,7 +472,7 @@ export class AIRouterService {
   }
 
   /**
-   * Add custom instant response (useful for admin interface)
+   * Add custom instant response (useful for admin interface) - UPDATED to support conference-specific responses
    */
   addInstantResponse(keyword: string, response: string): void {
     CacheService.addInstantResponse(keyword, response);
@@ -409,37 +506,74 @@ export class AIRouterService {
   }
 
   /**
-   * Preload cache with common conference responses (useful for startup)
+   * NEW: Get current conference data status (for debugging/admin)
    */
-  preloadCommonResponses(): void {
-    console.log('🔥 Preloading common conference responses...');
+  getConferenceDataStatus() {
+    return {
+      speakers: this.speakers.length,
+      sessions: this.sessions.length,
+      lastFetch: new Date(this.lastDataFetch).toISOString(),
+      dataAge: Date.now() - this.lastDataFetch,
+      isStale: (Date.now() - this.lastDataFetch) > this.dataFreshDuration
+    };
+  }
+
+  /**
+   * NEW: Force refresh of conference data
+   */
+  async refreshConferenceData(): Promise<void> {
+    this.lastDataFetch = 0; // Force refresh
+    await this.ensureConferenceData();
+    console.log('🔄 Conference data refreshed in AI Router');
+  }
+
+  /**
+   * Preload cache with common conference responses (UPDATED to use real data)
+   */
+  async preloadCommonResponses(): Promise<void> {
+    console.log('🔥 Preloading common conference responses with real data...');
     
-    const commonQuestions = [
-      { prompt: "What time is lunch?", strategy: "cheap" as Strategy },
-      { prompt: "Where is the conference?", strategy: "cheap" as Strategy },
-      { prompt: "What's the schedule?", strategy: "cheap" as Strategy },
-      { prompt: "When is the keynote?", strategy: "cheap" as Strategy },
-      { prompt: "Where can I park?", strategy: "cheap" as Strategy },
-      { prompt: "What food options are available?", strategy: "cheap" as Strategy }
+    // Ensure we have fresh conference data
+    await this.ensureConferenceData();
+    
+    // Create conference-specific instant responses based on real data
+    if (this.speakers.length > 0) {
+      const speakerNames = this.speakers.map(s => s.name).join(', ');
+      CacheService.addInstantResponse('who are the speakers', `Our speakers include: ${speakerNames}`);
+      CacheService.addInstantResponse('speakers', `Our speakers include: ${speakerNames}`);
+    }
+    
+    if (this.sessions.length > 0) {
+      const sessionCount = this.sessions.length;
+      CacheService.addInstantResponse('how many sessions', `We have ${sessionCount} sessions scheduled.`);
+      
+      // Add first session time if available
+      const firstSession = this.sessions.sort((a, b) => 
+        new Date(a.time).getTime() - new Date(b.time).getTime()
+      )[0];
+      
+      if (firstSession) {
+        const startTime = new Date(firstSession.time).toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        });
+        CacheService.addInstantResponse('when does it start', `The first session "${firstSession.title}" starts at ${startTime}.`);
+        CacheService.addInstantResponse('start time', `The first session starts at ${startTime}.`);
+      }
+    }
+
+    // Keep some generic instant responses
+    const genericResponses = [
+      { keyword: "wifi password", response: "Please check with conference staff for the WiFi password." },
+      { keyword: "parking", response: "Please check with conference organizers for parking information." },
+      { keyword: "registration", response: "Please check with conference registration desk for assistance." }
     ];
 
-    let preloadedCount = 0;
-    commonQuestions.forEach(({ prompt, strategy }) => {
-      const instant = CacheService.getInstantResponse(prompt);
-      if (instant) {
-        CacheService.setCachedResponse(
-          prompt, 
-          strategy, 
-          instant, 
-          'preload', 
-          0, 
-          { input: 0, output: 0, total: 0 },
-          0
-        );
-        preloadedCount++;
-      }
+    genericResponses.forEach(({ keyword, response }) => {
+      CacheService.addInstantResponse(keyword, response);
     });
 
-    console.log(`🔥 Preloaded ${preloadedCount} common responses into cache`);
+    console.log(`🔥 Preloaded conference responses for ${this.speakers.length} speakers and ${this.sessions.length} sessions`);
   }
 }
