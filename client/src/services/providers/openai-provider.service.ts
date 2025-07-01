@@ -69,81 +69,9 @@ export class OpenAIProviderService extends BaseProviderService {
     console.log('🚀 OpenAI Provider makeRequest called with prompt:', prompt.substring(0, 50) + '...');
     
     try {
-      // 🔥 GET REAL CONFERENCE DATA
-      console.log('📅 Fetching real conference data...');
-      const { speakers, sessions } = await getCachedConferenceData();
-      
-      let conferenceContext = '';
-
-      // Build speakers context
-      if (speakers && speakers.length > 0) {
-        console.log(`👥 Processing ${speakers.length} speakers`);
-        const speakersInfo = speakers.map(speaker => {
-          const name = speaker.name || 'Unknown Speaker';
-          const title = speaker.title || '';
-          const company = speaker.company || '';
-          const bio = speaker.bio || '';
-          
-          let speakerLine = `- ${name}`;
-          if (title) speakerLine += ` - ${title}`;
-          if (company) speakerLine += ` at ${company}`;
-          if (bio) speakerLine += ` | ${bio.substring(0, 100)}`;
-          
-          return speakerLine;
-        }).join('\n');
-        
-        conferenceContext += `\n\nCONFERENCE SPEAKERS:\n${speakersInfo}`;
-        console.log('👥 Added speakers context');
-      }
-
-      // Build sessions context
-      if (sessions && sessions.length > 0) {
-        console.log(`📅 Processing ${sessions.length} sessions`);
-        
-        // Sort sessions by time
-        const sortedSessions = sessions.sort((a, b) => 
-          new Date(a.time).getTime() - new Date(b.time).getTime()
-        );
-        
-        const sessionsInfo = sortedSessions.map(session => {
-          const startTime = new Date(session.time).toLocaleTimeString('en-US', {
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true
-          });
-          // Note: EventSession only has 'time', not 'end_time'
-          const endTime = startTime; // Use same time since we don't have end_time
-          
-          const title = session.title || 'Untitled Session';
-          const location = session.location || '';
-          const type = session.type || '';
-          const description = session.description || '';
-          
-          let sessionLine = `- ${startTime}`;
-          if (endTime !== startTime) sessionLine += ` - ${endTime}`;
-          sessionLine += `: ${title}`;
-          if (location) sessionLine += ` (${location})`;
-          if (type) sessionLine += ` [${type}]`;
-          if (description) sessionLine += ` - ${description.substring(0, 100)}`;
-          
-          return sessionLine;
-        }).join('\n');
-        
-        conferenceContext += `\n\nCONFERENCE SCHEDULE:\n${sessionsInfo}`;
-        console.log('📅 Added sessions context');
-      }
-
-      // If no real data available, provide guidance instead of fake data
-      if ((!speakers || speakers.length === 0) && (!sessions || sessions.length === 0)) {
-        console.log('⚠️ No conference data available - will inform user to check with organizers');
-        conferenceContext = `\n\nIMPORTANT: Conference schedule and speaker information is currently being updated. Please check with conference organizers for the latest information about speakers, schedules, and session details.`;
-      } else if (!speakers || speakers.length === 0) {
-        conferenceContext += `\n\nNOTE: Speaker information is being updated. Please check with conference organizers for speaker details.`;
-      } else if (!sessions || sessions.length === 0) {
-        conferenceContext += `\n\nNOTE: Session schedule is being updated. Please check with conference organizers for the latest schedule.`;
-      }
-
-      console.log('🚀 Making OpenAI API call with real conference data...');
+      // Use the enhanced prompt from AI Router (which already contains conference data)
+      // The AI Router handles all conference data fetching and enhancement
+      console.log('🚀 Making OpenAI API call with AI Router enhanced prompt...');
       const apiStartTime = performance.now();
       
       const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -160,7 +88,7 @@ export class OpenAIProviderService extends BaseProviderService {
               content: `You are Connie, a friendly and helpful AI assistant for conference attendees. You provide accurate information about the conference using ONLY the real data provided to you.
 
 IMPORTANT RULES:
-- Use ONLY the conference information provided below - never make up schedules, speakers, or locations
+- Use ONLY the conference information provided in the user's message - never make up schedules, speakers, or locations
 - If specific information isn't available, be honest and suggest checking with conference organizers
 - Be conversational, helpful, and concise
 - Always use Markdown formatting for better readability
@@ -174,9 +102,7 @@ WHAT YOU CAN HELP WITH:
 - General conference questions
 - Event logistics and navigation
 
-CURRENT CONFERENCE DATA:${conferenceContext}
-
-Remember: Only use the information provided above. If you don't have specific details, acknowledge this and suggest the user check with conference organizers for the most up-to-date information.`
+Remember: Only use the information provided in the user's message. If you don't have specific details, acknowledge this and suggest the user check with conference organizers for the most up-to-date information.`
             },
             {
               role: "user",
@@ -211,9 +137,8 @@ Remember: Only use the information provided above. If you don't have specific de
 
       // Estimate token usage for cost calculation
       const systemPromptTokens = Math.ceil(1000 / 4); // Rough estimate for system prompt
-      const conferenceDataTokens = Math.ceil(conferenceContext.length / 4);
       const userPromptTokens = Math.ceil(prompt.length / 4);
-      const inputTokens = systemPromptTokens + conferenceDataTokens + userPromptTokens;
+      const inputTokens = systemPromptTokens + userPromptTokens;
       const outputTokens = Math.ceil(cappedResponse.length / 4);
 
       console.log(`📊 Token usage: ${inputTokens} input + ${outputTokens} output = ${inputTokens + outputTokens} total`);
