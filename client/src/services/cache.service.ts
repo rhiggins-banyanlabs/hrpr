@@ -4,19 +4,11 @@ import { Strategy, CacheEntry, CacheStats } from "@/types/ai-router.types";
 export class CacheService {
   private static responseCache = new Map<string, CacheEntry>();
   private static instantResponses = new Map<string, string>([
-    // Conference-specific instant responses
-    ['schedule', 'Main sessions run 9 AM-5 PM daily with breaks at 11 AM and 3 PM. Keynote is at 2 PM in the main auditorium.'],
-    ['lunch', 'Lunch is served 12 PM-1 PM in the main dining hall with vegetarian, vegan, and gluten-free options available.'],
-    ['location', "We're at Grand Convention Center, 123 Conference Ave. Multiple floors have different session tracks."],
-    ['food', 'Food options include vegetarian, vegan, and gluten-free choices. Coffee and snacks are available throughout the day.'],
+    // Only keep generic responses that don't conflict with real conference data
     ['wifi', 'Free WiFi is available throughout the venue. Network: ConferenceGuest, Password: Welcome2024'],
     ['parking', 'Free parking is available in the main lot. Premium parking spots are $10/day in the covered garage.'],
     ['registration', 'Registration desk is open 8 AM-6 PM daily on the main floor. Bring your confirmation email or ID.'],
-    ['networking', 'Networking breaks are at 11 AM and 3 PM. Evening networking events are 6-8 PM in the lobby.'],
-    ['keynote', 'The keynote presentation is at 2 PM in the main auditorium. Doors open 15 minutes before.'],
-    ['sessions', 'Main sessions run from 9 AM to 5 PM with various tracks across multiple floors.'],
-    ['bathroom', 'Restrooms are located on every floor near the elevators and at both ends of each hallway.'],
-    ['coffee', 'Coffee stations are available throughout the venue with complimentary coffee, tea, and snacks all day.']
+    ['bathroom', 'Restrooms are located on every floor near the elevators and at both ends of each hallway.']
   ]);
 
   // Performance tracking
@@ -42,16 +34,11 @@ export class CacheService {
       }
     }
     
-    // Check for common question patterns
+    // Check for common question patterns (only for non-conference data)
     const patterns = [
-      { regex: /what time.*lunch|when.*lunch|lunch.*time/, response: this.instantResponses.get('lunch')! },
-      { regex: /where.*conference|conference.*location|address/, response: this.instantResponses.get('location')! },
-      { regex: /what.*schedule|daily.*schedule|session.*times/, response: this.instantResponses.get('schedule')! },
       { regex: /wifi|internet|password/, response: this.instantResponses.get('wifi')! },
       { regex: /parking|park.*car|where.*park/, response: this.instantResponses.get('parking')! },
-      { regex: /keynote.*time|when.*keynote/, response: this.instantResponses.get('keynote')! },
-      { regex: /bathroom|restroom|toilet/, response: this.instantResponses.get('bathroom')! },
-      { regex: /coffee|snack|drink/, response: this.instantResponses.get('coffee')! }
+      { regex: /bathroom|restroom|toilet/, response: this.instantResponses.get('bathroom')! }
     ];
 
     for (const pattern of patterns) {
