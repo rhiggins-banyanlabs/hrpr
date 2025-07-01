@@ -10,6 +10,8 @@ interface Message {
   timestamp: Date;
   isTyping?: boolean;
   isIntroMessage?: boolean;
+  isTemporary?: boolean;
+  isVoiceTranscription?: boolean;
 }
 
 interface UseChatProps {

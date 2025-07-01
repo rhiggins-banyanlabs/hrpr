@@ -90,24 +90,6 @@ export const ChatInput = ({
       </div>
 
       <form onSubmit={handleSubmit} className="flex gap-2">
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder={
-            isConnieSpeaking 
-              ? "Connie is speaking..." 
-              : isVoiceInputActive 
-                ? "Listening... speak now" 
-                : "Ask Connie anything about the conference..."
-          }
-          disabled={isProcessing || isVoiceInputActive || isConnieSpeaking} // Add isConnieSpeaking
-          className={`flex-1 px-4 py-2 bg-gray-800 text-white border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 ${
-            isVoiceInputActive
-              ? "border-red-500 focus:ring-red-500 animate-pulse"
-              : "border-indigo-500/30"
-          }`}
-        />
                 
         <MicrophoneButton
           isRecording={isVoiceInputActive}
@@ -115,14 +97,6 @@ export const ChatInput = ({
           onToggle={onVoiceInputToggle}
           disabled={isProcessing || isConnieSpeaking} // Add isConnieSpeaking
         />
-                
-        <button
-          type="submit"
-          disabled={isProcessing || !input.trim() || isVoiceInputActive || isConnieSpeaking} // Add isConnieSpeaking
-          className="px-6 py-2 bg-gradient-to-r from-indigo-600 via-purple-600 to-blue-500 text-white rounded-lg hover:from-indigo-700 hover:via-purple-700 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-        >
-          {isProcessing ? 'Thinking...' : 'Send'}
-        </button>
       </form>
 
       {isVoiceInputActive && (
