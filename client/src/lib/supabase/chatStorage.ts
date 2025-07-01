@@ -1,6 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
 
-
 // Initialize Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -71,41 +70,79 @@ export interface EventSession {
 }
 
 // =============================================
-// EXISTING CHAT STORAGE SERVICE
+// ENHANCED CHAT STORAGE SERVICE
 // =============================================
 
 export class ChatStorageService {
-  // Create a new chat session when "Hey Connie" is detected
+  // Create a new chat session - ENHANCED with detailed logging
   static async createChatSession(metadata?: Record<string, any>): Promise<ChatSession | null> {
     try {
+      console.log('🔧 ChatStorageService.createChatSession called with metadata:', metadata);
+      
+      // Prepare the session data
+      const sessionData = {
+        user_agent: typeof window !== 'undefined' ? navigator.userAgent : 'server',
+        metadata: metadata || {},
+        is_active: true,
+        session_started_at: new Date().toISOString(),
+        // user_id will be null if not authenticated
+      };
+
+      console.log('🔧 Session data prepared:', sessionData);
+
+      // Insert the session
       const { data: session, error } = await supabase
         .from('chat_sessions')
-        .insert({
-          user_agent: navigator.userAgent,
-          metadata: metadata || {},
-          // user_id will be null if not authenticated
-        })
+        .insert(sessionData)
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Supabase error creating session:', error);
+        console.error('❌ Error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
+        throw error;
+      }
+
+      if (!session) {
+        console.error('❌ No session returned from Supabase (but no error)');
+        return null;
+      }
+
+      console.log('✅ Session created successfully:', session.id);
 
       // Log analytics event
-      if (session) {
+      try {
         await this.logAnalyticsEvent(session.id, 'session_start', {
-          trigger: 'voice_activation',
+          trigger: 'chat_open',
           ...metadata
         });
+        console.log('📊 Analytics event logged for session:', session.id);
+      } catch (analyticsError) {
+        console.error('⚠️ Failed to log analytics event (non-fatal):', analyticsError);
+        // Don't fail the session creation if analytics fails
       }
 
       return session;
     } catch (error) {
-      console.error('Error creating chat session:', error);
+      console.error('❌ Error in createChatSession:', error);
+      
+      // Provide more specific error information
+      if (error instanceof Error) {
+        console.error('❌ Error name:', error.name);
+        console.error('❌ Error message:', error.message);
+        console.error('❌ Error stack:', error.stack);
+      }
+      
       return null;
     }
   }
 
-  // Save a message to the database
+  // Save a message to the database - ENHANCED
   static async saveMessage(
     sessionId: string,
     sender: 'user' | 'connie',
@@ -118,47 +155,74 @@ export class ChatStorageService {
     }
   ): Promise<Message | null> {
     try {
+      console.log('💾 Saving message:', { sessionId, sender, messageLength: messageText.length });
+
+      const messageData = {
+        session_id: sessionId,
+        sender,
+        message_text: messageText,
+        message_timestamp: new Date().toISOString(),
+        is_voice_input: options?.isVoiceInput || false,
+        voice_transcript: options?.voiceTranscript,
+        selected_voice: options?.selectedVoice,
+        metadata: options?.metadata || {}
+      };
+
       const { data: message, error } = await supabase
         .from('messages')
-        .insert({
-          session_id: sessionId,
-          sender,
-          message_text: messageText,
-          is_voice_input: options?.isVoiceInput || false,
-          voice_transcript: options?.voiceTranscript,
-          selected_voice: options?.selectedVoice,
-          metadata: options?.metadata || {}
-        })
+        .insert(messageData)
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Error saving message:', error);
+        throw error;
+      }
+
+      if (!message) {
+        console.error('❌ No message returned from Supabase');
+        return null;
+      }
+
+      console.log('✅ Message saved:', message.id);
       return message;
     } catch (error) {
-      console.error('Error saving message:', error);
+      console.error('❌ Error in saveMessage:', error);
       return null;
     }
   }
 
-  // End a chat session
+  // End a chat session - ENHANCED
   static async endChatSession(sessionId: string): Promise<boolean> {
     try {
+      console.log('🔚 Ending chat session:', sessionId);
+
       const { error } = await supabase
         .from('chat_sessions')
         .update({
           session_ended_at: new Date().toISOString(),
-          is_active: false
+          is_active: false,
+          updated_at: new Date().toISOString()
         })
         .eq('id', sessionId);
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Error ending session:', error);
+        throw error;
+      }
 
       // Log analytics event
-      await this.logAnalyticsEvent(sessionId, 'session_end');
+      try {
+        await this.logAnalyticsEvent(sessionId, 'session_end');
+        console.log('📊 Session end analytics logged');
+      } catch (analyticsError) {
+        console.error('⚠️ Failed to log session end analytics (non-fatal):', analyticsError);
+      }
 
+      console.log('✅ Session ended successfully:', sessionId);
       return true;
     } catch (error) {
-      console.error('Error ending chat session:', error);
+      console.error('❌ Error ending chat session:', error);
       return false;
     }
   }
@@ -197,11 +261,6 @@ export class ChatStorageService {
     }
   }
 
-  // ADD THESE METHODS TO YOUR EXISTING ChatStorageService CLASS
-// (Don't replace anything, just add these methods at the end of the ChatStorageService class)
-
-  // Add these methods to your existing ChatStorageService class:
-  
   // Get all chat sessions (for admin panel)
   static async getAllSessions(): Promise<ChatSession[]> {
     try {
@@ -239,22 +298,56 @@ export class ChatStorageService {
     return this.getSessionMessages(sessionId);
   }
 
-  // Log analytics events
+  // Log analytics events - ENHANCED
   static async logAnalyticsEvent(
     sessionId: string,
     eventType: string,
     eventData?: Record<string, any>
   ): Promise<void> {
     try {
-      await supabase
+      console.log('📊 Logging analytics event:', { sessionId, eventType, eventData });
+
+      const { error } = await supabase
         .from('chat_analytics')
         .insert({
           session_id: sessionId,
           event_type: eventType,
-          event_data: eventData || {}
+          event_data: eventData || {},
+          created_at: new Date().toISOString()
         });
+
+      if (error) {
+        console.error('❌ Error logging analytics event:', error);
+        throw error;
+      }
+
+      console.log('✅ Analytics event logged successfully');
     } catch (error) {
-      console.error('Error logging analytics event:', error);
+      console.error('❌ Error in logAnalyticsEvent:', error);
+      // Don't throw - analytics failures shouldn't break the app
+    }
+  }
+
+  // Test database connection
+  static async testConnection(): Promise<boolean> {
+    try {
+      console.log('🧪 Testing database connection...');
+      
+      const { data, error } = await supabase
+        .from('chat_sessions')
+        .select('count(*)')
+        .limit(1);
+
+      if (error) {
+        console.error('❌ Database connection test failed:', error);
+        return false;
+      }
+
+      console.log('✅ Database connection test successful');
+      return true;
+    } catch (error) {
+      console.error('❌ Database connection test error:', error);
+      return false;
     }
   }
 }
@@ -438,3 +531,42 @@ export class ConferenceStorageService {
     }
   }
 }
+
+// =============================================
+// NEW DEBUG UTILITIES
+// =============================================
+
+export const ChatStorageDebug = {
+  // Check if all required environment variables are set
+  checkEnvironment: () => {
+    const required = ['NEXT_PUBLIC_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_ANON_KEY'];
+    const missing = required.filter(key => !process.env[key]);
+    
+    if (missing.length > 0) {
+      console.error('❌ Missing environment variables:', missing);
+      return false;
+    }
+    
+    console.log('✅ All required environment variables are set');
+    return true;
+  },
+
+  // Test basic Supabase functionality
+  testBasicFunctionality: async () => {
+    try {
+      console.log('🧪 Testing basic Supabase functionality...');
+      
+      // Test connection
+      const connectionOk = await ChatStorageService.testConnection();
+      if (!connectionOk) {
+        throw new Error('Database connection failed');
+      }
+
+      console.log('✅ Basic Supabase functionality test passed');
+      return true;
+    } catch (error) {
+      console.error('❌ Basic Supabase functionality test failed:', error);
+      return false;
+    }
+  }
+};
