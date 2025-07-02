@@ -1,6 +1,6 @@
 // hooks/useOptimizedVoice.ts  – leak-proof version
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { OpenAIVoice } from '@/types/voice.types';
+import { OpenAIVoice } from '@/features/voice/types/voice.types';
 
 export const useOptimizedVoice = () => {
   /* ------------------------------------------------------------------ */
