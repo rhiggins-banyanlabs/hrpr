@@ -1,6 +1,6 @@
 "use client"
 
-import { VoiceOrb } from "@/components/VoiceOrb"
+import { VoiceOrb } from "@/features/voice"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition"
 import { useChatStorage } from "@/hooks/useChatStorage"

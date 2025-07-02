@@ -1,8 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
-import { VoiceSelector } from "@/components/VoiceSelector";
+import { VoiceSelector, OpenAIVoice } from "@/features/voice";
 import { MicrophoneButton } from "@/components/MicrophoneButton";
 import { SuggestedQuestions } from "@/components/SuggestedQuestions";
-import { OpenAIVoice } from "@/types/voice.types";
 
 interface ChatInputProps {
   onSubmit: (message: string) => void;

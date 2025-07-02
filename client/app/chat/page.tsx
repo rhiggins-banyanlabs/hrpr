@@ -6,10 +6,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useOptimizedVoice } from "@/hooks/useOptimizedVoice";
 import { useChat } from "@/hooks/useChat";
 import { useChatStorage } from "@/hooks/useChatStorage";
-import { VoiceSelector } from "@/components/VoiceSelector";
+import { VoiceSelector, VoiceInput } from "@/features/voice";
 import { ChatMessages } from "@/components/ChatMessages";
 import { ChatInput } from "@/components/ChatInput";
-import VoiceInput from "@/components/VoiceInput";
 import Waves from "@/components/waves";
 
 export default function ChatPage() {

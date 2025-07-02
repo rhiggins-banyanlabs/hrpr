@@ -2,11 +2,11 @@
 import React, { useEffect, useRef, useCallback, useState, memo } from "react"
 import { useOptimizedVoice } from "@/hooks/useOptimizedVoice"
 import { useChat } from "@/hooks/useChat"
-import { VoiceSelector } from "@/components/VoiceSelector"
+import { VoiceSelector } from "@/features/voice"
 import { ChatMessages } from "@/components/ChatMessages"
 import { ChatInput } from "@/components/ChatInput"
-import VoiceInput from "@/components/VoiceInput"
-import { Button } from "@/components/ui/button"
+import { VoiceInput } from "@/features/voice"
+import { Button } from "@/shared/components/ui/button"
 import { Square, RotateCcw } from "lucide-react"
 
 interface CompactChatProps {

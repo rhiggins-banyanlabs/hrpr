@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import Orb from "@/components/orb";
+import Orb from "@/shared/components/orb";
 
 interface VoiceOrbProps {
   listening: boolean;
@@ -36,7 +36,7 @@ const IconWrapper: React.FC<{
   </div>
 );
 
-export const VoiceOrb: React.FC<VoiceOrbProps> = ({
+const VoiceOrb: React.FC<VoiceOrbProps> = ({
   listening,
   connieDetected,
   isNavigating,
@@ -187,3 +187,5 @@ export const VoiceOrb: React.FC<VoiceOrbProps> = ({
     </div>
   );
 };
+
+export default VoiceOrb;
