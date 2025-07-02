@@ -22,8 +22,8 @@ export default function AdminTabs({ tabs, activeTab, onTabChange }: AdminTabsPro
             onClick={() => onTabChange(tab.id)}
             className={`px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-2 ${
               activeTab === tab.id
-                ? 'bg-indigo-600 text-white shadow-lg'
-                : 'text-white/70 hover:text-white hover:bg-white/10'
+                ? 'bg-indigo-600 text-white shadow-lg cursor-pointer'
+                : 'text-white/70 hover:text-white hover:bg-white/10 cursor-pointer'
             }`}
           >
             {tab.icon}

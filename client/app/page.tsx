@@ -14,13 +14,10 @@ import { ChatToggleButton } from "@/components/ToggleChatButton"
 import { AdminButton } from "@/components/admin/ui/AdminButton"
 import { useRouter } from "next/navigation"
 
-// Debug components
-// import { DebugSessionCreation } from '@/components/DebugSessionCreation';
-// import { DatabaseSaveTest } from '@/components/DatabaseSaveTest';
-// import { ConferenceDataCheck } from '@/components/ConferenceDataCheck';
-
 export default function Home() {
   const [isChatOpen, setIsChatOpen] = useState(false)
+  const [isVoiceInputActive, setIsVoiceInputActive] = useState(false)
+  const [isConnieSpeaking, setIsConnieSpeaking] = useState(false)
   const router = useRouter()
   const { isPedestalMode, isSystemLocked } = useAdminAuth()
 
@@ -57,10 +54,39 @@ export default function Home() {
 
   const [speechState, speechActions] = useSpeechRecognition(handleConnieDetected)
 
-  // RESET STATES IMMEDIATELY WHEN CHAT OPENS
+  // Handle voice input toggle for the unified orb
+  const handleVoiceInputToggle = useCallback(() => {
+    console.log("🎤 🔄 Voice input toggle called from VoiceOrb, current state:", isVoiceInputActive)
+
+    // Don't allow voice input while wake word detection is active or Connie is speaking
+    if (speechState.listening || isConnieSpeaking) {
+      console.log("🎤 ❌ Wake word detection is active or Connie is speaking, not toggling voice input")
+      return
+    }
+
+    const newState = !isVoiceInputActive
+    setIsVoiceInputActive(newState)
+    
+    if (!newState) {
+      console.log("🎤 Stopping voice input from VoiceOrb")
+    } else {
+      console.log("🎤 Starting voice input from VoiceOrb")
+    }
+  }, [isVoiceInputActive, speechState.listening, isConnieSpeaking])
+
+  // Stable callback for speaking state changes
+  const handleSpeakingChange = useCallback((isSpeaking: boolean) => {
+    setIsConnieSpeaking(isSpeaking)
+  }, [])
+
+  // RESET STATES ONLY WHEN CHAT INITIALLY OPENS - not on subsequent state changes
+  const [hasInitializedChat, setHasInitializedChat] = useState(false)
+  
   useEffect(() => {
-    if (isChatOpen) {
-      console.log("🔄 Chat opened - RESETTING ALL MAIN INTERFACE STATES")
+    // Only reset when chat transitions from closed to open for the first time
+    if (isChatOpen && !hasInitializedChat) {
+      console.log("🔄 Chat opened for first time - RESETTING MAIN INTERFACE STATES")
+      setHasInitializedChat(true)
 
       // Reset speech recognition states immediately
       speechActions.resetStates()
@@ -68,23 +94,25 @@ export default function Home() {
       // Reset processing flags
       isProcessingVoiceQueryRef.current = false
 
-      // Reset initialization flags
-      hasPlayedIntroRef.current = false
+      // Reset initialization flags - but don't reset hasPlayedIntroRef here
       initializationAttemptedRef.current = false
 
-      console.log("✅ All main interface states reset to default")
+      console.log("✅ Main interface states reset for new chat session")
+    } else if (!isChatOpen) {
+      // Reset the initialization flag when chat closes
+      setHasInitializedChat(false)
     }
-  }, [isChatOpen, speechActions])
+  }, [isChatOpen, hasInitializedChat, speechActions])
 
-  // Disable main speech recognition when chat is open
+  // Disable main speech recognition when chat is open OR voice input is active
   useEffect(() => {
-    if (isChatOpen) {
-      console.log("🔇 Chat is open, ensuring main speech recognition is disabled")
+    if (isChatOpen || isVoiceInputActive) {
+      console.log("🔇 Chat is open or voice input active, ensuring main speech recognition is disabled")
       if (speechState.listening) {
         speechActions.stopListening()
       }
     }
-  }, [isChatOpen, speechState.listening, speechActions])
+  }, [isChatOpen, isVoiceInputActive, speechState.listening, speechActions])
 
   // Handle chat open/close
   const handleChatToggle = useCallback(async () => {
@@ -120,6 +148,9 @@ export default function Home() {
     isProcessingVoiceQueryRef.current = false
     hasPlayedIntroRef.current = false
     initializationAttemptedRef.current = false
+    
+    // Reset voice input when actually closing chat
+    setIsVoiceInputActive(false)
   }, [speechActions, currentSession?.id, endSession])
 
   if (speechState.permissionError) {
@@ -152,15 +183,6 @@ export default function Home() {
           {/* Admin button for unlocking */}
           <AdminButton />
         </div>
-
-        {/* Debug components - only show in development */}
-        {/* {process.env.NODE_ENV === 'development' && (
-          <>
-            <DebugSessionCreation />
-            <DatabaseSaveTest />
-            <ConferenceDataCheck />
-          </>
-        )} */}
       </div>
     );
   }
@@ -216,6 +238,10 @@ export default function Home() {
                 listening={speechState.listening}
                 connieDetected={speechState.connieDetected}
                 isNavigating={speechState.isNavigating}
+                isVoiceInputActive={isVoiceInputActive}
+                onVoiceInputToggle={handleVoiceInputToggle}
+                isChatOpen={isChatOpen}
+                isConnieSpeaking={isConnieSpeaking}
               />
             </div>
 
@@ -236,7 +262,7 @@ export default function Home() {
             )}
 
             <div className="flex flex-col items-center gap-4">
-              {/* Control Buttons */}
+              {/* Control Buttons - Only show VoiceButton when chat is closed */}
               <div className="flex flex-col items-center gap-4">
                 {!isChatOpen && (
                   <>
@@ -250,13 +276,10 @@ export default function Home() {
                 )}
               </div>
 
-              {!isChatOpen && (
-                <div className="text-center">
-                  <p className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 via-purple-300 to-blue-300 max-w-md font-medium text-base">
-                    Say <span className="text-lg font-bold">"Hey CONNIE"</span> for all your conference needs!
-                  </p>
-                </div>
-              )}
+              {!isChatOpen }
+
+              {/* Instructions for chat mode */}
+              {isChatOpen}
             </div>
           </div>
         </div>
@@ -267,22 +290,15 @@ export default function Home() {
             {/* Compact Chat Component - Smaller height */}
             <div className="h-72 max-h-[40vh] -mt-16">
               <CompactChat 
-                key="compact-chat" 
                 onClose={handleChatClose}
                 sessionId={currentSession?.id || null}
+                isVoiceInputActive={isVoiceInputActive}
+                onVoiceInputToggle={handleVoiceInputToggle}
+                onSpeakingChange={handleSpeakingChange}
               />
             </div>
           </div>
         )}
-
-        {/* Debug components - only show in development */}
-        {/* {process.env.NODE_ENV === 'development' && (
-          <>
-            <DebugSessionCreation />
-            <DatabaseSaveTest />
-            <ConferenceDataCheck />
-          </>
-        )} */}
       </div>
     </div>
   )

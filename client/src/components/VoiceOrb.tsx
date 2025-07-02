@@ -5,6 +5,11 @@ interface VoiceOrbProps {
   listening: boolean;
   connieDetected: boolean;
   isNavigating: boolean;
+  // New props for unified functionality
+  isVoiceInputActive?: boolean;
+  onVoiceInputToggle?: () => void;
+  isChatOpen?: boolean;
+  isConnieSpeaking?: boolean;
 }
 
 const IconGradient: React.FC<{ id: string }> = ({ id }) => (
@@ -35,12 +40,21 @@ export const VoiceOrb: React.FC<VoiceOrbProps> = ({
   listening,
   connieDetected,
   isNavigating,
+  isVoiceInputActive = false,
+  onVoiceInputToggle,
+  isChatOpen = false,
+  isConnieSpeaking = false,
 }) => {
   const [showSpeaker, setShowSpeaker] = useState(false);
 
+  // Determine which state takes priority
+  const isActivelyRecording = isVoiceInputActive;
+  const isListeningForWakeWord = listening && !isVoiceInputActive;
+  const shouldShowRecordingState = isActivelyRecording;
+
   useEffect(() => {
     let timer: NodeJS.Timeout | undefined;
-    if (listening) {
+    if (isListeningForWakeWord) {
       timer = setTimeout(() => {
         setShowSpeaker(true);
       }, 250);
@@ -51,29 +65,55 @@ export const VoiceOrb: React.FC<VoiceOrbProps> = ({
     return () => {
       if (timer) clearTimeout(timer);
     };
-  }, [listening]);
+  }, [isListeningForWakeWord]);
+
+  // Handle click - only allow when chat is open and Connie isn't speaking
+  const handleClick = () => {
+    console.log("🎤 VoiceOrb clicked!", { 
+      isChatOpen, 
+      isConnieSpeaking, 
+      hasToggleFunction: !!onVoiceInputToggle,
+      isClickable 
+    })
+    
+    if (isChatOpen && !isConnieSpeaking && onVoiceInputToggle) {
+      console.log('🎤 VoiceOrb executing voice input toggle')
+      onVoiceInputToggle()
+    } else {
+      console.log('🎤 VoiceOrb click ignored - conditions not met')
+    }
+  };
+
+  // Determine if orb should be clickable
+  const isClickable = isChatOpen && !isConnieSpeaking && onVoiceInputToggle;
 
   return (
     <div className="relative w-64 h-64 sm:w-80 sm:h-80">
+      <div
+        className={`absolute inset-0 z-10 ${
+          isClickable ? 'cursor-pointer' : 'cursor-default'
+        }`}
+        onClick={handleClick}
+      />
       <Orb
         hoverIntensity={0.6}
         rotateOnHover={true}
         hue={0}
-        forceHoverState={connieDetected || isNavigating}
+        forceHoverState={connieDetected || isNavigating || shouldShowRecordingState}
       />
       
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
         <div
           className={`transition-all duration-300 ${
-            listening ? "scale-110 opacity-90" : "scale-100 opacity-70"
+            isListeningForWakeWord || shouldShowRecordingState ? "scale-110 opacity-90" : "scale-100 opacity-70"
           }`}
         >
-          {/* Microphone Icon */}
-          <IconWrapper show={!showSpeaker && !isNavigating}>
+          {/* Microphone Icon - Default state or when actively recording */}
+          <IconWrapper show={(!showSpeaker && !isNavigating) || shouldShowRecordingState}>
             <svg
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 24 24"
-              className="w-full h-full"
+              className={`w-full h-full ${shouldShowRecordingState ? 'animate-pulse' : ''}`}
               fill="none"
               stroke="url(#icon-gradient)"
               strokeWidth="1.5"
@@ -84,11 +124,17 @@ export const VoiceOrb: React.FC<VoiceOrbProps> = ({
                 strokeLinejoin="round"
                 d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z"
               />
+              {/* Recording indicator when actively recording */}
+              {shouldShowRecordingState && (
+                <circle cx="18" cy="6" r="3" fill="red">
+                  <animate attributeName="opacity" values="1;0;1" dur="1s" repeatCount="indefinite"/>
+                </circle>
+              )}
             </svg>
           </IconWrapper>
 
-          {/* Speaker Icon */}
-          <IconWrapper show={showSpeaker && !isNavigating && !connieDetected}>
+          {/* Speaker Icon - When listening for wake word */}
+          <IconWrapper show={showSpeaker && !isNavigating && !connieDetected && !shouldShowRecordingState}>
             <svg
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 24 24"
@@ -105,25 +151,6 @@ export const VoiceOrb: React.FC<VoiceOrbProps> = ({
               />
             </svg>
           </IconWrapper>
-          {/* Commented this out because the message icon was always pulsating behing the microphone icon */}
-          {/* Connie Detected Icon */}
-          {/* <IconWrapper show={connieDetected && !isNavigating} className="animate-pulse">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              className="w-full h-full"
-              fill="none"
-              stroke="url(#connie-gradient)"
-              strokeWidth="1.5"
-            >
-              <IconGradient id="connie-gradient" />
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z"
-              />
-            </svg>
-          </IconWrapper> */}
 
           {/* Loading Icon */}
           <IconWrapper show={isNavigating} className="animate-spin">
@@ -145,6 +172,18 @@ export const VoiceOrb: React.FC<VoiceOrbProps> = ({
           </IconWrapper>
         </div>
       </div>
+
+      {/* Click hint when chat is open - INSIDE THE ORB */}
+      {isChatOpen && !isConnieSpeaking && (
+        <div className="absolute bottom-16 left-1/2 transform -translate-x-1/2 text-sm text-indigo-200 font-medium text-center z-20">
+          {isVoiceInputActive ? 'Recording...' : 'Click to speak'}
+        </div>
+      )}
+
+      {/* Visual feedback for active recording */}
+      {shouldShowRecordingState && (
+        <div className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full animate-ping"></div>
+      )}
     </div>
   );
 };

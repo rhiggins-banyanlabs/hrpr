@@ -12,7 +12,8 @@ interface ChatInputProps {
   selectedVoice: OpenAIVoice;
   onVoiceChange: (voice: OpenAIVoice) => void;
   voiceTranscript?: string;
-  isConnieSpeaking?: boolean; // New prop to disable inputs while Connie speaks
+  isConnieSpeaking?: boolean;
+  showMicrophoneButton?: boolean; // New prop to control microphone button visibility
 }
 
 export const ChatInput = ({
@@ -23,10 +24,11 @@ export const ChatInput = ({
   selectedVoice,
   onVoiceChange,
   voiceTranscript = "",
-  isConnieSpeaking = false // New prop with default value
+  isConnieSpeaking = false,
+  showMicrophoneButton = true // Default to true for backwards compatibility
 }: ChatInputProps) => {
   const [input, setInput] = useState("");
-  const [isConversationStarted, setIsConversationStarted] = useState(false); // Add this state
+  const [isConversationStarted, setIsConversationStarted] = useState(false);
 
   useEffect(() => {
     if (isVoiceInputActive && voiceTranscript) {
@@ -79,22 +81,36 @@ export const ChatInput = ({
   };
 
   return (
-    <div className="relative z-10 p-4 ">
-      
+    <div className="relative z-10 p-4">
+      {/* Only show microphone button if showMicrophoneButton is true */}
+      {showMicrophoneButton && (
+        <form onSubmit={handleSubmit} className="flex justify-center">
+          <MicrophoneButton
+            isRecording={isVoiceInputActive}
+            isProcessing={false}
+            onToggle={onVoiceInputToggle}
+            disabled={isProcessing || isConnieSpeaking}
+          />
+        </form>
+      )}
 
-      <form onSubmit={handleSubmit} className="flex justify-center">
-                
-        <MicrophoneButton
-          isRecording={isVoiceInputActive}
-          isProcessing={false}
-          onToggle={onVoiceInputToggle}
-          disabled={isProcessing || isConnieSpeaking} // Add isConnieSpeaking
-        />
-      </form>
-
-      {isVoiceInputActive && (
+      {/* Voice input status - only show when microphone button is visible and voice input is active */}
+      {showMicrophoneButton && isVoiceInputActive && (
         <div className="mt-2 text-green-400 text-sm animate-pulse text-center">
           🎤 Listening... (auto-sends after 2 seconds of silence)
+        </div>
+      )}
+
+      {/* When microphone button is hidden, show helpful text about using the orb */}
+      {!showMicrophoneButton && (
+        <div className="text-center">
+          <p className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 via-purple-300 to-blue-300 text-sm">
+            {isVoiceInputActive ? (
+              <span className="text-green-400 animate-pulse">🎤 Recording... (auto-sends after silence)</span>
+            ) : (
+              "Click the orb above to speak with CONNIE"
+            )}
+          </p>
         </div>
       )}
     </div>
