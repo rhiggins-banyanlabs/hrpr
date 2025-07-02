@@ -15,183 +15,253 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
   onListeningChange,
 }) => {
   const recognitionRef = useRef<SpeechRecognition | null>(null);
-  const [allText, setAllText] = useState('');
-  const autoSendTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const isMountedRef = useRef(true);
+  const [finalTranscript, setFinalTranscript] = useState('');
+  const [interimTranscript, setInterimTranscript] = useState('');
+  const finalTranscriptRef = useRef(''); // Store current final transcript
+  const interimTranscriptRef = useRef(''); // Store current interim transcript
+  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isStoppingRef = useRef(false);
+  const hasReceivedSpeechRef = useRef(false);
 
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);
+  // Clear silence timer
+  const clearSilenceTimer = () => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+  };
 
+  // Start silence timer (2 seconds)
+  const startSilenceTimer = () => {
+    clearSilenceTimer();
+    silenceTimerRef.current = setTimeout(() => {
+      console.log('🎤 Silence timeout - stopping recognition');
+      finishRecognition();
+    }, 2000);
+  };
+
+  // Finish recognition and send result
+  const finishRecognition = () => {
+    if (isStoppingRef.current) return;
+    
+    isStoppingRef.current = true;
+    
+    // Get the final transcript from refs (current values)
+    const textToSend = (finalTranscriptRef.current + ' ' + interimTranscriptRef.current).trim();
+    console.log('🎤 Finishing recognition with transcript:', textToSend);
+
+    // Stop recognition
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
+    }
+
+    // Clear timers
+    clearSilenceTimer();
+
+    // Send the final transcript if we have any
+    if (textToSend && hasReceivedSpeechRef.current) {
+      console.log('🎤 Sending final transcript:', textToSend);
+      onSpeechEnd(textToSend);
+    } else {
+      console.log('🎤 No speech to send, just stopping');
+    }
+
+    // Reset states
+    setFinalTranscript('');
+    setInterimTranscript('');
+    finalTranscriptRef.current = '';
+    interimTranscriptRef.current = '';
+    hasReceivedSpeechRef.current = false;
+    isStoppingRef.current = false;
+
+    // Turn off listening
+    onListeningChange(false);
+  };
+
+  // Start recognition
   const startRecognition = () => {
+    if (recognitionRef.current || isStoppingRef.current) {
+      console.log('🎤 Recognition already exists or stopping, skipping start');
+      return;
+    }
+
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     
     if (!SpeechRecognition) {
       console.error('❌ Speech Recognition not supported');
-      return null;
+      onListeningChange(false);
+      return;
     }
 
+    console.log('🎤 Starting new recognition instance');
+    
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = 'en-US';
-    
-    let sessionTranscript = '';
-    
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => {
+      console.log('🎤 Speech recognition started');
+      isStoppingRef.current = false;
+      hasReceivedSpeechRef.current = false;
+      setFinalTranscript('');
+      setInterimTranscript('');
+      finalTranscriptRef.current = '';
+      interimTranscriptRef.current = '';
+    };
+
     recognition.onresult = (event: any) => {
-      let current = '';
-      let isFinal = false;
-      
-      for (let i = event.resultIndex; i < event.results.length; i++) {
+      let newFinalTranscript = '';
+      let newInterimTranscript = '';
+
+      // Process all results
+      for (let i = 0; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        
         if (event.results[i].isFinal) {
-          current += event.results[i][0].transcript;
-          isFinal = true;
+          newFinalTranscript += transcript;
+          hasReceivedSpeechRef.current = true;
+          console.log('🎤 Final result received:', transcript);
+          
+          // Start silence timer after receiving final speech
+          startSilenceTimer();
         } else {
-          current += event.results[i][0].transcript;
+          newInterimTranscript += transcript;
+          console.log('🎤 Interim result received:', transcript);
         }
       }
-      
-      const fullText = (allText + ' ' + current).trim();
-      
-      console.log('🎤 Speech result:', { current, fullText, isFinal });
-      
-      if (onTranscriptUpdate) {
-        onTranscriptUpdate(fullText, !isFinal);
+
+      // Update states and refs - accumulate final transcript
+      if (newFinalTranscript) {
+        const updatedFinal = (finalTranscriptRef.current + ' ' + newFinalTranscript).trim();
+        setFinalTranscript(updatedFinal);
+        finalTranscriptRef.current = updatedFinal;
+        console.log('🎤 Updated final transcript:', updatedFinal);
       }
-      
-      if (isFinal && current.trim()) {
-        // Reset auto-send timer on final result
-        if (autoSendTimerRef.current) {
-          clearTimeout(autoSendTimerRef.current);
-        }
-        
-        // Set auto-send for 2 seconds after final speech
-        autoSendTimerRef.current = setTimeout(() => {
-          if (isMountedRef.current && fullText.length > 2) {
-            console.log('🚀 Auto-sending after final speech:', fullText);
-            finishAndSend(fullText);
-          }
-        }, 2000);
-        
-        setAllText(fullText);
+      setInterimTranscript(newInterimTranscript);
+      interimTranscriptRef.current = newInterimTranscript;
+
+      // Update parent with combined transcript
+      const combinedTranscript = ((finalTranscriptRef.current + ' ' + newInterimTranscript).trim());
+      if (onTranscriptUpdate && combinedTranscript) {
+        console.log('🎤 Updating parent with transcript:', combinedTranscript);
+        onTranscriptUpdate(combinedTranscript, !newFinalTranscript);
+      }
+
+      // If we received any speech, clear and restart silence timer
+      if (newFinalTranscript || newInterimTranscript) {
+        startSilenceTimer();
       }
     };
-    
+
     recognition.onend = () => {
       console.log('🎤 Recognition ended');
-      if (isListening && isMountedRef.current) {
-        console.log('🔄 Restarting recognition...');
+      
+      // Don't restart if we're intentionally stopping
+      if (isStoppingRef.current) {
+        console.log('🎤 Stopping intentionally, not restarting');
+        return;
+      }
+
+      // Don't restart if we've already processed speech successfully
+      if (hasReceivedSpeechRef.current) {
+        console.log('🎤 Speech was processed successfully, finishing instead of restarting');
+        finishRecognition();
+        return;
+      }
+
+      // If we're still supposed to be listening and haven't received speech, restart
+      if (isListening && !hasReceivedSpeechRef.current) {
+        console.log('🎤 Restarting recognition - no speech received yet');
         setTimeout(() => {
-          if (isListening && isMountedRef.current) {
-            const newRecognition = startRecognition();
-            if (newRecognition) {
-              recognitionRef.current = newRecognition;
-            }
+          if (isListening && !isStoppingRef.current && !hasReceivedSpeechRef.current) {
+            startRecognition();
           }
         }, 100);
       }
     };
-    
+
     recognition.onerror = (event: any) => {
-      console.error('🎤 Speech recognition error:', event.error);
-      
+      // Only log serious errors, ignore expected "no-speech" errors
       if (event.error === 'not-allowed') {
+        console.error('🎤 Microphone access denied');
         alert('Please allow microphone access');
         onListeningChange(false);
         return;
       }
       
       if (event.error === 'audio-capture') {
+        console.error('🎤 No microphone detected');
         alert('No microphone detected. Please check your microphone.');
         onListeningChange(false);
         return;
       }
-      
-      // For other errors, just log them
-      if (event.error !== 'no-speech' && event.error !== 'network') {
-        console.warn('Speech recognition error:', event.error);
+
+      // For "no-speech" error after successful processing, just finish
+      if (event.error === 'no-speech' && hasReceivedSpeechRef.current) {
+        console.log('🎤 Finishing after successful speech processing');
+        finishRecognition();
+        return;
       }
+
+      // For aborted errors, try restarting if still listening
+      if (event.error === 'aborted' && isListening && !isStoppingRef.current) {
+        console.log('🎤 Recognition aborted, restarting...');
+        setTimeout(() => {
+          if (isListening && !isStoppingRef.current) {
+            startRecognition();
+          }
+        }, 200);
+        return;
+      }
+
+      // Silently ignore "no-speech" errors as they're expected
+      if (event.error === 'no-speech') {
+        // Don't log anything for no-speech errors
+        return;
+      }
+
+      // Log other unexpected errors
+      console.log('🎤 Speech recognition error:', event.error);
     };
-    
-    recognition.onstart = () => {
-      console.log('🎤 Speech recognition started');
-    };
-    
+
     try {
       recognition.start();
-      return recognition;
+      recognitionRef.current = recognition;
     } catch (error) {
       console.error('❌ Failed to start recognition:', error);
-      return null;
+      onListeningChange(false);
     }
   };
 
-  const finishAndSend = (text: string) => {
-    console.log('✅ Finishing and sending:', text);
-    
-    // Clear timers
-    if (autoSendTimerRef.current) {
-      clearTimeout(autoSendTimerRef.current);
-    }
-    
-    // Stop recognition
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-      recognitionRef.current = null;
-    }
-    
-    // Reset state
-    setAllText('');
-    
-    // Send result
-    if (text.trim()) {
-      onSpeechEnd(text.trim());
-    }
-    onListeningChange(false);
-  };
-
+  // Main effect to handle listening state changes
   useEffect(() => {
-    if (isListening) {
+    console.log('🎤 VoiceInput effect triggered:', { isListening, hasRecognition: !!recognitionRef.current, isStopping: isStoppingRef.current });
+    
+    if (isListening && !recognitionRef.current && !isStoppingRef.current) {
       console.log('🎤 Starting voice input...');
-      isMountedRef.current = true;
-      setAllText('');
-      
-      const recognition = startRecognition();
-      if (recognition) {
-        recognitionRef.current = recognition;
-      } else {
-        onListeningChange(false);
-      }
-      
-    } else {
+      startRecognition();
+    } else if (isListening && !recognitionRef.current && isStoppingRef.current) {
+      console.log('🎤 Resetting stopping state and starting voice input...');
+      isStoppingRef.current = false; // Reset stopping state
+      startRecognition();
+    } else if (!isListening && recognitionRef.current) {
       console.log('🎤 Stopping voice input...');
-      isMountedRef.current = false;
-      
-      // Clear timers
-      if (autoSendTimerRef.current) {
-        clearTimeout(autoSendTimerRef.current);
-      }
-      
-      // Stop recognition
+      finishRecognition();
+    }
+
+    // Cleanup on unmount
+    return () => {
+      console.log('🎤 VoiceInput cleanup triggered');
       if (recognitionRef.current) {
         recognitionRef.current.stop();
         recognitionRef.current = null;
       }
-      
-      setAllText('');
-    }
-    
-    return () => {
-      isMountedRef.current = false;
-      if (autoSendTimerRef.current) clearTimeout(autoSendTimerRef.current);
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
+      clearSilenceTimer();
     };
-  }, [isListening, onListeningChange]);
+  }, [isListening]);
 
   return null;
 };

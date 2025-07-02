@@ -1,5 +1,5 @@
 "use client"
-import React, { useEffect, useRef, useCallback, useState } from "react"
+import React, { useEffect, useRef, useCallback, useState, memo } from "react"
 import { useOptimizedVoice } from "@/hooks/useOptimizedVoice"
 import { useChat } from "@/hooks/useChat"
 import { VoiceSelector } from "@/components/VoiceSelector"
@@ -12,11 +12,19 @@ import { Square, RotateCcw } from "lucide-react"
 interface CompactChatProps {
   onClose: () => void
   sessionId: string | null
+  isVoiceInputActive: boolean
+  onVoiceInputToggle: () => void
+  onSpeakingChange?: (isSpeaking: boolean) => void
 }
 
-export function CompactChat({ onClose, sessionId }: CompactChatProps) {
+const CompactChatComponent = ({ 
+  onClose, 
+  sessionId, 
+  isVoiceInputActive, 
+  onVoiceInputToggle,
+  onSpeakingChange
+}: CompactChatProps) => {
   // Voice input state
-  const [isVoiceInputActive, setIsVoiceInputActive] = useState(false)
   const [voiceTranscript, setVoiceTranscript] = useState("")
   const [isVoiceTranscribing, setIsVoiceTranscribing] = useState(false)
 
@@ -29,6 +37,13 @@ export function CompactChat({ onClose, sessionId }: CompactChatProps) {
 
   // Voice hooks
   const { speakText, isSpeaking, selectedVoice, setSelectedVoice, unlockAudio } = useOptimizedVoice()
+
+  // Notify parent of speaking state changes
+  useEffect(() => {
+    if (onSpeakingChange) {
+      onSpeakingChange(isSpeaking)
+    }
+  }, [isSpeaking, onSpeakingChange])
 
   // Chat hook - now uses the combined version
   const {
@@ -103,14 +118,14 @@ export function CompactChat({ onClose, sessionId }: CompactChatProps) {
 
       if (!text.trim()) {
         console.log("🎤 ❌ Empty voice input, skipping")
-        setIsVoiceInputActive(false)
+        onVoiceInputToggle() // Turn off voice input
         return
       }
 
       // Prevent bot from responding to its own speech
       if (isSpeaking) {
         console.log("🎤 ❌ Bot is speaking, ignoring voice input")
-        setIsVoiceInputActive(false)
+        onVoiceInputToggle() // Turn off voice input
         return
       }
 
@@ -119,44 +134,19 @@ export function CompactChat({ onClose, sessionId }: CompactChatProps) {
 
       // Check for duplicate
       if (isDuplicateMessage(formattedText)) {
-        setIsVoiceInputActive(false)
+        onVoiceInputToggle() // Turn off voice input
         return
       }
 
       // Clear voice states
-      setIsVoiceInputActive(false)
+      onVoiceInputToggle() // Turn off voice input
 
       // Auto-submit the message
       console.log("🎤 Auto-submitting voice message:", formattedText)
       await sendMessage(formattedText, true)
     },
-    [sendMessage, isSpeaking, isDuplicateMessage],
+    [sendMessage, isSpeaking, isDuplicateMessage, onVoiceInputToggle],
   )
-
-  const handleVoiceInputToggle = useCallback(() => {
-    console.log("🎤 🔄 Voice input toggle called, current state:", isVoiceInputActive)
-
-    // Don't allow voice input while bot is speaking
-    if (isSpeaking) {
-      console.log("🎤 ❌ Bot is speaking, not toggling voice input")
-      return
-    }
-
-    const newState = !isVoiceInputActive
-    setIsVoiceInputActive(newState)
-    
-    if (!newState) {
-      // Stopping voice input - clear all related state immediately
-      console.log("🎤 Clearing voice input state")
-      setVoiceTranscript("")
-      setIsVoiceTranscribing(false)
-    } else {
-      // Starting voice input - ensure clean state
-      console.log("🎤 Starting voice input with clean state")
-      setVoiceTranscript("")
-      setIsVoiceTranscribing(false)
-    }
-  }, [isVoiceInputActive, isSpeaking])
 
   // Send intro message after session is ready
   useEffect(() => {
@@ -243,18 +233,33 @@ export function CompactChat({ onClose, sessionId }: CompactChatProps) {
 
     // Reset voice input and clear transcript
     console.log("🎤 Force stop - clearing all voice state")
-    setIsVoiceInputActive(false)
+    if (isVoiceInputActive) {
+      onVoiceInputToggle()
+    }
     setVoiceTranscript("")
     setIsVoiceTranscribing(false)
-  }, [stopTyping])
+  }, [stopTyping, isVoiceInputActive, onVoiceInputToggle])
 
   // Add cleanup when component unmounts
   useEffect(() => {
     return () => {
-      console.log("🧹 CompactChat unmounting, stopping any ongoing typing")
-      handleForceStop()
+      console.log("🧹 CompactChat unmounting, checking if should stop")
+      // Only force stop if voice input is not active - let voice input finish naturally
+      if (!isVoiceInputActive) {
+        console.log("🛑 Voice input not active, running force stop")
+        handleForceStop()
+      } else {
+        console.log("🎤 Voice input active, skipping force stop on unmount - just cleaning up bot states")
+        // Just stop bot typing without affecting voice input
+        stopTyping()
+        isProcessingVoiceQueryRef.current = false
+        if (thinkingTimeoutRef.current) {
+          clearTimeout(thinkingTimeoutRef.current)
+          thinkingTimeoutRef.current = null
+        }
+      }
     }
-  }, [handleForceStop])
+  }, [isVoiceInputActive, stopTyping])
 
   // Handle message submission
   const handleMessageSubmit = useCallback(
@@ -269,14 +274,14 @@ export function CompactChat({ onClose, sessionId }: CompactChatProps) {
       // Clear voice input state when submitting text message
       if (isVoiceInputActive) {
         console.log("🎤 Clearing voice state due to text message submission")
-        setIsVoiceInputActive(false)
+        onVoiceInputToggle()
         setIsVoiceTranscribing(false)
         setVoiceTranscript("")
       }
 
       await sendMessage(message, false) // Mark as text input
     },
-    [sendMessage, isVoiceInputActive, isDuplicateMessage],
+    [sendMessage, isVoiceInputActive, isDuplicateMessage, onVoiceInputToggle],
   )
 
   // Handle stop typing - more aggressive cleanup
@@ -299,30 +304,6 @@ export function CompactChat({ onClose, sessionId }: CompactChatProps) {
     )
   }
 
-  // Create enhanced messages array that includes live voice transcription
-  const enhancedMessages = React.useMemo(() => {
-    const baseMessages = messages.map(msg => ({
-      ...msg,
-      sender: msg.sender
-    }))
-
-    // Add live voice transcription as a typing user message
-    if (isVoiceTranscribing && voiceTranscript.trim()) {
-      const voiceMessage = {
-        id: 'voice-transcription-temp',
-        text: voiceTranscript,
-        sender: 'user' as const,
-        timestamp: new Date(),
-        isTemporary: true,
-        isVoiceTranscription: true,
-        isTyping: true 
-      }
-      return [...baseMessages, voiceMessage]
-    }
-
-    return baseMessages
-  }, [messages, isVoiceTranscribing, voiceTranscript])
-
   // Add this right before the return statement for debugging
   console.log("🤖 Bot States:", {
     isBotTyping,
@@ -337,6 +318,7 @@ export function CompactChat({ onClose, sessionId }: CompactChatProps) {
     messageCount: messageCountRef.current,
     lastMessage: lastMessageRef.current.substring(0, 50),
     sessionId,
+    isVoiceInputActive,
   })
 
   return (
@@ -358,17 +340,18 @@ export function CompactChat({ onClose, sessionId }: CompactChatProps) {
         />
       </div>
 
-      {/* Input - Fixed at bottom */}
+      {/* Input - Fixed at bottom - NO MICROPHONE BUTTON */}
       <div className="">
         <ChatInput
           onSubmit={handleMessageSubmit}
           isProcessing={isProcessing}
           isVoiceInputActive={isVoiceInputActive}
-          onVoiceInputToggle={handleVoiceInputToggle}
+          onVoiceInputToggle={onVoiceInputToggle}
           selectedVoice={selectedVoice}
           onVoiceChange={setSelectedVoice}
           voiceTranscript={voiceTranscript}
           isConnieSpeaking={isSpeaking}
+          showMicrophoneButton={false} // Hide the microphone button
         />
       </div>
 
@@ -377,8 +360,24 @@ export function CompactChat({ onClose, sessionId }: CompactChatProps) {
         onSpeechEnd={handleVoiceInput}
         onTranscriptUpdate={handleVoiceTranscript}
         isListening={isVoiceInputActive}
-        onListeningChange={setIsVoiceInputActive}
+        onListeningChange={(listening) => {
+          if (!listening) {
+            onVoiceInputToggle() // This will turn off voice input when VoiceInput decides to stop
+          }
+        }}
       />
     </div>
   )
 }
+
+// Memoize the component to prevent unnecessary re-renders
+export const CompactChat = memo(CompactChatComponent, (prevProps, nextProps) => {
+  // Only re-render if these specific props change
+  return (
+    prevProps.sessionId === nextProps.sessionId &&
+    prevProps.isVoiceInputActive === nextProps.isVoiceInputActive &&
+    prevProps.onClose === nextProps.onClose &&
+    prevProps.onVoiceInputToggle === nextProps.onVoiceInputToggle &&
+    prevProps.onSpeakingChange === nextProps.onSpeakingChange
+  )
+})
