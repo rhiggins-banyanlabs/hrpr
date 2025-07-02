@@ -286,3 +286,15 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+/* Add to your CSS file */
+#chat-messages {
+  /* Hide scrollbar for Chrome, Safari and Opera */
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* Internet Explorer 10+ */
+}
+
+#chat-messages::-webkit-scrollbar {
+  display: none; /* WebKit */
+}

@@ -1,5 +1,5 @@
 "use client"
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import { FeedbackButtons } from "@/components/FeedbackButtons"
 
 interface Message {
@@ -51,15 +51,21 @@ export const ChatMessages = ({
 }: ChatMessagesProps) => {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const [activeFeedbackId, setActiveFeedbackId] = useState<string | null>(null)
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages, isThinking, isBotTyping, typingBotMsg, isUserTyping, userTypingMsg])
 
+  const toggleFeedback = (id: string) => {
+    setActiveFeedbackId((prev) => (prev === id ? null : id))
+  }
+
   return (
     <div
       ref={containerRef}
-      className="chat-messages flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth"
+      id="chat-messages"
+      className="scrollbar-hide flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth"
       style={{
         maxHeight: "100%",
         scrollbarGutter: "stable",
@@ -70,7 +76,7 @@ export const ChatMessages = ({
           {/* USER MESSAGE */}
           {message.sender === "user" && (
             <div className="flex justify-end mb-4">
-              <div className="flex items-end space-x-3 z-50">
+              <div  className="flex items-end space-x-3 z-50">
                 <div className="bg-gradient-to-br from-indigo-400/20 via-blue-500/20 to-indigo-500/20 backdrop-blur-md border border-blue-400/30 text-white px-5 py-3 rounded-2xl max-w-xs lg:max-w-md shadow-2xl transition-transform transform hover:scale-105">
                   <div className="font-semibold whitespace-pre-wrap text-sm">{message.text}</div>
                 </div>
@@ -97,7 +103,7 @@ export const ChatMessages = ({
           {/* CONNIE MESSAGE */}
           {message.sender === "connie" && (
             <div className="flex justify-start mb-4">
-              <div className="flex items-start space-x-3 z-50">
+              <div onMouseEnter={() => toggleFeedback(message.id)} onMouseLeave={() => toggleFeedback(message.id)} onClick={() => toggleFeedback(message.id)} className="flex items-start space-x-3 z-50">
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 via-purple-500 to-indigo-700 flex items-center justify-center text-white font-bold shadow-lg flex-shrink-0">
                   <span className="text-sm">C</span>
                 </div>
@@ -111,7 +117,7 @@ export const ChatMessages = ({
                   />
                   </div>
                   {/* Add feedback buttons for Connie's messages */}
-                  {sessionId && (
+                  {sessionId && message.id ===activeFeedbackId && (
                     <FeedbackButtons 
                       messageId={message.id} 
                       sessionId={sessionId}

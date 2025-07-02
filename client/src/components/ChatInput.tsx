@@ -79,17 +79,10 @@ export const ChatInput = ({
   };
 
   return (
-    <div className="relative z-10 p-4 bg-black/20 backdrop-blur-sm border-t border-indigo-500/20">
+    <div className="relative z-10 p-4 ">
       
-      {/* Mobile Voice Selector */}
-      <div className="md:hidden mb-3 flex justify-center">
-        <VoiceSelector 
-          selectedVoice={selectedVoice}
-          onVoiceChange={onVoiceChange}
-        />
-      </div>
 
-      <form onSubmit={handleSubmit} className="flex gap-2">
+      <form onSubmit={handleSubmit} className="flex justify-center">
                 
         <MicrophoneButton
           isRecording={isVoiceInputActive}
