@@ -23,7 +23,13 @@ export const MicrophoneButton: React.FC<MicrophoneButtonProps> = ({
   const buttonState = getButtonState();
 
   const getButtonStyles = () => {
-    const baseStyles = "p-2 rounded-lg transition-all duration-200 flex items-center justify-center cursor-pointer";
+    const baseStyles = `p-2 rounded-lg transition-all duration-200 flex items-center justify-center cursor-pointer z-50
+        group flex items-center gap-2
+        px-4 py-2 rounded-xl backdrop-blur-sm
+        border border-indigo-500/30
+        bg-gradient-to-r from-indigo-600/20 via-purple-600/20 to-blue-600/20
+        hover:from-indigo-600/30 hover:via-purple-600/30 hover:to-blue-600/30
+        transition-all shadow-lg shadow-indigo-500/10 hover:shadow-indigo-500/20  `;
     
     switch (buttonState) {
       case 'recording':
@@ -31,7 +37,7 @@ export const MicrophoneButton: React.FC<MicrophoneButtonProps> = ({
       case 'processing':
         return `${baseStyles} bg-yellow-500 text-white opacity-75 cursor-not-allowed`;
       default:
-        return `${baseStyles} bg-gray-600 hover:bg-gray-500 text-white`;
+        return `${baseStyles} text-indigo-400 hover:text-indigo-300`;
     }
   };
 

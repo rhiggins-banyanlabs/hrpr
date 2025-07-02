@@ -1,5 +1,5 @@
 "use client"
-import { useEffect, useRef, useCallback, useState } from "react"
+import React, { useEffect, useRef, useCallback, useState } from "react"
 import { useOptimizedVoice } from "@/hooks/useOptimizedVoice"
 import { useChat } from "@/hooks/useChat"
 import { VoiceSelector } from "@/components/VoiceSelector"
@@ -18,6 +18,7 @@ export function CompactChat({ onClose, sessionId }: CompactChatProps) {
   // Voice input state
   const [isVoiceInputActive, setIsVoiceInputActive] = useState(false)
   const [voiceTranscript, setVoiceTranscript] = useState("")
+  const [isVoiceTranscribing, setIsVoiceTranscribing] = useState(false)
 
   // Refs for state management
   const hasPlayedIntroRef = useRef(false)
@@ -75,23 +76,41 @@ export function CompactChat({ onClose, sessionId }: CompactChatProps) {
 
   // Voice handlers
   const handleVoiceTranscript = useCallback((transcript: string, isInterim: boolean) => {
-    console.log("🎤 Voice transcript update:", transcript)
+    console.log("🎤 Voice transcript update:", transcript, "isInterim:", isInterim)
     setVoiceTranscript(transcript)
-  }, [])
+    
+    // Set transcribing state when we start receiving any transcript
+    if (transcript.trim() && !isVoiceTranscribing) {
+      console.log("🎤 Starting voice transcription bubble")
+      setIsVoiceTranscribing(true)
+    }
+    
+    // If transcript becomes empty and we were transcribing, stop
+    if (!transcript.trim() && isVoiceTranscribing) {
+      console.log("🎤 Transcript empty, stopping transcription bubble")
+      setIsVoiceTranscribing(false)
+    }
+  }, [isVoiceTranscribing])
 
   const handleVoiceInput = useCallback(
     async (text: string) => {
       console.log("🎤 ===== VOICE INPUT HANDLER CALLED =====")
       console.log("🎤 Received text:", text)
 
+      // Clear transcribing state and voice transcript immediately
+      setIsVoiceTranscribing(false)
+      setVoiceTranscript("")
+
       if (!text.trim()) {
         console.log("🎤 ❌ Empty voice input, skipping")
+        setIsVoiceInputActive(false)
         return
       }
 
       // Prevent bot from responding to its own speech
       if (isSpeaking) {
         console.log("🎤 ❌ Bot is speaking, ignoring voice input")
+        setIsVoiceInputActive(false)
         return
       }
 
@@ -100,13 +119,15 @@ export function CompactChat({ onClose, sessionId }: CompactChatProps) {
 
       // Check for duplicate
       if (isDuplicateMessage(formattedText)) {
+        setIsVoiceInputActive(false)
         return
       }
 
+      // Clear voice states
       setIsVoiceInputActive(false)
-      setVoiceTranscript("")
 
-      // Send message with voice flag
+      // Auto-submit the message
+      console.log("🎤 Auto-submitting voice message:", formattedText)
       await sendMessage(formattedText, true)
     },
     [sendMessage, isSpeaking, isDuplicateMessage],
@@ -121,9 +142,19 @@ export function CompactChat({ onClose, sessionId }: CompactChatProps) {
       return
     }
 
-    setIsVoiceInputActive(!isVoiceInputActive)
-    if (isVoiceInputActive) {
+    const newState = !isVoiceInputActive
+    setIsVoiceInputActive(newState)
+    
+    if (!newState) {
+      // Stopping voice input - clear all related state immediately
+      console.log("🎤 Clearing voice input state")
       setVoiceTranscript("")
+      setIsVoiceTranscribing(false)
+    } else {
+      // Starting voice input - ensure clean state
+      console.log("🎤 Starting voice input with clean state")
+      setVoiceTranscript("")
+      setIsVoiceTranscribing(false)
     }
   }, [isVoiceInputActive, isSpeaking])
 
@@ -210,9 +241,11 @@ export function CompactChat({ onClose, sessionId }: CompactChatProps) {
       thinkingTimeoutRef.current = null
     }
 
-    // Reset voice input
+    // Reset voice input and clear transcript
+    console.log("🎤 Force stop - clearing all voice state")
     setIsVoiceInputActive(false)
     setVoiceTranscript("")
+    setIsVoiceTranscribing(false)
   }, [stopTyping])
 
   // Add cleanup when component unmounts
@@ -233,8 +266,12 @@ export function CompactChat({ onClose, sessionId }: CompactChatProps) {
         return
       }
 
+      // Clear voice input state when submitting text message
       if (isVoiceInputActive) {
+        console.log("🎤 Clearing voice state due to text message submission")
         setIsVoiceInputActive(false)
+        setIsVoiceTranscribing(false)
+        setVoiceTranscript("")
       }
 
       await sendMessage(message, false) // Mark as text input
@@ -251,7 +288,7 @@ export function CompactChat({ onClose, sessionId }: CompactChatProps) {
   // Show loading if no session
   if (!sessionId) {
     return (
-      <div className="flex flex-col h-full bg-black/30 backdrop-blur-3xl border border-indigo-500/20 rounded-2xl shadow-2xl shadow-indigo-500/5 overflow-hidden">
+      <div className="flex flex-col h-full overflow-hidden">
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-400 mx-auto mb-4"></div>
@@ -262,12 +299,38 @@ export function CompactChat({ onClose, sessionId }: CompactChatProps) {
     )
   }
 
+  // Create enhanced messages array that includes live voice transcription
+  const enhancedMessages = React.useMemo(() => {
+    const baseMessages = messages.map(msg => ({
+      ...msg,
+      sender: msg.sender
+    }))
+
+    // Add live voice transcription as a typing user message
+    if (isVoiceTranscribing && voiceTranscript.trim()) {
+      const voiceMessage = {
+        id: 'voice-transcription-temp',
+        text: voiceTranscript,
+        sender: 'user' as const,
+        timestamp: new Date(),
+        isTemporary: true,
+        isVoiceTranscription: true,
+        isTyping: true 
+      }
+      return [...baseMessages, voiceMessage]
+    }
+
+    return baseMessages
+  }, [messages, isVoiceTranscribing, voiceTranscript])
+
   // Add this right before the return statement for debugging
   console.log("🤖 Bot States:", {
     isBotTyping,
     isBotThinking,
     isProcessing,
     isSpeaking,
+    isVoiceTranscribing,
+    voiceTranscript: voiceTranscript.substring(0, 50),
     typingBotMsg: typingBotMsg,
     typingBotMsgLength: typingBotMsg?.length || 0,
     hasTimeout: !!thinkingTimeoutRef.current,
@@ -277,44 +340,12 @@ export function CompactChat({ onClose, sessionId }: CompactChatProps) {
   })
 
   return (
-    <div className="flex flex-col h-full bg-black/30 backdrop-blur-3xl border border-indigo-500/20 rounded-2xl shadow-2xl shadow-indigo-500/5 overflow-hidden">
-      {/* Chat Header */}
-      <div className="flex items-center justify-between p-4 border-b border-indigo-500/20">
-        <h3 className="text-lg font-semibold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-500 to-blue-400">
-          Chat with Connie
-        </h3>
-        <div className="flex gap-2">
-          {(isBotTyping || isProcessing || isBotThinking) && (
-            <>
-              <Button
-                onClick={handleStopTyping}
-                size="sm"
-                variant="outline"
-                className="!border-purple-400 text-purple-400 hover:bg-purple-500/10 hover:text-purple-200 bg-transparent backdrop-blur-sm text-sm h-8 px-3 animate-pulse"
-              >
-                <Square className="h-3 w-3 mr-1" />
-                Stop
-              </Button>
-            </>
-          )}
-          <div className="hidden md:block">
-            <VoiceSelector selectedVoice={selectedVoice} onVoiceChange={setSelectedVoice} />
-          </div>
-          <Button
-            onClick={onClose}
-            size="sm"
-            variant="outline"
-            className="!border-indigo-400 text-indigo-400 hover:bg-indigo-500/10 hover:text-indigo-200 bg-transparent backdrop-blur-sm text-sm h-8 px-3"
-          >
-            <Square className="h-3 w-3" />
-          </Button>
-        </div>
-      </div>
+    <div className="flex flex-col h-full max-w-4xl mx-auto overflow-hidden">
 
       {/* Messages - Takes remaining space */}
       <div className="flex-1 overflow-hidden">
         <ChatMessages
-          messages={messages.map(msg => ({
+          messages={messages.filter(msg => !msg.isTemporary).map(msg => ({
             ...msg,
             sender: msg.sender
           }))}
@@ -322,11 +353,13 @@ export function CompactChat({ onClose, sessionId }: CompactChatProps) {
           isBotTyping={isBotTyping}
           typingBotMsg={typingBotMsg}
           sessionId={sessionId}
+          isUserTyping={isVoiceTranscribing}
+          userTypingMsg={voiceTranscript}
         />
       </div>
 
       {/* Input - Fixed at bottom */}
-      <div className="border-t border-indigo-500/20">
+      <div className="">
         <ChatInput
           onSubmit={handleMessageSubmit}
           isProcessing={isProcessing}
