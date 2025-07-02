@@ -352,6 +352,7 @@ export function CompactChat({ onClose, sessionId }: CompactChatProps) {
           isThinking={isBotThinking}
           isBotTyping={isBotTyping}
           typingBotMsg={typingBotMsg}
+          sessionId={sessionId}
           isUserTyping={isVoiceTranscribing}
           userTypingMsg={voiceTranscript}
         />

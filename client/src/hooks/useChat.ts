@@ -200,7 +200,7 @@ export const useChat = ({
 
       // Save intro message to database
       try {
-        await ChatStorageService.saveMessage(
+        const savedIntroMessage = await ChatStorageService.saveMessage(
           sessionId,
           'connie',
           introMessage.text,
@@ -208,6 +208,16 @@ export const useChat = ({
             metadata: { isIntroMessage: true, messageId: introMessage.id }
           }
         );
+        
+        // Update the message with the saved ID
+        if (savedIntroMessage) {
+          setMessages(prev => prev.map(msg => 
+            msg.id === introMessage.id 
+              ? { ...msg, id: savedIntroMessage.id }
+              : msg
+          ));
+        }
+        
         console.log('💾 Intro message saved to database');
       } catch (error) {
         console.warn('⚠️ Failed to save intro message:', error);
@@ -260,7 +270,7 @@ export const useChat = ({
       // Save user message to database
       console.log('💾 Saving user message to database...');
       try {
-        await ChatStorageService.saveMessage(
+        const savedUserMessage = await ChatStorageService.saveMessage(
           sessionId,
           'user',
           userMessage.text,
@@ -273,6 +283,16 @@ export const useChat = ({
             }
           }
         );
+        
+        // Update the local message with the saved ID
+        if (savedUserMessage) {
+          setMessages(prev => prev.map(msg => 
+            msg.id === userMessage.id 
+              ? { ...msg, id: savedUserMessage.id }
+              : msg
+          ));
+        }
+        
         console.log('✅ User message saved to database');
       } catch (saveError) {
         console.error('❌ Error saving user message:', saveError);
@@ -338,7 +358,7 @@ export const useChat = ({
       // Save bot message to database with metadata
       console.log('💾 Saving bot message to database...');
       try {
-        await ChatStorageService.saveMessage(
+        const savedBotMessage = await ChatStorageService.saveMessage(
           sessionId,
           'connie',
           botMessage.text,
@@ -359,6 +379,16 @@ export const useChat = ({
             }
           }
         );
+        
+        // Update the local message with the saved ID
+        if (savedBotMessage) {
+          setMessages(prev => prev.map(msg => 
+            msg.id === botMessage.id 
+              ? { ...msg, id: savedBotMessage.id }
+              : msg
+          ));
+        }
+        
         console.log('✅ Bot message saved to database with metadata');
       } catch (saveError) {
         console.error('❌ Error saving bot message:', saveError);
@@ -403,20 +433,21 @@ export const useChat = ({
     console.log('🤖 sendBotMessage called:', text.substring(0, 30));
     console.log('🤖 Session ID:', sessionId);
     console.log('🤖 Is intro message:', isIntro);
-    
+  
     const botMsg: Message = {
       id: `bot-${Date.now()}`,
       sender: "connie",
       text,
       timestamp: new Date(),
+      isIntro: isIntro  // ✅ Renamed for UI compatibility
     };
-    
+  
     console.log('🤖 Bot message created:', botMsg.id);
-    
+  
     // Apply typing effect with voice
     console.log('🤖 Starting typing effect...');
     await showTypingEffect(text, true);
-    
+  
     // Add to UI messages
     console.log('🤖 Adding message to UI...');
     setMessages(prevMessages => {
@@ -424,12 +455,12 @@ export const useChat = ({
       console.log('🤖 Messages after adding:', newMessages.length);
       return newMessages;
     });
-    
+  
     // Save to database if session exists
     if (sessionId) {
       console.log('💾 Saving bot message to database...');
       try {
-        await ChatStorageService.saveMessage(
+        const savedBotMessage = await ChatStorageService.saveMessage(
           sessionId,
           'connie',
           botMsg.text,
@@ -438,10 +469,20 @@ export const useChat = ({
             metadata: {
               timestamp: new Date().toISOString(),
               messageId: botMsg.id,
-              isIntroMessage: isIntro
+              isIntroMessage: isIntro  // ✅ Keep this for storage
             }
           }
         );
+  
+        // Update the local message with the saved ID
+        if (savedBotMessage) {
+          setMessages(prev => prev.map(msg => 
+            msg.id === botMsg.id 
+              ? { ...msg, id: savedBotMessage.id }
+              : msg
+          ));
+        }
+  
         console.log('✅ Bot message saved to database');
       } catch (saveError) {
         console.error('❌ Error saving bot message:', saveError);
@@ -450,6 +491,7 @@ export const useChat = ({
       console.warn('⚠️ No session ID - bot message will appear in UI but not be saved to database');
     }
   }, [sessionId, selectedVoice, speakText]);
+  
 
   // Send intro message with proper tracking
   const sendIntroMessage = useCallback(() => {
@@ -458,13 +500,16 @@ export const useChat = ({
     
     if (sessionId) {
       console.log('🚀 ✅ Sending intro message');
-      
+  
       const introText = "Hi, I'm Connie, your personal conference assistant! What would you like to know about the conference?";
+      
+      // Pass isIntro as metadata
       sendBotMessage(introText, true);
     } else {
       console.log('🚀 ❌ No session ID, skipping intro');
     }
   }, [sendBotMessage, sessionId]);
+  
 
   // Handle voice input
   const handleVoiceInput = useCallback(async (transcript: string) => {

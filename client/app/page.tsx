@@ -15,9 +15,9 @@ import { AdminButton } from "@/components/admin/ui/AdminButton"
 import { useRouter } from "next/navigation"
 
 // Debug components
-import { DebugSessionCreation } from '@/components/DebugSessionCreation';
-import { DatabaseSaveTest } from '@/components/DatabaseSaveTest';
-import { ConferenceDataCheck } from '@/components/ConferenceDataCheck';
+// import { DebugSessionCreation } from '@/components/DebugSessionCreation';
+// import { DatabaseSaveTest } from '@/components/DatabaseSaveTest';
+// import { ConferenceDataCheck } from '@/components/ConferenceDataCheck';
 
 export default function Home() {
   const [isChatOpen, setIsChatOpen] = useState(false)
@@ -154,13 +154,13 @@ export default function Home() {
         </div>
 
         {/* Debug components - only show in development */}
-        {process.env.NODE_ENV === 'development' && (
+        {/* {process.env.NODE_ENV === 'development' && (
           <>
             <DebugSessionCreation />
             <DatabaseSaveTest />
             <ConferenceDataCheck />
           </>
-        )}
+        )} */}
       </div>
     );
   }
@@ -276,13 +276,13 @@ export default function Home() {
         )}
 
         {/* Debug components - only show in development */}
-        {process.env.NODE_ENV === 'development' && (
+        {/* {process.env.NODE_ENV === 'development' && (
           <>
             <DebugSessionCreation />
             <DatabaseSaveTest />
             <ConferenceDataCheck />
           </>
-        )}
+        )} */}
       </div>
     </div>
   )

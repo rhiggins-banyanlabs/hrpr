@@ -74,6 +74,136 @@ export interface EventSession {
 // =============================================
 
 export class ChatStorageService {
+
+  // Save or update feedback for a message
+  static async saveFeedback(
+    messageId: string,
+    sessionId: string,
+    feedbackType: 'thumbs_up' | 'thumbs_down'
+  ): Promise<MessageFeedback | null> {
+    try {
+      console.log('👍👎 Saving feedback:', { messageId, sessionId, feedbackType });
+
+      // First, check if feedback already exists for this message
+      const { data: existingFeedback } = await supabase
+        .from('message_feedback')
+        .select('*')
+        .eq('message_id', messageId)
+        .single();
+
+      let result;
+
+      if (existingFeedback) {
+        // Update existing feedback
+        const { data, error } = await supabase
+        .from('message_feedback')
+        .insert({
+          message_id: messageId,
+          session_id: sessionId,
+          feedback_type: feedbackType,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+        if (error) throw error;
+        result = data;
+      } else {
+        // Insert new feedback
+        const { data, error } = await supabase
+          .from('message_feedback')
+          .insert({
+            message_id: messageId,
+            session_id: sessionId,
+            feedback_type: feedbackType
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+        result = data;
+      }
+
+      console.log('✅ Feedback saved successfully');
+
+      // Log analytics event
+      try {
+        await this.logAnalyticsEvent(sessionId, 'message_feedback', {
+          message_id: messageId,
+          feedback_type: feedbackType
+        });
+      } catch (analyticsError) {
+        console.error('⚠️ Failed to log feedback analytics (non-fatal):', analyticsError);
+      }
+
+      return result;
+    } catch (error: any) {
+      console.error('❌ Error saving feedback:', {
+        message: error?.message,
+        code: error?.code,
+        details: error?.details,
+        hint: error?.hint,
+        full: JSON.stringify(error, null, 2),
+      });
+      return null;
+    }
+  }
+
+  // Get feedback for a specific message
+  static async getMessageFeedback(messageId: string): Promise<MessageFeedback | null> {
+    try {
+      const { data, error } = await supabase
+        .from('message_feedback')
+        .select('*')
+        .eq('message_id', messageId)
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 is "not found" error
+        throw error;
+      }
+
+      return data || null;
+    } catch (error) {
+      console.error('Error fetching message feedback:', error);
+      return null;
+    }
+  }
+
+  // Get all feedback for a session
+  static async getSessionFeedback(sessionId: string): Promise<MessageFeedback[]> {
+    try {
+      const { data, error } = await supabase
+        .from('message_feedback')
+        .select('*')
+        .eq('session_id', sessionId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching session feedback:', error);
+      return [];
+    }
+  }
+
+  // Remove feedback (if user wants to undo their feedback)
+  static async removeFeedback(messageId: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('message_feedback')
+        .delete()
+        .eq('message_id', messageId);
+
+      if (error) throw error;
+      
+      console.log('✅ Feedback removed successfully');
+      return true;
+    } catch (error) {
+      console.error('Error removing feedback:', error);
+      return false;
+    }
+  }
   // Create a new chat session - ENHANCED with detailed logging
   static async createChatSession(metadata?: Record<string, any>): Promise<ChatSession | null> {
     try {
@@ -531,6 +661,21 @@ export class ConferenceStorageService {
     }
   }
 }
+
+
+// Add this to your existing chatStorage.ts file after the Message interface
+
+export interface MessageFeedback {
+  id: string;
+  message_id: string;
+  session_id: string;
+  feedback_type: 'thumbs_up' | 'thumbs_down';
+  created_at: string;
+  updated_at: string;
+}
+
+// Add these methods to your ChatStorageService class
+
 
 // =============================================
 // NEW DEBUG UTILITIES
