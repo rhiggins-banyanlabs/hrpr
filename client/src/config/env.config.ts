@@ -1,8 +1,5 @@
 interface EnvConfig {
   openaiApiKey: string;
-  anthropicApiKey: string;
-  geminiApiKey: string;
-  cohereApiKey: string;
   nodeEnv: string;
 }
 
@@ -14,9 +11,6 @@ class EnvironmentConfig {
     this.validateEnvironment();
     this.config = {
       openaiApiKey: process.env.OPENAI_API_KEY!,
-      anthropicApiKey: process.env.ANTHROPIC_API_KEY!,
-      geminiApiKey: process.env.GEMINI_API_KEY!,
-      cohereApiKey: process.env.COHERE_API_KEY!,
       nodeEnv: process.env.NODE_ENV || "development",
     };
   }
@@ -31,9 +25,6 @@ class EnvironmentConfig {
   private validateEnvironment(): void {
     const requiredEnvVars = [
       "OPENAI_API_KEY",
-      "ANTHROPIC_API_KEY",
-      "GEMINI_API_KEY",
-      "COHERE_API_KEY",
     ];
 
     const missingVars = requiredEnvVars.filter(
@@ -43,25 +34,13 @@ class EnvironmentConfig {
     if (missingVars.length > 0) {
       throw new Error(
         `Missing required environment variables: ${missingVars.join(", ")}\n` +
-          "Please check your .env.local file and ensure all API keys are set.",
+          "Please check your .env.local file and ensure the OpenAI API key is set.",
       );
     }
   }
 
   public get openai(): string {
     return this.config.openaiApiKey;
-  }
-
-  public get anthropic(): string {
-    return this.config.anthropicApiKey;
-  }
-
-  public get gemini(): string {
-    return this.config.geminiApiKey;
-  }
-
-  public get cohere(): string {
-    return this.config.cohereApiKey;
   }
 
   public get isDevelopment(): boolean {
