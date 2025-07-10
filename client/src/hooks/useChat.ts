@@ -1,7 +1,6 @@
 // hooks/useChat.ts - COMBINED VERSION with typing effects and AI Router
 import { useState, useRef, useCallback } from 'react';
 import { ChatStorageService } from '@/lib/supabase/chatStorage';
-import { Strategy } from '@/types/ai-router.types';
 
 interface Message {
   id: string;
@@ -12,6 +11,7 @@ interface Message {
   isIntroMessage?: boolean;
   isTemporary?: boolean;
   isVoiceTranscription?: boolean;
+  isIntro?: boolean;
 }
 
 interface UseChatProps {
@@ -29,8 +29,7 @@ export const useChat = ({
   speakText, 
   unlockAudio,
   selectedVoice,
-  sessionId,
-  onClose
+  sessionId
 }: UseChatProps) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isBotTyping, setIsBotTyping] = useState(false);
@@ -77,25 +76,6 @@ export const useChat = ({
     }
   };
 
-  // Determine optimal AI strategy based on message content
-  const getOptimalStrategy = (text: string): Strategy => {
-    const lowerText = text.toLowerCase();
-    
-    // Simple questions get cheap strategy
-    if (lowerText.includes('time') || lowerText.includes('when') || lowerText.includes('where') || 
-        lowerText.includes('who') || lowerText.length < 50) {
-      return 'cheap';
-    }
-    
-    // Complex questions get quality strategy
-    if (lowerText.includes('explain') || lowerText.includes('how') || lowerText.includes('why') ||
-        lowerText.includes('detail') || lowerText.length > 200) {
-      return 'quality';
-    }
-    
-    // Default to balanced
-    return 'balanced';
-  };
 
   // Enhanced typing effect with voice support
   const showTypingEffect = async (text: string, withVoice: boolean = false) => {
@@ -304,51 +284,42 @@ export const useChat = ({
       // Create new abort controller for this request
       abortControllerRef.current = new AbortController();
 
-      // Determine optimal strategy for this question
-      const strategy = getOptimalStrategy(text);
-      console.log(`🎯 Using strategy: ${strategy} for question: "${text.substring(0, 50)}..."`);
-
-      // Call AI Router API
-      const response = await fetch('/api/ai-router', {
+      // Call OpenAI Chat API
+      const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          prompt: text,
-          strategy: strategy
+          prompt: text
         }),
         signal: abortControllerRef.current.signal
       });
 
       if (!response.ok) {
-        throw new Error(`AI Router API request failed: ${response.status}`);
+        throw new Error(`Chat API request failed: ${response.status}`);
       }
 
       const data = await response.json();
       
-      if (!data.response) {
-        throw new Error('No response from AI Router');
+      if (!data.success || !data.response) {
+        throw new Error(data.error || 'No response from OpenAI');
       }
 
-      console.log(`✅ AI Router response received from ${data.provider} (${data.responseTime}ms, $${data.cost?.toFixed(4) || '0'})`);
-
-      // Log optimization details if available
-      if (data.optimizations) {
-        console.log(`🚀 Optimizations used: ${data.optimizations.join(', ')}`);
-      }
-      if (data.cached) {
-        console.log(`💾 Response was cached (${data.cacheAge ? `${data.cacheAge}s old` : 'instant'})`);
-      }
+      console.log(`✅ OpenAI response received (${data.responseTime}ms, $${data.cost?.toFixed(4) || '0'})`);
+      console.log(`📊 Tokens used: ${data.tokensUsed.total} (${data.tokensUsed.input} input + ${data.tokensUsed.output} output)`);
+      
+      // Use data.response instead of data.response
+      const responseText = data.response;
 
       // Show typing effect with voice (enhanced version)
-      await showTypingEffect(data.response, true);
+      await showTypingEffect(responseText, true);
 
       // Create bot message for UI
       const botMessage: Message = {
         id: `connie-${Date.now()}`,
         sender: "connie",
-        text: data.response,
+        text: responseText,
         timestamp: new Date(),
       };
 
@@ -368,12 +339,9 @@ export const useChat = ({
               timestamp: new Date().toISOString(),
               messageId: botMessage.id,
               provider: data.provider,
-              strategy: strategy,
               cost: data.cost,
               responseTime: data.responseTime,
               tokensUsed: data.tokensUsed,
-              cached: data.cached,
-              optimizations: data.optimizations,
               questionCategory: categorizeQuestion(text.trim()),
               hasConferenceData: true
             }
