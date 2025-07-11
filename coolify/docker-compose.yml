@@ -73,7 +73,7 @@ services:
       - supabase-db
 
   supabase-studio:
-    image: supabase/studio:20240404-6b60901
+    image: supabase/studio:2025.06.30-sha-6f5982d
     restart: unless-stopped
     ports:
       - "3001:3000"
