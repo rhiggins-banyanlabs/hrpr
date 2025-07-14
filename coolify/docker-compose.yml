@@ -34,7 +34,7 @@ services:
     ports:
       - "8081:443"  # Use 8081 instead of 443 to avoid conflict with Coolify
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       - ./nginx/htpasswd:/etc/nginx/htpasswd:ro
       - /data/coolify/proxy/certs:/etc/nginx/certs:ro
     depends_on:

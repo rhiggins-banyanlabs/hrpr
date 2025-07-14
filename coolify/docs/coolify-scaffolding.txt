@@ -12,6 +12,6 @@
     │   ├── cert.crt
     │   └── cert.key
     ├── htpasswd
-    └── nginx.conf
+    └── default.conf
 
 4 directories, 11 files
