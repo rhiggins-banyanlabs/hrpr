@@ -31,12 +31,12 @@ services:
     image: nginx:stable
     container_name: supabase-proxy
     restart: unless-stopped
-    expose:
-      - "8081"  # Internal port only, no public mapping
+    ports:
+      - "8081:443"  # Use 8081 instead of 443 to avoid conflict with Coolify
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - /data/coolify/proxy/certs:/etc/nginx/certs:ro
       - ./nginx/htpasswd:/etc/nginx/htpasswd:ro
+      - /data/coolify/proxy/certs:/etc/nginx/certs:ro
     depends_on:
       - supabase-studio
 
