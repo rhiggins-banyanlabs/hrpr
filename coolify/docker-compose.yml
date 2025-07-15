@@ -34,13 +34,14 @@ services:
     ports:
       - "8081:443"  # Use 8081 instead of 443 to avoid conflict with Coolify
     volumes:
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/htpasswd:/etc/nginx/htpasswd:ro
       - /data/coolify/proxy/certs:/etc/nginx/certs:ro
     depends_on:
       - supabase-studio
     networks:
       - default
+    command: ["sh", "-c", "apt update && apt install -y net-tools procps curl && nginx -g 'daemon off;'"]
 
   supabase-rest:
     image: postgrest/postgrest:v11.2.0
