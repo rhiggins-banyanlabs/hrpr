@@ -39,6 +39,8 @@ services:
       - /data/coolify/proxy/certs:/etc/nginx/certs:ro
     depends_on:
       - supabase-studio
+    networks:
+      - default
 
   supabase-rest:
     image: postgrest/postgrest:v11.2.0
@@ -118,3 +120,8 @@ services:
 
 volumes:
   supabase-db-data:
+
+networks:
+  default:
+    external:
+      name: xc84w4okk8ggk4cc08s0ksgg
