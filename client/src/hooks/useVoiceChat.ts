@@ -1,6 +1,7 @@
 // hooks/useVoiceChat.ts - Voice-only chat without UI components
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { ChatStorageService } from '@/lib/supabase/chatStorage';
+import { ttsOrchestrator } from '@/services/tts-orchestrator.service';
 // import { StreamingTTSService } from '@/services/streaming-tts.service'; // Removed for performance
 
 interface UseVoiceChatProps {
@@ -24,6 +25,14 @@ export const useVoiceChat = ({
   // const streamingTTSRef = useRef(new StreamingTTSService()); // Removed for performance
 
   console.log('🎤 useVoiceChat - sessionId:', sessionId);
+
+  // Initialize TTS orchestrator when speakText function is available
+  useEffect(() => {
+    if (speakText) {
+      ttsOrchestrator.initialize(speakText);
+      console.log('🎤 TTS Orchestrator initialized');
+    }
+  }, [speakText]);
 
   // Notify parent of speaking state changes
   useEffect(() => {
@@ -141,12 +150,9 @@ export const useVoiceChat = ({
 
       console.log('🤖 AI Response received:', aiResponse.response.substring(0, 50) + '...');
 
-      // Run database save and TTS generation in parallel for better performance
-      const parallelTasks = [];
-
-      // Task 1: Save Harper's response to database
-      parallelTasks.push(
-        ChatStorageService.saveMessage(
+      // Save Harper's response to database
+      try {
+        const savedMessage = await ChatStorageService.saveMessage(
           activeSessionId,
           'Harper',
           aiResponse.response,
@@ -158,40 +164,26 @@ export const useVoiceChat = ({
               cost: aiResponse.cost
             }
           }
-        ).then(savedMessage => {
-          console.log('💾 Harper message saved:', savedMessage?.id);
-          return savedMessage;
-        }).catch(dbError => {
-          console.error('❌ Failed to save Harper message to database:', dbError);
-          console.log('⚠️ Continuing with voice synthesis despite database error');
-          return null;
-        })
-      );
-
-      // Task 2: Generate TTS audio (single call is faster than streaming)
-      if (speakText) {
-        console.log('🔊 Starting TTS generation...');
-        setIsSpeaking(true);
-        
-        parallelTasks.push(
-          speakText(aiResponse.response).then(() => {
-            console.log('🔊 Speech completed');
-            return true;
-          }).catch(voiceError => {
-            console.error('🔊 Voice error:', voiceError);
-            return false;
-          }).finally(() => {
-            setIsSpeaking(false);
-          })
         );
+        console.log('💾 Harper message saved:', savedMessage?.id);
+      } catch (dbError) {
+        console.error('❌ Failed to save Harper message to database:', dbError);
+        console.log('⚠️ Continuing with voice synthesis despite database error');
       }
 
-      // Wait for both tasks to complete in parallel
-      try {
-        await Promise.all(parallelTasks);
-        console.log('✅ All parallel tasks completed');
-      } catch (error) {
-        console.error('❌ Error in parallel task execution:', error);
+      // Use TTS orchestrator for clean filler + main response sequence
+      if (speakText) {
+        console.log('🔊 Starting TTS orchestrator for filler + AI response...');
+        setIsSpeaking(true);
+        
+        try {
+          await ttsOrchestrator.speakWithFiller(text, aiResponse.response);
+          console.log('✅ TTS orchestrator completed successfully');
+        } catch (voiceError) {
+          console.error('❌ TTS orchestrator error:', voiceError);
+        } finally {
+          setIsSpeaking(false);
+        }
       }
 
     } catch (error) {

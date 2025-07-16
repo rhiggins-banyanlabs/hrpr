@@ -54,7 +54,7 @@ export class OpenAIService {
     return Math.ceil(text.length / 4);
   }
 
-  async sendMessage(prompt: string): Promise<OpenAIResponse> {
+  async sendMessage(prompt: string, options?: { stream?: boolean }): Promise<OpenAIResponse> {
     const startTime = Date.now();
     
     try {
@@ -94,7 +94,7 @@ You help with: schedules, speakers, locations, and general conference questions.
           ],
           max_tokens: 70, // Force shorter responses
           temperature: 0.05, // Maximum focus
-          stream: false // Disable streaming - simpler and faster for short responses
+          stream: options?.stream ?? false
         }),
       });
 

@@ -65,7 +65,7 @@ export const useOptimizedVoice = () => {
     async (
       text: string,
       voice: OpenAIVoice = selectedVoice,
-      speed: number = 1.2
+      speed: number = 1.0
     ) => {
       const cacheKey = `${text}-${voice}-${speed}`;
       if (audioCache.current.has(cacheKey)) {
@@ -162,7 +162,7 @@ export const useOptimizedVoice = () => {
     
     try {
       console.log('🔄 Pre-caching intro message...');
-      await speakWithOptimizedTTS(introMessage, selectedVoice, 1.2);
+      await speakWithOptimizedTTS(introMessage, selectedVoice, 1.0);
       console.log('✅ Intro message pre-cached successfully');
     } catch (error) {
       console.error('❌ Error pre-caching intro message:', error);

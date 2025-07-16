@@ -30,6 +30,7 @@ const CompactChatComponent = ({
 
   // Refs for state management
   const hasPlayedIntroRef = useRef(false)
+  const introRequestInProgressRef = useRef(false)
   const isProcessingVoiceQueryRef = useRef(false)
   const thinkingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const lastMessageRef = useRef<string>("")
@@ -64,6 +65,14 @@ const CompactChatComponent = ({
   })
 
   console.log("🏗️ Compact Chat render - messages:", messages.length, "session:", sessionId)
+
+  // Reset intro flags on unmount
+  useEffect(() => {
+    return () => {
+      hasPlayedIntroRef.current = false
+      introRequestInProgressRef.current = false
+    }
+  }, [])
 
   // Format message helper
   const formatMessage = (message: string) => {
@@ -158,25 +167,38 @@ const CompactChatComponent = ({
       })
       
       // Only send intro if we have a session and haven't sent it yet
-      if (!hasPlayedIntroRef.current && sessionId) {
+      if (!hasPlayedIntroRef.current && !introRequestInProgressRef.current && sessionId) {
+        // Set both flags immediately to prevent race condition in StrictMode
         hasPlayedIntroRef.current = true
+        introRequestInProgressRef.current = true
         console.log("🎯 Session ready, sending intro message to session:", sessionId)
 
         // Wait a moment to ensure the session is fully ready
         await new Promise(resolve => setTimeout(resolve, 500))
 
-        console.log("🎯 Sending intro message now")
-        try {
-          await sendIntroMessage()
-          console.log("🎯 Intro message sent successfully")
-        } catch (error) {
-          console.error("🎯 Error sending intro message:", error)
+        // Double-check the flag hasn't been set by another effect run
+        if (messages.length === 0) {
+          console.log("🎯 Sending intro message now")
+          try {
+            await sendIntroMessage()
+            console.log("🎯 Intro message sent successfully")
+          } catch (error) {
+            console.error("🎯 Error sending intro message:", error)
+            // Reset flags on error so it can retry
+            hasPlayedIntroRef.current = false
+            introRequestInProgressRef.current = false
+          }
+        } else {
+          console.log("🎯 Skipping intro - messages already exist")
         }
+        
+        // Reset progress flag after completion
+        introRequestInProgressRef.current = false
       }
     }
 
     sendIntro()
-  }, [sessionId, sendIntroMessage])
+  }, [sessionId, sendIntroMessage, messages.length])
 
   // Aggressive thinking state timeout - force clear after 15 seconds
   useEffect(() => {

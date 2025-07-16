@@ -3,43 +3,39 @@ import { Strategy } from "@/types/ai-router.types";
 import { ConferenceDataService } from "./conference-data.service";
 import { LocationService } from "./location.service";
 import { VenueLookupService } from "./venue-lookup.service";
+import { IntentDetectorService } from "./intent-detector.service";
 
 export class PromptEnhancementService {
   private venueLookup: VenueLookupService | null = null;
+  private venueLookupInitialized = false;
 
   constructor(
     private conferenceService: ConferenceDataService,
     private locationService: LocationService
   ) {
-    this.initializeVenueLookup();
+    // Don't initialize venue lookup until needed
   }
 
-  private async initializeVenueLookup() {
-    this.venueLookup = await VenueLookupService.getInstance();
+  private async initializeVenueLookupIfNeeded() {
+    if (!this.venueLookupInitialized) {
+      console.log('⚡ Initializing venue lookup (lazy loading)...');
+      this.venueLookup = await VenueLookupService.getInstance();
+      this.venueLookupInitialized = true;
+      console.log('✅ Venue lookup initialized');
+    }
   }
 
   /**
-   * Enhanced prompt creation with organized venue data
+   * Enhanced prompt creation with intent-first optimization
    */
   async createEnhancedPrompt(originalPrompt: string): Promise<string> {
     let enhancedPrompt = originalPrompt;
 
-    // Ensure venue lookup is initialized
-    if (!this.venueLookup) {
-      console.log('⏳ PromptEnhancement: Waiting for VenueLookup initialization...');
-      await this.initializeVenueLookup();
-      console.log('✅ PromptEnhancement: VenueLookup initialized');
-    }
-
-    // Check for conference schedule queries
-    const isConferenceQuery = /schedule|session|speaker|time|when|who|keynote|presentation/i.test(originalPrompt);
-    // Check for basic location queries  
-    const isLocationQuery = /location|where|address|venue|conference.*located|how.*get|directions/i.test(originalPrompt);
-    // Check for venue queries (restaurants, parking, etc.)
-    const venueCategory = this.venueLookup?.detectCategory(originalPrompt);
-    console.log(`🔍 PromptEnhancement: Query "${originalPrompt}" -> Category: ${venueCategory || 'none'}`);
+    // Step 1: Fast intent detection (no database)
+    const intent = IntentDetectorService.detectIntent(originalPrompt);
     
-    if (isConferenceQuery) {
+    // Step 2: Add conference data if needed (no database)
+    if (intent.isConferenceQuery) {
       enhancedPrompt += '\n\nCONFERENCE SCHEDULE:';
       enhancedPrompt += '\n- 9AM: Opening Keynote by Sarah Chen';
       enhancedPrompt += '\n- 10:30AM: Deep Learning Fundamentals';
@@ -50,21 +46,33 @@ export class PromptEnhancementService {
       enhancedPrompt += '\n- 6:30PM: Closing Reception';
     }
     
-    if (isLocationQuery) {
+    // Step 3: Add location data if needed (no database)
+    if (intent.isLocationQuery) {
       enhancedPrompt += '\n\nVENUE INFO:';
       enhancedPrompt += '\n- Convention Center: 700 14th St, Denver';
       enhancedPrompt += '\n- Host Hotel: Hyatt Regency (2min walk)';
       enhancedPrompt += '\n- Parking: $15/day at center, $10/day nearby';
     }
 
-    // Add specific venue data if detected
-    if (venueCategory && this.venueLookup) {
+    // Step 4: Only initialize venue lookup if needed (database call only when necessary)
+    if (intent.isVenueQuery) {
       try {
-        const venueData = await this.venueLookup.formatVenuesForResponse(venueCategory, 150);
-        enhancedPrompt += '\n\nNEARBY VENUES:\n' + venueData;
+        await this.initializeVenueLookupIfNeeded();
+        
+        if (this.venueLookup) {
+          const venueCategory = this.venueLookup.detectCategory(originalPrompt);
+          console.log(`🔍 PromptEnhancement: Venue category detected: ${venueCategory || 'none'}`);
+          
+          if (venueCategory) {
+            const venueData = await this.venueLookup.formatVenuesForResponse(venueCategory, 150);
+            enhancedPrompt += '\n\nNEARBY VENUES:\n' + venueData;
+          }
+        }
       } catch (error) {
-        console.log('⚠️ Venue lookup failed, using fallback');
+        console.log('⚠️ Venue lookup failed, continuing without venue data');
       }
+    } else {
+      console.log('⚡ Skipping venue lookup - not a venue query');
     }
 
     return enhancedPrompt;

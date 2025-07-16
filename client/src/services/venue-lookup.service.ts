@@ -48,6 +48,10 @@ export class VenueLookupService {
     return VenueLookupService.instance;
   }
 
+  async waitForInitialization(): Promise<void> {
+    await this.categoriesPromise;
+  }
+
   private async loadCategories() {
     try {
       const { data, error } = await this.supabase

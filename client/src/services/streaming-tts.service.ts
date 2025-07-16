@@ -32,7 +32,7 @@ export class StreamingTTSService {
             body: JSON.stringify({ 
               text: sentence.trim(), 
               voice, 
-              speed: 1.3, 
+              speed: 1.0, 
               model: 'tts-1' 
             }),
             signal: AbortSignal.timeout(5000)
