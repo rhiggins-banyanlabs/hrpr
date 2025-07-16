@@ -71,7 +71,7 @@ Use the `useChat` hook for all chat functionality. It handles:
 
 ### Voice Integration
 Voice features use the `VoiceOrb` component with:
-- Wake word detection ("Hey Connie")
+- Wake word detection ("Hey Harper")
 - Speech-to-text transcription
 - Text-to-speech with multiple voice options
 - Visual feedback for recording states

@@ -3,13 +3,14 @@ import Orb from "@/shared/components/orb";
 
 interface VoiceOrbProps {
   listening: boolean;
-  connieDetected: boolean;
+  HarperDetected: boolean;
   isNavigating: boolean;
   // New props for unified functionality
   isVoiceInputActive?: boolean;
   onVoiceInputToggle?: () => void;
   isChatOpen?: boolean;
-  isConnieSpeaking?: boolean;
+  isHarperSpeaking?: boolean;
+  isHarperActivated?: boolean; // New prop for activated state
 }
 
 const IconGradient: React.FC<{ id: string }> = ({ id }) => (
@@ -38,18 +39,19 @@ const IconWrapper: React.FC<{
 
 const VoiceOrb: React.FC<VoiceOrbProps> = ({
   listening,
-  connieDetected,
+  HarperDetected,
   isNavigating,
   isVoiceInputActive = false,
   onVoiceInputToggle,
   isChatOpen = false,
-  isConnieSpeaking = false,
+  isHarperSpeaking = false,
+  isHarperActivated = false,
 }) => {
   const [showSpeaker, setShowSpeaker] = useState(false);
 
   // Determine which state takes priority
   const isActivelyRecording = isVoiceInputActive;
-  const isListeningForWakeWord = listening && !isVoiceInputActive;
+  const isListeningForWakeWord = listening && !isVoiceInputActive && !isHarperActivated;
   const shouldShowRecordingState = isActivelyRecording;
 
   useEffect(() => {
@@ -67,16 +69,24 @@ const VoiceOrb: React.FC<VoiceOrbProps> = ({
     };
   }, [isListeningForWakeWord]);
 
-  // Handle click - only allow when chat is open and Connie isn't speaking
+  // Debug current state (commented out to reduce noise)
+  // console.log("🔍 VoiceOrb State:", {
+  //   listening, HarperDetected, isNavigating, isVoiceInputActive,
+  //   isHarperSpeaking, isHarperActivated, isActivelyRecording,
+  //   isListeningForWakeWord, shouldShowRecordingState, showSpeaker
+  // });
+
+  // Handle click - only allow when Harper is activated and not speaking
   const handleClick = () => {
     console.log("🎤 VoiceOrb clicked!", { 
       isChatOpen, 
-      isConnieSpeaking, 
+      isHarperActivated,
+      isHarperSpeaking, 
       hasToggleFunction: !!onVoiceInputToggle,
       isClickable 
     })
     
-    if (isChatOpen && !isConnieSpeaking && onVoiceInputToggle) {
+    if ((isChatOpen || isHarperActivated) && !isHarperSpeaking && onVoiceInputToggle) {
       console.log('🎤 VoiceOrb executing voice input toggle')
       onVoiceInputToggle()
     } else {
@@ -85,7 +95,7 @@ const VoiceOrb: React.FC<VoiceOrbProps> = ({
   };
 
   // Determine if orb should be clickable
-  const isClickable = isChatOpen && !isConnieSpeaking && onVoiceInputToggle;
+  const isClickable = (isChatOpen || isHarperActivated) && !isHarperSpeaking && onVoiceInputToggle;
 
   return (
     <div className="relative w-64 h-64 sm:w-80 sm:h-80">
@@ -99,7 +109,13 @@ const VoiceOrb: React.FC<VoiceOrbProps> = ({
         hoverIntensity={0.6}
         rotateOnHover={true}
         hue={0}
-        forceHoverState={connieDetected || isNavigating || shouldShowRecordingState}
+        forceHoverState={
+          HarperDetected || 
+          (isNavigating && !isHarperActivated) || 
+          shouldShowRecordingState || 
+          isHarperSpeaking ||
+          (listening && !isHarperActivated)
+        }
       />
       
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -109,7 +125,7 @@ const VoiceOrb: React.FC<VoiceOrbProps> = ({
           }`}
         >
           {/* Microphone Icon - Default state or when actively recording */}
-          <IconWrapper show={(!showSpeaker && !isNavigating) || shouldShowRecordingState}>
+          <IconWrapper show={(!showSpeaker && !isNavigating && !isHarperActivated) || shouldShowRecordingState || (isHarperActivated && !isVoiceInputActive && !isHarperSpeaking)}>
             <svg
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 24 24"
@@ -134,7 +150,7 @@ const VoiceOrb: React.FC<VoiceOrbProps> = ({
           </IconWrapper>
 
           {/* Speaker Icon - When listening for wake word */}
-          <IconWrapper show={showSpeaker && !isNavigating && !connieDetected && !shouldShowRecordingState}>
+          <IconWrapper show={showSpeaker && !isNavigating && !HarperDetected && !shouldShowRecordingState}>
             <svg
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 24 24"
@@ -152,29 +168,33 @@ const VoiceOrb: React.FC<VoiceOrbProps> = ({
             </svg>
           </IconWrapper>
 
-          {/* Loading Icon */}
-          <IconWrapper show={isNavigating} className="animate-spin">
+          {/* Processing Icon - Show microphone instead of spinning arrows */}
+          <IconWrapper show={isNavigating && !isHarperActivated}>
             <svg
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 24 24"
-              className="w-full h-full"
+              className="w-full h-full animate-pulse"
               fill="none"
-              stroke="url(#loading-gradient)"
+              stroke="url(#processing-gradient)"
               strokeWidth="1.5"
             >
-              <IconGradient id="loading-gradient" />
+              <IconGradient id="processing-gradient" />
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"
+                d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z"
               />
+              {/* Processing indicator */}
+              <circle cx="18" cy="6" r="3" fill="orange">
+                <animate attributeName="opacity" values="1;0;1" dur="1s" repeatCount="indefinite"/>
+              </circle>
             </svg>
           </IconWrapper>
         </div>
       </div>
 
-      {/* Click hint when chat is open - INSIDE THE ORB */}
-      {isChatOpen && !isConnieSpeaking && (
+      {/* Click hint when Harper is activated - INSIDE THE ORB */}
+      {isHarperActivated && !isHarperSpeaking && (
         <div className="absolute bottom-16 left-1/2 transform -translate-x-1/2 text-sm text-indigo-200 font-medium text-center z-20">
           {isVoiceInputActive ? 'Recording...' : 'Click to speak'}
         </div>

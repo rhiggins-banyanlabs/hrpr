@@ -110,7 +110,7 @@ export const useSleepMode = (
       console.log('🛌 Sleep mode heard:', transcript);
 
       // Check for wake phrases
-      const wakeKeywords = ['hey connie', 'connie', 'hey cone', 'hey coney'];
+      const wakeKeywords = ['hey Harper', 'Harper', 'hey cone', 'hey coney'];
       const shouldWake = wakeKeywords.some(keyword => transcript.includes(keyword));
 
       if (shouldWake) {

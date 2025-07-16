@@ -191,8 +191,8 @@ export default function ChatPage() {
       // Wait for intro message to complete
       setTimeout(() => {
         const isJustGreeting = !query || 
-                              query.toLowerCase() === 'hey connie' ||
-                              query.toLowerCase() === 'connie' ||
+                              query.toLowerCase() === 'hey Harper' ||
+                              query.toLowerCase() === 'Harper' ||
                               query.toLowerCase().includes('hello') ||
                               query.toLowerCase().includes('hi') ||
                               query.trim().length < 3;
@@ -258,7 +258,7 @@ export default function ChatPage() {
         </button>
         
         <h1 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-500 to-blue-400">
-          Chat with Connie
+          Chat with Harper
           {isSpeaking && (
             <span className="ml-2 text-sm text-green-400 animate-pulse">
               🔊 Speaking
@@ -293,7 +293,7 @@ export default function ChatPage() {
         selectedVoice={selectedVoice}
         onVoiceChange={setSelectedVoice}
         voiceTranscript={voiceTranscript}
-        isConnieSpeaking={isSpeaking}
+        isHarperSpeaking={isSpeaking}
       />
 
       {/* Voice Input Component */}

@@ -3,14 +3,18 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export const runtime = 'edge';
 
+// Simple in-memory cache for TTS responses
+const ttsCache = new Map<string, { data: ArrayBuffer; timestamp: number }>();
+const CACHE_DURATION = 60 * 60 * 1000; // 1 hour
+
 export async function POST(req: NextRequest) {
   try {
     const { 
       text, 
-      voice = 'shimmer', 
-      model = 'tts-1-hd',
+      voice = 'nova', 
+      model = 'tts-1', // Use fastest model 
       response_format = 'mp3',
-      speed = 1.0
+      speed = 1.2 // Slightly faster speech speed
     } = await req.json();
 
     const apiKey = process.env.OPENAI_API_KEY;
@@ -47,12 +51,30 @@ export async function POST(req: NextRequest) {
       textPreview: text.substring(0, 50) + '...'
     });
 
+    // Create cache key
+    const cacheKey = `${text}-${voice}-${model}-${speed}`;
+    
+    // Check cache first
+    const cached = ttsCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < CACHE_DURATION) {
+      console.log('🚀 TTS Cache hit - returning cached audio');
+      return new NextResponse(cached.data, {
+        status: 200,
+        headers: {
+          'Content-Type': 'audio/mpeg',
+          'Content-Disposition': 'inline; filename="speech.mp3"',
+          'Cache-Control': 'public, max-age=31536000',
+        },
+      });
+    }
+
     const response = await fetch('https://api.openai.com/v1/audio/speech', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
+      signal: AbortSignal.timeout(10000), // 10 second timeout for TTS
       body: JSON.stringify({
         model,
         input: text,
@@ -70,10 +92,25 @@ export async function POST(req: NextRequest) {
 
     const audioBuffer = await response.arrayBuffer();
     
+    // Cache the response
+    ttsCache.set(cacheKey, {
+      data: audioBuffer,
+      timestamp: Date.now()
+    });
+    
+    // Cleanup old cache entries (keep cache size manageable)
+    if (ttsCache.size > 100) {
+      const entries = Array.from(ttsCache.entries());
+      entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
+      const toDelete = entries.slice(0, 20); // Delete oldest 20 entries
+      toDelete.forEach(([key]) => ttsCache.delete(key));
+    }
+    
     console.log('🔊 TTS Success:', {
       voice,
       audioSize: audioBuffer.byteLength,
-      format: response_format
+      format: response_format,
+      cached: true
     });
 
     return new NextResponse(audioBuffer, {

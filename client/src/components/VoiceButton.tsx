@@ -4,21 +4,21 @@ import React from 'react';
 interface VoiceButtonProps {
   listening: boolean;
   isNavigating: boolean;
-  connieDetected: boolean;
+  HarperDetected: boolean;
   onToggle: () => void;
 }
 
 export const VoiceButton: React.FC<VoiceButtonProps> = ({
   listening,
   isNavigating,
-  connieDetected,
+  HarperDetected,
   onToggle,
 }) => {
   const getButtonText = () => {
-    if (connieDetected) {
+    if (HarperDetected) {
       return (
         <span>
-          Connie detected! <span className="text-xl font-extrabold">Going to chat...</span>
+          Harper detected! <span className="text-xl font-extrabold">Processing...</span>
         </span>
       );
     }
@@ -26,14 +26,14 @@ export const VoiceButton: React.FC<VoiceButtonProps> = ({
     if (listening) {
       return (
         <span>
-          Listening for <span className="text-xl font-extrabold">"Hey CONNIE"</span>...
+          Listening for <span className="text-xl font-extrabold">"Hey Harper"</span>...
         </span>
       );
     }
     
     return (
       <span>
-        Press and say <span className="text-xl font-extrabold">"Hey CONNIE"</span>
+        Press and say <span className="text-xl font-extrabold">"Hey Harper"</span>
       </span>
     );
   };
@@ -44,17 +44,22 @@ export const VoiceButton: React.FC<VoiceButtonProps> = ({
       : "M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z";
   };
 
+  const handleClick = () => {
+    console.log("🔘 VoiceButton clicked", { listening, HarperDetected, isNavigating });
+    onToggle();
+  };
+
   return (
     <button
-      onClick={onToggle}
-      disabled={connieDetected}
+      onClick={handleClick}
+      disabled={HarperDetected}
       className={`group relative flex items-center justify-center gap-3 bg-gradient-to-r from-indigo-600 via-purple-600 to-blue-500 text-white py-4 px-8 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer ${
-        connieDetected ? "opacity-70 cursor-not-allowed" : "hover:scale-105"
+        HarperDetected ? "opacity-70 cursor-not-allowed" : "hover:scale-105"
       }`}
     >
       <svg
         xmlns="http://www.w3.org/2000/svg"
-        className={`h-6 w-6 ${(listening || connieDetected) ? "animate-pulse" : "group-hover:animate-pulse"}`}
+        className={`h-6 w-6 ${(listening || HarperDetected) ? "animate-pulse" : "group-hover:animate-pulse"}`}
         fill="none"
         viewBox="0 0 24 24"
         stroke="currentColor"

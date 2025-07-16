@@ -62,7 +62,7 @@ export class ChatStorageService {
    */
   static async saveMessage(
     sessionId: string,
-    sender: 'user' | 'connie',
+    sender: 'user' | 'Harper',
     messageText: string,
     options?: {
       isVoiceInput?: boolean;

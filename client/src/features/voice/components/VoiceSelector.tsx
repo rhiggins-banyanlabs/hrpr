@@ -17,7 +17,7 @@ export const VoiceSelector: React.FC<VoiceSelectorProps> = ({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          text: `Hi! I'm Connie speaking with the ${OPENAI_VOICES[voice].name} voice. This is how I'll sound during our conference chat.`,
+          text: `Hi! I'm Harper, your conference assistant. How can I help you today?`,
           voice: voice,
           model: 'tts-1-hd'
         }),

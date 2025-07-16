@@ -7,7 +7,7 @@ import { AdminAuthProvider } from "@/components/admin/security/AdminAuthContext"
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "CONNIE - AI Event Assistant",
+  title: "Harper - AI Event Assistant",
   description: "Your intelligent conference companion",
 };
 

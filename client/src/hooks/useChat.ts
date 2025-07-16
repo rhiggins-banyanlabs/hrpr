@@ -5,7 +5,7 @@ import { ChatStorageService } from '@/lib/supabase/chatStorage';
 interface Message {
   id: string;
   text: string;
-  sender: 'user' | 'connie';
+  sender: 'user' | 'Harper';
   timestamp: Date;
   isTyping?: boolean;
   isIntroMessage?: boolean;
@@ -158,7 +158,7 @@ export const useChat = ({
     });
   };
 
-  // Initialize chat with Connie's intro message
+  // Initialize chat with Harper's intro message
   const initializeChat = useCallback(async () => {
     if (!sessionId) {
       console.log('❌ No session ID provided for chat initialization');
@@ -170,8 +170,8 @@ export const useChat = ({
       
       const introMessage: Message = {
         id: `intro-${Date.now()}`,
-        text: "Hi! I'm Connie, your conference assistant. I can help you with speaker information, session schedules, locations, and any other conference questions you might have. How can I help you today?",
-        sender: 'connie',
+        text: "Hi! I'm Harper, your conference assistant. How can I help you today?",
+        sender: 'Harper',
         timestamp: new Date(),
         isIntroMessage: true
       };
@@ -182,7 +182,7 @@ export const useChat = ({
       try {
         const savedIntroMessage = await ChatStorageService.saveMessage(
           sessionId,
-          'connie',
+          'Harper',
           introMessage.text,
           {
             metadata: { isIntroMessage: true, messageId: introMessage.id }
@@ -317,8 +317,8 @@ export const useChat = ({
 
       // Create bot message for UI
       const botMessage: Message = {
-        id: `connie-${Date.now()}`,
-        sender: "connie",
+        id: `Harper-${Date.now()}`,
+        sender: "Harper",
         text: responseText,
         timestamp: new Date(),
       };
@@ -331,7 +331,7 @@ export const useChat = ({
       try {
         const savedBotMessage = await ChatStorageService.saveMessage(
           sessionId,
-          'connie',
+          'Harper',
           botMessage.text,
           {
             selectedVoice,
@@ -376,7 +376,7 @@ export const useChat = ({
         
       const errorMsg: Message = {
         id: `error-${Date.now()}`,
-        sender: "connie",
+        sender: "Harper",
         text: errorMessage,
         timestamp: new Date(),
       };
@@ -404,7 +404,7 @@ export const useChat = ({
   
     const botMsg: Message = {
       id: `bot-${Date.now()}`,
-      sender: "connie",
+      sender: "Harper",
       text,
       timestamp: new Date(),
       isIntro: isIntro  // ✅ Renamed for UI compatibility
@@ -430,7 +430,7 @@ export const useChat = ({
       try {
         const savedBotMessage = await ChatStorageService.saveMessage(
           sessionId,
-          'connie',
+          'Harper',
           botMsg.text,
           {
             selectedVoice,
@@ -469,7 +469,7 @@ export const useChat = ({
     if (sessionId) {
       console.log('🚀 ✅ Sending intro message');
   
-      const introText = "Hi, I'm Connie, your personal conference assistant! What would you like to know about the conference?";
+      const introText = "Hi! I'm Harper, your conference assistant. How can I help you today?";
       
       // Pass isIntro as metadata
       sendBotMessage(introText, true);

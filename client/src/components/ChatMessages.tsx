@@ -5,7 +5,7 @@ import { FeedbackButtons } from "@/components/FeedbackButtons"
 interface Message {
   id: string
   text: string
-  sender: "user" | "connie"
+  sender: "user" | "Harper"
   timestamp: Date
   isTyping?: boolean
   isIntro?: boolean // Add this to identify intro messages
@@ -100,8 +100,8 @@ export const ChatMessages = ({
             </div>
           )}
 
-          {/* CONNIE MESSAGE */}
-          {message.sender === "connie" && (
+          {/* Harper MESSAGE */}
+          {message.sender === "Harper" && (
             <div className="flex justify-start mb-4">
               <div onMouseEnter={() => toggleFeedback(message.id)} onMouseLeave={() => toggleFeedback(message.id)} onClick={() => toggleFeedback(message.id)} className="flex items-start space-x-3 z-50">
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 via-purple-500 to-indigo-700 flex items-center justify-center text-white font-bold shadow-lg flex-shrink-0">
@@ -116,7 +116,7 @@ export const ChatMessages = ({
                     }}
                   />
                   </div>
-                  {/* Add feedback buttons for Connie's messages */}
+                  {/* Add feedback buttons for Harper's messages */}
                   {sessionId && message.id ===activeFeedbackId && (
                     <FeedbackButtons 
                       messageId={message.id} 

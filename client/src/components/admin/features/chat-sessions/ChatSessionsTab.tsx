@@ -31,7 +31,7 @@ export default function ChatSessionsTab() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h2 className="text-2xl font-bold text-white mb-2">Chat Sessions</h2>
-            <p className="text-white/70">Monitor user conversations with Connie</p>
+            <p className="text-white/70">Monitor user conversations with Harper</p>
           </div>
           
           <div className="flex gap-3">
@@ -287,7 +287,7 @@ export default function ChatSessionsTab() {
                                 fontSize: '11px',
                                 fontWeight: '500'
                               }}>
-                                {message.sender === 'user' ? 'User' : 'Connie'}
+                                {message.sender === 'user' ? 'User' : 'Harper'}
                               </span>
                               {message.is_voice_input && (
                                 <span style={{
@@ -412,7 +412,7 @@ export default function ChatSessionsTab() {
                           color: 'rgba(255,255,255,0.6)', 
                           fontSize: '12px' 
                         }}>
-                          Connie Messages
+                          Harper Messages
                         </p>
                         <p style={{ 
                           margin: 0,
@@ -420,7 +420,7 @@ export default function ChatSessionsTab() {
                           fontWeight: '600',
                           fontSize: '16px'
                         }}>
-                          {sessionMessages.filter(m => m.sender === 'connie').length}
+                          {sessionMessages.filter(m => m.sender === 'Harper').length}
                         </p>
                       </div>
                     </div>

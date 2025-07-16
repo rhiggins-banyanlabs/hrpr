@@ -24,7 +24,7 @@ export const useChat = ({ sessionId, onClose }: UseChatProps) => {
   const [currentTypingText, setCurrentTypingText] = useState('');
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Initialize chat with Connie's intro message
+  // Initialize chat with Harper's intro message
   const initializeChat = useCallback(async () => {
     if (!sessionId) {
       console.log('❌ No session ID provided for chat initialization');
@@ -36,7 +36,7 @@ export const useChat = ({ sessionId, onClose }: UseChatProps) => {
       
       const introMessage: Message = {
         id: `intro-${Date.now()}`,
-        text: "Hi! I'm Connie, your conference assistant. I can help you with speaker information, session schedules, locations, and any other conference questions you might have. How can I help you today?",
+        text: "Hi! I'm Harper, your conference assistant. How can I help you today?",
         isUser: false,
         timestamp: new Date(),
         isIntroMessage: true

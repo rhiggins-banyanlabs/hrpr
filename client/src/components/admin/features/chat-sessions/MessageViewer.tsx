@@ -26,7 +26,7 @@ export default function MessageViewer() {
     return null
   }
 
-  const connieMessages = sessionMessages.filter(m => m.sender === 'connie').length
+  const HarperMessages = sessionMessages.filter(m => m.sender === 'Harper').length
   const userMessages = sessionMessages.filter(m => m.sender === 'user').length
 
   return (
@@ -100,7 +100,7 @@ export default function MessageViewer() {
                         variant={message.sender === 'user' ? 'info' : 'warning'}
                         className="text-xs"
                       >
-                        {message.sender === 'user' ? 'User' : 'Connie'}
+                        {message.sender === 'user' ? 'User' : 'Harper'}
                       </Badge>
                       {message.is_voice_input && (
                         <Badge variant="success" className="text-xs">
@@ -153,8 +153,8 @@ export default function MessageViewer() {
                 <p className="text-blue-400 font-semibold">{userMessages}</p>
               </div>
               <div>
-                <p className="text-white/60 text-xs">Connie Messages</p>
-                <p className="text-purple-400 font-semibold">{connieMessages}</p>
+                <p className="text-white/60 text-xs">Harper Messages</p>
+                <p className="text-purple-400 font-semibold">{HarperMessages}</p>
               </div>
             </div>
           </div>

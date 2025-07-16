@@ -11,7 +11,7 @@ interface ChatInputProps {
   selectedVoice: OpenAIVoice;
   onVoiceChange: (voice: OpenAIVoice) => void;
   voiceTranscript?: string;
-  isConnieSpeaking?: boolean;
+  isHarperSpeaking?: boolean;
   showMicrophoneButton?: boolean; // New prop to control microphone button visibility
 }
 
@@ -23,7 +23,7 @@ export const ChatInput = ({
   selectedVoice,
   onVoiceChange,
   voiceTranscript = "",
-  isConnieSpeaking = false,
+  isHarperSpeaking = false,
   showMicrophoneButton = true // Default to true for backwards compatibility
 }: ChatInputProps) => {
   const [input, setInput] = useState("");
@@ -56,7 +56,7 @@ export const ChatInput = ({
   const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     console.log('🔧 handleSubmit called with input:', input);
-    if (!input.trim() || isProcessing || isConnieSpeaking) return;
+    if (!input.trim() || isProcessing || isHarperSpeaking) return;
 
     const formattedMessage = formatMessage(input);
     console.log('🔧 Formatted message result:', formattedMessage);
@@ -64,12 +64,12 @@ export const ChatInput = ({
     setIsConversationStarted(true);
     console.log('🔧 About to call onSubmit with:', formattedMessage);
     onSubmit(formattedMessage);
-  }, [input, isProcessing, isConnieSpeaking, onSubmit]);
+  }, [input, isProcessing, isHarperSpeaking, onSubmit]);
 
   // Handle suggested question click
   const handleSuggestedClick = (question: string) => {
     console.log('🔧 handleSuggestedClick called with:', question);
-    if (isConnieSpeaking) return;
+    if (isHarperSpeaking) return;
     
     setInput("");
     setIsConversationStarted(true);
@@ -88,7 +88,7 @@ export const ChatInput = ({
             isRecording={isVoiceInputActive}
             isProcessing={false}
             onToggle={onVoiceInputToggle}
-            disabled={isProcessing || isConnieSpeaking}
+            disabled={isProcessing || isHarperSpeaking}
           />
         </form>
       )}
@@ -107,7 +107,7 @@ export const ChatInput = ({
             {isVoiceInputActive ? (
               <span className="text-green-400 animate-pulse">🎤 Recording... (auto-sends after silence)</span>
             ) : (
-              "Click the orb above to speak with CONNIE"
+              "Click the orb above to speak with Harper"
             )}
           </p>
         </div>

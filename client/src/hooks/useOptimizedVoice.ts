@@ -7,7 +7,7 @@ export const useOptimizedVoice = () => {
   /*  STATE + REFS                                                      */
   /* ------------------------------------------------------------------ */
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [selectedVoice, setSelectedVoice] = useState<OpenAIVoice>('shimmer');
+  const [selectedVoice, setSelectedVoice] = useState<OpenAIVoice>('nova');
 
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const audioUnlockedRef = useRef(false);
@@ -65,7 +65,7 @@ export const useOptimizedVoice = () => {
     async (
       text: string,
       voice: OpenAIVoice = selectedVoice,
-      speed: number = 1.3
+      speed: number = 1.2
     ) => {
       const cacheKey = `${text}-${voice}-${speed}`;
       if (audioCache.current.has(cacheKey)) {
@@ -79,6 +79,8 @@ export const useOptimizedVoice = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text, voice, speed, model: 'tts-1' }),
+        // Add timeout for TTS API
+        signal: AbortSignal.timeout(8000)
       });
 
       if (!res.ok) {
@@ -139,11 +141,33 @@ export const useOptimizedVoice = () => {
         currentAudioRef.current = null;
       };
 
+      // Ensure audio is ready before playing to prevent cutoff
+      audio.load();
+      await new Promise(resolve => {
+        audio.oncanplaythrough = resolve;
+        if (audio.readyState >= 3) resolve(undefined); // Already ready
+      });
+      
       await audio.play();
       return { audio, duration };
     },
     [unlockAudio, stopSpeaking, speakWithOptimizedTTS]
   );
+
+  /* ------------------------------------------------------------------ */
+  /*  PRE-CACHE INTRO MESSAGE                                           */
+  /* ------------------------------------------------------------------ */
+  const preCacheIntroMessage = useCallback(async () => {
+    const introMessage = "Hi! I'm Harper, your conference assistant. How can I help you today?";
+    
+    try {
+      console.log('🔄 Pre-caching intro message...');
+      await speakWithOptimizedTTS(introMessage, selectedVoice, 1.2);
+      console.log('✅ Intro message pre-cached successfully');
+    } catch (error) {
+      console.error('❌ Error pre-caching intro message:', error);
+    }
+  }, [speakWithOptimizedTTS, selectedVoice]);
 
   /* ------------------------------------------------------------------ */
   /*  TEST VOICE                                                        */
@@ -152,7 +176,7 @@ export const useOptimizedVoice = () => {
     async (voice: OpenAIVoice) => {
       try {
         await speakText(
-          `Hi! I'm Connie speaking with the ${voice} voice. How do I sound?`,
+          `Hi! I'm Harper, your conference assistant. How can I help you today?`,
           voice
         );
       } catch (err) {
@@ -184,5 +208,6 @@ export const useOptimizedVoice = () => {
     stopSpeaking,
     testVoice,
     unlockAudio,
+    preCacheIntroMessage,
   };
 };

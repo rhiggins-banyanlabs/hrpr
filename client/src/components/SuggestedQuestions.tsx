@@ -5,7 +5,7 @@ import React from "react";
 interface SuggestedQuestionsProps {
   onSelect: (question: string) => void;
   isConversationStarted: boolean;
-  isConnieSpeaking?: boolean; // New prop
+  isHarperSpeaking?: boolean; // New prop
 }
 
 const questions = [
@@ -17,7 +17,7 @@ const questions = [
   "What speakers are at the conference?"
 ];
 
-export const SuggestedQuestions = ({ onSelect, isConversationStarted, isConnieSpeaking = false }: SuggestedQuestionsProps) => {
+export const SuggestedQuestions = ({ onSelect, isConversationStarted, isHarperSpeaking = false }: SuggestedQuestionsProps) => {
   // Don't render anything if conversation has started
   if (isConversationStarted) {
     return null;
@@ -29,7 +29,7 @@ export const SuggestedQuestions = ({ onSelect, isConversationStarted, isConnieSp
         <button
           key={idx}
           onClick={() => onSelect(question)}
-          disabled={isConnieSpeaking} // Disable buttons while Connie is speaking
+          disabled={isHarperSpeaking} // Disable buttons while Harper is speaking
           className={`
             bg-gradient-to-br from-blue-500/60 via-indigo-500/60 to-purple-500/60
             backdrop-blur-md
@@ -47,7 +47,7 @@ export const SuggestedQuestions = ({ onSelect, isConversationStarted, isConnieSp
             disabled:opacity-50
             disabled:cursor-not-allowed
             disabled:hover:scale-100
-            ${isConnieSpeaking ? 'pointer-events-none' : ''}
+            ${isHarperSpeaking ? 'pointer-events-none' : ''}
             `}
         >
           {question}

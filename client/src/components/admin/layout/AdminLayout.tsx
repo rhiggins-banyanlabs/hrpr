@@ -105,7 +105,7 @@ export default function AdminLayout() {
             <div className="flex-1">
               <AdminHeader 
                 title="Beacon Admin Dashboard"
-                description="Configure and monitor the Connie AI system for your conference"
+                description="Configure and monitor the Harper AI system for your conference"
               />
             </div>
             

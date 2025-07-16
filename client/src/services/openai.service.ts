@@ -66,47 +66,43 @@ export class OpenAIService {
           'Authorization': `Bearer ${envConfig.openai}`,
           'Content-Type': 'application/json',
         },
+        signal: AbortSignal.timeout(8000), // 8 second timeout
         body: JSON.stringify({
           model: this.model,
           messages: [
             {
               role: 'system',
-              content: `You are Connie, a friendly and helpful AI assistant for conference attendees. You provide accurate information about the conference using ONLY the real data provided to you.
+              content: `You are Harper, a helpful AI assistant for conference attendees. Use ONLY the real data provided.
 
-IMPORTANT RULES:
-- Use ONLY the conference information provided in the user's message - never make up schedules, speakers, or locations
-- If specific information isn't available, be honest and suggest checking with conference organizers
-- Be conversational, helpful, and concise
-- Always use Markdown formatting for better readability
-- Keep responses under 800 characters for better user experience
-- Use bullet points and **bold** text for key information
+RULES:
+- Use ONLY provided conference information - never make up data
+- CRITICAL CHARACTER LIMIT: Your ENTIRE response must be under 300 characters total. Count as you write. Use these strategies:
+  • Use short words and phrases
+  • Skip unnecessary words like "Here's" or "Let me tell you"
+  • Use abbreviations (9AM not 9:00 AM, & not and)
+  • Limit to 2-3 bullet points maximum
+  • End responses naturally within the limit
+- If no data available, say "Check with organizers"
+- Priority: Be helpful but STAY UNDER 300 characters
 
-WHAT YOU CAN HELP WITH:
-- Conference schedule and session times
-- Speaker information and backgrounds
-- Session locations and details
-- General conference questions
-- Event logistics and navigation
-
-Remember: Only use the information provided in the user's message. If you don't have specific details, acknowledge this and suggest the user check with conference organizers for the most up-to-date information.`
+You help with: schedules, speakers, locations, and general conference questions.`
             },
             {
               role: 'user',
               content: enhancedPrompt
             }
           ],
-          max_tokens: 300,
-          temperature: 0.7,
-          stream: false
+          max_tokens: 70, // Force shorter responses
+          temperature: 0.05, // Maximum focus
+          stream: false // Disable streaming - simpler and faster for short responses
         }),
       });
-
-      const responseTime = Date.now() - startTime;
 
       if (!response.ok) {
         const errorData = await response.json();
         this.logger.addErrorLog('openai', `HTTP ${response.status}: ${errorData.error?.message || response.statusText}`, 'balanced');
         
+        const responseTime = Date.now() - startTime;
         return {
           success: false,
           error: `OpenAI API error: ${errorData.error?.message || response.statusText}`,
@@ -116,9 +112,11 @@ Remember: Only use the information provided in the user's message. If you don't 
         };
       }
 
+      // Handle non-streaming response (faster for short responses)
       const data = await response.json();
       const botResponse = data.choices[0]?.message?.content || 'I apologize, but I\'m having trouble generating a response right now.';
       
+      const responseTime = Date.now() - startTime;
       const inputTokens = data.usage?.prompt_tokens || this.estimateTokens(enhancedPrompt);
       const outputTokens = data.usage?.completion_tokens || this.estimateTokens(botResponse);
       const cost = this.calculateCost(inputTokens, outputTokens);
@@ -172,5 +170,29 @@ Remember: Only use the information provided in the user's message. If you don't 
 
   async refreshConferenceData(): Promise<void> {
     await this.conferenceService.refreshConferenceData();
+  }
+
+  // Static method for direct access
+  static async getResponse(prompt: string, signal?: AbortSignal): Promise<{ text: string; processingTime: number }> {
+    const instance = OpenAIService.getInstance();
+    const startTime = Date.now();
+    
+    try {
+      const response = await instance.sendMessage(prompt);
+      
+      if (!response.success || !response.data) {
+        throw new Error(response.error || 'Failed to get response');
+      }
+      
+      return {
+        text: response.data,
+        processingTime: Date.now() - startTime
+      };
+    } catch (error) {
+      if (signal?.aborted) {
+        throw new Error('Request aborted');
+      }
+      throw error;
+    }
   }
 }
