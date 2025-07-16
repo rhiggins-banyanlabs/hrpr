@@ -256,7 +256,7 @@ export class LocationService {
   }
 
   /**
-   * Search for nearby places using Google Maps API (server-side)
+   * Search for nearby places using server-side API route
    */
   async searchNearbyPlaces(
     type?: string, 
@@ -264,17 +264,8 @@ export class LocationService {
     radius: number = 1500
   ): Promise<Place[]> {
     try {
-      // Direct Google Maps API call from server
-      const apiKey = process.env.GOOGLE_MAPS_API_KEY;
-      if (!apiKey) {
-        console.warn('⚠️ Google Maps API key not configured');
-        return [];
-      }
-
       const params = new URLSearchParams({
-        location: `${this.CONFERENCE_VENUE.lat},${this.CONFERENCE_VENUE.lng}`,
-        radius: radius.toString(),
-        key: apiKey
+        radius: radius.toString()
       });
       
       if (type) {
@@ -287,64 +278,17 @@ export class LocationService {
 
       console.log(`🗺️ Searching for places: type=${type}, keyword=${keyword}, radius=${radius}`);
 
-      const response = await fetch(
-        `https://maps.googleapis.com/maps/api/place/nearbysearch/json?${params.toString()}`,
-        { 
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-          },
-          // 2-second timeout for Google Maps API
-          signal: AbortSignal.timeout(2000)
-        }
-      );
+      const response = await fetch(`/api/places?${params.toString()}`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+        },
+        signal: AbortSignal.timeout(5000)
+      });
       
       if (response.ok) {
         const data = await response.json();
         console.log(`📍 Found ${data.results?.length || 0} places`);
-        
-        // For fast food searches, if we don't get good results, try a broader search
-        if (keyword === 'fast food' && (data.results?.length || 0) < 3) {
-          console.log(`🔄 Fast food search returned few results, trying broader restaurant search...`);
-          
-          // Try a broader search without the fast food keyword
-          const broaderParams = new URLSearchParams({
-            location: `${this.CONFERENCE_VENUE.lat},${this.CONFERENCE_VENUE.lng}`,
-            radius: radius.toString(),
-            type: 'restaurant',
-            key: apiKey
-          });
-          
-          const broaderResponse = await fetch(
-            `https://maps.googleapis.com/maps/api/place/nearbysearch/json?${broaderParams.toString()}`,
-            { 
-              method: 'GET',
-              headers: {
-                'Accept': 'application/json',
-              },
-              // 2-second timeout for Google Maps API
-              signal: AbortSignal.timeout(2000)
-            }
-          );
-          
-          if (broaderResponse.ok) {
-            const broaderData = await broaderResponse.json();
-            console.log(`📍 Broader search found ${broaderData.results?.length || 0} restaurants`);
-            
-            // Filter for fast food-like places (lower price levels, common fast food names)
-            const fastFoodKeywords = ['mcdonalds', 'burger king', 'wendys', 'subway', 'taco bell', 'kfc', 'pizza hut', 'dominos', 'chipotle', 'panera', 'starbucks'];
-            const fastFoodPlaces = broaderData.results?.filter((place: any) => {
-              const name = place.name?.toLowerCase() || '';
-              const isFastFood = fastFoodKeywords.some(keyword => name.includes(keyword));
-              const isLowPrice = place.price_level !== undefined && place.price_level <= 2;
-              return isFastFood || isLowPrice;
-            }) || [];
-           
-            console.log(`🍔 Filtered to ${fastFoodPlaces.length} fast food places`);
-            return fastFoodPlaces;
-          }
-        }
-        
         return data.results || [];
       }
       
