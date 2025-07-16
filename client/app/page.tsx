@@ -20,6 +20,7 @@ export default function Home() {
   const [isHarperSpeaking, setIsHarperSpeaking] = useState(false)
   const [voiceTranscript, setVoiceTranscript] = useState("")
   const [isHarperActivated, setIsHarperActivated] = useState(false) // Track if Harper has been activated
+  const [isThinking, setIsThinking] = useState(false) // Track when AI is processing
   const router = useRouter()
   const { isPedestalMode, isSystemLocked } = useAdminAuth()
 
@@ -35,9 +36,17 @@ export default function Home() {
   // Voice hooks
   const { speakText, isSpeaking, selectedVoice, setSelectedVoice, unlockAudio, preCacheIntroMessage } = useOptimizedVoice()
   
-  // Stable callback for speaking state changes
-  const handleSpeakingChange = useCallback((isSpeaking: boolean) => {
+  // Sync the voice hook's speaking state with Harper speaking state
+  useEffect(() => {
+    console.log('🔊 Voice hook isSpeaking changed:', isSpeaking)
     setIsHarperSpeaking(isSpeaking)
+  }, [isSpeaking])
+  
+  // Stable callback for speaking state changes (kept for useVoiceChat compatibility)
+  const handleSpeakingChange = useCallback((isSpeaking: boolean) => {
+    // This is now redundant since we're using the voice hook's state directly
+    // But keeping it for compatibility with useVoiceChat
+    console.log('🔊 handleSpeakingChange called:', isSpeaking)
   }, [])
   
   // Voice chat hook
@@ -99,8 +108,16 @@ export default function Home() {
       
       // Then process the query
       console.log("🎯 Processing query:", query);
-      await processVoiceQuery(query, sessionId)
-      console.log("✅ Query processed successfully");
+      setIsThinking(true);
+      try {
+        await processVoiceQuery(query, sessionId)
+        console.log("✅ Query processed successfully");
+      } finally {
+        setIsThinking(false);
+      }
+      
+      // Reset speech recognition states after processing
+      speechActions.resetStates();
       
     } catch (error) {
       console.error("❌ Error in handleHarperDetected:", error);
@@ -260,6 +277,7 @@ export default function Home() {
                 isChatOpen={false}
                 isHarperSpeaking={isHarperSpeaking}
                 isHarperActivated={isHarperActivated}
+                isThinking={isThinking}
               />
             </div>
 
@@ -305,7 +323,12 @@ export default function Home() {
             setIsVoiceInputActive(false);
             
             if (text.trim()) {
-              await processVoiceQuery(text, currentSession?.id);
+              setIsThinking(true);
+              try {
+                await processVoiceQuery(text, currentSession?.id);
+              } finally {
+                setIsThinking(false);
+              }
             }
           }}
           onTranscriptUpdate={(transcript, isInterim) => {

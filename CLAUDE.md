@@ -21,7 +21,7 @@ docker compose up --build    # Run with hot reload
 
 ## Architecture Overview
 
-Beacon is a voice-enabled conference chatbot built with Next.js and TypeScript. The architecture consists of:
+Beacon is an interactive event chatbot app designed to enhance the attendee experience at the AIDA conference. Built with Next.js 15 and TypeScript, it provides real-time Q&A, event schedule lookup, venue information, and a friendly voice-enabled interface. The architecture consists of:
 
 ### AI Service
 - **Core Service**: `src/services/openai.service.ts` - OpenAI GPT-4o-mini integration
@@ -53,6 +53,11 @@ Required environment variables for full functionality:
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` - Supabase anonymous key
 - `OPENAI_API_KEY` - OpenAI API access for GPT-4o-mini
 - `GOOGLE_MAPS_API_KEY` - Google Maps integration for location services
+
+Optional configuration:
+- `NEXT_PUBLIC_PEDESTAL_MODE_ENABLED` - Enable kiosk/pedestal mode (default: false)
+- `NEXT_PUBLIC_DEFAULT_VOICE` - Default TTS voice (default: alloy)
+- `NEXT_PUBLIC_TTS_SPEED` - Text-to-speech speed (default: 1.3)
 
 ### AI Provider
 The application uses OpenAI's GPT-4o-mini model for all chat interactions:
@@ -88,6 +93,19 @@ Admin functionality requires:
 Currently uses Next.js built-in linting. Run tests with:
 ```bash
 npm run lint
+```
+
+## TypeScript Path Aliases
+
+The project uses path aliases for cleaner imports:
+- `@/*` → `./src/*`
+- `@/app/*` → `./app/*`
+- `@/components/*` → `./components/*` or `./src/components/*`
+
+Example usage:
+```typescript
+import { OpenAIService } from '@/services/openai.service';
+import { VoiceOrb } from '@/features/voice/components/VoiceOrb';
 ```
 
 ## Database Schema

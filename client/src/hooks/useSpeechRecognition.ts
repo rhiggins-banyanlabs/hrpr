@@ -200,6 +200,8 @@ export const useSpeechRecognition = (
     // Immediate navigation - no waiting
     setTimeout(() => {
       onHarperDetected(query);
+      // Reset HarperDetected state after processing
+      HarperDetectedRef.current = false;
     }, 50); // Minimal delay just for UI feedback
   };
 
