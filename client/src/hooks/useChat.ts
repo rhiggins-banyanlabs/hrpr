@@ -1,7 +1,7 @@
 // hooks/useChat.ts - COMBINED VERSION with typing effects and AI Router
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { ChatStorageService } from '@/lib/supabase/chatStorage';
-import { ttsOrchestrator } from '@/services/tts-orchestrator.service';
+import { IntentDetectorService } from '@/services/intent-detector.service';
 
 interface Message {
   id: string;
@@ -45,14 +45,6 @@ export const useChat = ({
 
   console.log('🏠 useChat render - messages:', messages.length, 'sessionId:', sessionId);
 
-  // Initialize TTS orchestrator when speakText function is available
-  useEffect(() => {
-    if (speakText) {
-      ttsOrchestrator.initialize(speakText);
-      console.log('🏠 TTS Orchestrator initialized');
-    }
-  }, [speakText]);
-
   // Categorize questions for analytics
   const categorizeQuestion = (question: string): string => {
     const lowerQ = question.toLowerCase();
@@ -87,7 +79,7 @@ export const useChat = ({
 
 
   // Enhanced typing effect with voice support
-  const showTypingEffect = async (text: string, withVoice: boolean = false) => {
+  const showTypingEffect = async (text: string, withVoice: boolean = false, fillerAudioPromise?: Promise<any> | null) => {
     console.log('🔤 Starting typing effect for:', text.substring(0, 30));
     console.log('🔤 withVoice:', withVoice, 'speakText available:', !!speakText);
     
@@ -99,6 +91,35 @@ export const useChat = ({
       setTypingBotMsg(null);
       
       try {
+        // Wait for filler response to complete if provided
+        if (fillerAudioPromise) {
+          console.log('🔊 Waiting for filler response to complete...');
+          const fillerResult = await fillerAudioPromise;
+          
+          if (fillerResult && fillerResult.audio) {
+            await new Promise<void>((resolve) => {
+              const checkAudioComplete = () => {
+                if (fillerResult.audio.ended || fillerResult.audio.paused) {
+                  console.log('🔊 Filler response completed');
+                  resolve();
+                } else {
+                  setTimeout(checkAudioComplete, 100);
+                }
+              };
+              
+              checkAudioComplete();
+              
+              setTimeout(() => {
+                console.log('🔊 Filler response timeout - continuing');
+                resolve();
+              }, 5000);
+            });
+            
+            // Small pause between filler and main response
+            await new Promise(resolve => setTimeout(resolve, 300));
+          }
+        }
+        
         const voiceResult = await speakText(text);
         console.log('🔊 Voice result received:', !!voiceResult, 'audio:', !!voiceResult?.audio);
         
@@ -494,6 +515,17 @@ export const useChat = ({
         console.error('❌ Error saving user message:', saveError);
       }
 
+      // Get and play filler response immediately for better UX
+      let fillerAudioPromise: Promise<any> | null = null;
+      const fillerResponse = IntentDetectorService.getFillerResponse(text);
+      if (fillerResponse && speakText) {
+        console.log('🎤 Playing immediate filler response:', fillerResponse);
+        fillerAudioPromise = speakText(fillerResponse).catch(error => {
+          console.log('⚠️ Filler response TTS failed, continuing without filler:', error);
+          return null;
+        });
+      }
+
       // Show thinking dots
       setIsBotThinking(true);
 
@@ -539,21 +571,8 @@ export const useChat = ({
       // Add bot message to UI immediately
       setMessages(prevMessages => [...prevMessages, botMessage]);
 
-      // Use TTS orchestrator for clean filler + main response sequence
-      const ttsPromise = (async () => {
-        if (speakText) {
-          console.log('🔊 Starting TTS orchestrator for filler + AI response...');
-          try {
-            await ttsOrchestrator.speakWithFiller(text, responseText);
-            console.log('✅ TTS orchestrator completed successfully');
-          } catch (voiceError) {
-            console.error('❌ TTS orchestrator error:', voiceError);
-          }
-        } else {
-          // No voice - just show typing effect
-          await showTypingEffect(responseText, false);
-        }
-      })();
+      // Start TTS and database save in parallel for better performance
+      const ttsPromise = showTypingEffect(responseText, true, fillerAudioPromise);
       const dbPromise = (async () => {
         console.log('💾 Saving bot message to database...');
         try {

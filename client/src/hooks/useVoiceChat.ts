@@ -1,7 +1,7 @@
 // hooks/useVoiceChat.ts - Voice-only chat without UI components
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { ChatStorageService } from '@/lib/supabase/chatStorage';
-import { ttsOrchestrator } from '@/services/tts-orchestrator.service';
+import { IntentDetectorService } from '@/services/intent-detector.service';
 // import { StreamingTTSService } from '@/services/streaming-tts.service'; // Removed for performance
 
 interface UseVoiceChatProps {
@@ -25,14 +25,6 @@ export const useVoiceChat = ({
   // const streamingTTSRef = useRef(new StreamingTTSService()); // Removed for performance
 
   console.log('🎤 useVoiceChat - sessionId:', sessionId);
-
-  // Initialize TTS orchestrator when speakText function is available
-  useEffect(() => {
-    if (speakText) {
-      ttsOrchestrator.initialize(speakText);
-      console.log('🎤 TTS Orchestrator initialized');
-    }
-  }, [speakText]);
 
   // Notify parent of speaking state changes
   useEffect(() => {
@@ -93,7 +85,20 @@ export const useVoiceChat = ({
     isProcessingRef.current = true;
     setIsProcessing(true);
 
+    let fillerAudioPromise: Promise<any> | null = null;
+    
     try {
+      // Get and play filler response immediately for better UX
+      const fillerResponse = IntentDetectorService.getFillerResponse(text);
+      if (fillerResponse && speakText) {
+        console.log('🎤 Playing immediate filler response:', fillerResponse);
+        // Keep track of the filler audio promise so we can wait for it later
+        fillerAudioPromise = speakText(fillerResponse).catch(error => {
+          console.log('⚠️ Filler response TTS failed, continuing without filler:', error);
+          return null;
+        });
+      }
+
       // Log analytics event
       try {
         await ChatStorageService.logAnalyticsEvent(activeSessionId, 'user_question', {
@@ -150,6 +155,55 @@ export const useVoiceChat = ({
 
       console.log('🤖 AI Response received:', aiResponse.response.substring(0, 50) + '...');
 
+      // Generate TTS audio and save to database
+      if (speakText) {
+        console.log('🔊 Starting TTS generation...');
+        setIsSpeaking(true);
+        
+        try {
+          // Wait for filler response to complete if it's still playing
+          if (fillerAudioPromise) {
+            console.log('🔊 Waiting for filler response to complete...');
+            const fillerResult = await fillerAudioPromise;
+            
+            // If filler has audio playing, wait for it to complete
+            if (fillerResult && fillerResult.audio) {
+              await new Promise<void>((resolve) => {
+                const checkAudioComplete = () => {
+                  if (fillerResult.audio.ended || fillerResult.audio.paused) {
+                    console.log('🔊 Filler response completed');
+                    resolve();
+                  } else {
+                    // Check again in 100ms
+                    setTimeout(checkAudioComplete, 100);
+                  }
+                };
+                
+                // Start checking immediately
+                checkAudioComplete();
+                
+                // Fallback timeout after 5 seconds
+                setTimeout(() => {
+                  console.log('🔊 Filler response timeout - continuing');
+                  resolve();
+                }, 5000);
+              });
+              
+              // Add small pause between filler and main response
+              await new Promise(resolve => setTimeout(resolve, 300));
+            }
+          }
+          
+          // Now play the main AI response
+          await speakText(aiResponse.response);
+          console.log('🔊 Speech completed');
+        } catch (voiceError) {
+          console.error('🔊 Voice error:', voiceError);
+        } finally {
+          setIsSpeaking(false);
+        }
+      }
+
       // Save Harper's response to database
       try {
         const savedMessage = await ChatStorageService.saveMessage(
@@ -168,22 +222,7 @@ export const useVoiceChat = ({
         console.log('💾 Harper message saved:', savedMessage?.id);
       } catch (dbError) {
         console.error('❌ Failed to save Harper message to database:', dbError);
-        console.log('⚠️ Continuing with voice synthesis despite database error');
-      }
-
-      // Use TTS orchestrator for clean filler + main response sequence
-      if (speakText) {
-        console.log('🔊 Starting TTS orchestrator for filler + AI response...');
-        setIsSpeaking(true);
-        
-        try {
-          await ttsOrchestrator.speakWithFiller(text, aiResponse.response);
-          console.log('✅ TTS orchestrator completed successfully');
-        } catch (voiceError) {
-          console.error('❌ TTS orchestrator error:', voiceError);
-        } finally {
-          setIsSpeaking(false);
-        }
+        console.log('⚠️ Continuing despite database error');
       }
 
     } catch (error) {
