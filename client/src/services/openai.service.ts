@@ -54,7 +54,7 @@ export class OpenAIService {
     return Math.ceil(text.length / 4);
   }
 
-  async sendMessage(prompt: string): Promise<OpenAIResponse> {
+  async sendMessage(prompt: string, options?: { stream?: boolean }): Promise<OpenAIResponse> {
     const startTime = Date.now();
     
     try {

@@ -1,6 +1,7 @@
 // hooks/useChat.ts - COMBINED VERSION with typing effects and AI Router
 import { useState, useRef, useCallback } from 'react';
 import { ChatStorageService } from '@/lib/supabase/chatStorage';
+import { IntentDetectorService } from '@/services/intent-detector.service';
 
 interface Message {
   id: string;
@@ -78,7 +79,7 @@ export const useChat = ({
 
 
   // Enhanced typing effect with voice support
-  const showTypingEffect = async (text: string, withVoice: boolean = false) => {
+  const showTypingEffect = async (text: string, withVoice: boolean = false, fillerAudioPromise?: Promise<any> | null) => {
     console.log('🔤 Starting typing effect for:', text.substring(0, 30));
     console.log('🔤 withVoice:', withVoice, 'speakText available:', !!speakText);
     
@@ -90,6 +91,35 @@ export const useChat = ({
       setTypingBotMsg(null);
       
       try {
+        // Wait for filler response to complete if provided
+        if (fillerAudioPromise) {
+          console.log('🔊 Waiting for filler response to complete...');
+          const fillerResult = await fillerAudioPromise;
+          
+          if (fillerResult && fillerResult.audio) {
+            await new Promise<void>((resolve) => {
+              const checkAudioComplete = () => {
+                if (fillerResult.audio.ended || fillerResult.audio.paused) {
+                  console.log('🔊 Filler response completed');
+                  resolve();
+                } else {
+                  setTimeout(checkAudioComplete, 100);
+                }
+              };
+              
+              checkAudioComplete();
+              
+              setTimeout(() => {
+                console.log('🔊 Filler response timeout - continuing');
+                resolve();
+              }, 5000);
+            });
+            
+            // Small pause between filler and main response
+            await new Promise(resolve => setTimeout(resolve, 300));
+          }
+        }
+        
         const voiceResult = await speakText(text);
         console.log('🔊 Voice result received:', !!voiceResult, 'audio:', !!voiceResult?.audio);
         
@@ -208,6 +238,213 @@ export const useChat = ({
     }
   }, [sessionId]);
 
+  // Streaming version for faster responses
+  const sendMessageStreaming = useCallback(async (text: string, isVoiceInput: boolean = false) => {
+    console.log('🚀 ===== STREAMING SEND MESSAGE STARTED =====');
+    console.log('🚀 Message text:', text);
+    console.log('🚀 Session ID:', sessionId);
+    
+    if (isProcessingRef.current || !text.trim() || !sessionId) {
+      console.log('⏹️ Skipping - already processing, empty text, or no session');
+      return;
+    }
+
+    // Cancel any ongoing request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    isProcessingRef.current = true;
+    setIsLoading(true);
+    
+    if (unlockAudio) {
+      await unlockAudio();
+    }
+
+    try {
+      // Cache the user question for analytics
+      await cacheUserQuestion(text.trim());
+
+      // Create user message for UI
+      const userMessage: Message = {
+        id: `user-${Date.now()}`,
+        sender: "user",
+        text: text.trim(),
+        timestamp: new Date(),
+      };
+
+      // Add user message to UI immediately
+      setMessages(prevMessages => [...prevMessages, userMessage]);
+      
+      // Save user message to database
+      console.log('💾 Saving user message to database...');
+      try {
+        const savedUserMessage = await ChatStorageService.saveMessage(
+          sessionId,
+          'user',
+          userMessage.text,
+          {
+            isVoiceInput,
+            metadata: {
+              timestamp: new Date().toISOString(),
+              messageId: userMessage.id,
+              category: categorizeQuestion(text.trim())
+            }
+          }
+        );
+        
+        if (savedUserMessage) {
+          setMessages(prev => prev.map(msg => 
+            msg.id === userMessage.id 
+              ? { ...msg, id: savedUserMessage.id }
+              : msg
+          ));
+        }
+      } catch (saveError) {
+        console.error('❌ Error saving user message:', saveError);
+      }
+
+      // Show thinking dots
+      setIsBotThinking(true);
+
+      // Create new abort controller for this request
+      abortControllerRef.current = new AbortController();
+
+      // Create streaming TTS service instance
+      const { StreamingTTSService } = await import('@/services/streaming-tts.service');
+      const streamingTTS = new StreamingTTSService();
+      
+      // Start streaming request
+      const response = await fetch('/api/chat-stream', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ prompt: text }),
+        signal: abortControllerRef.current.signal
+      });
+
+      if (!response.ok) {
+        throw new Error(`Chat API request failed: ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('No response body');
+
+      let fullResponse = '';
+      let ttsStarted = false;
+      
+      // Hide thinking dots and show typing as soon as streaming starts
+      setIsBotThinking(false);
+      setIsBotTyping(true);
+      setTypingBotMsg('');
+      
+      // Read streaming response
+      const decoder = new TextDecoder();
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              
+              if (data.type === 'sentence') {
+                const sentence = data.content;
+                fullResponse += sentence + ' ';
+                
+                // Update typing display
+                setTypingBotMsg(fullResponse.trim());
+                
+                // Start TTS immediately with the full response so far
+                if (!ttsStarted) {
+                  ttsStarted = true;
+                  
+                  // Use the full text for TTS to ensure smooth playback
+                  streamingTTS.generateAndPlayStreaming(
+                    fullResponse.trim(),
+                    selectedVoice,
+                    () => console.log('🔊 TTS started'),
+                    () => {
+                      console.log('🔊 TTS completed');
+                      setIsBotTyping(false);
+                      setTypingBotMsg(null);
+                    }
+                  );
+                }
+              } else if (data.type === 'complete') {
+                fullResponse = data.fullText;
+                setTypingBotMsg(fullResponse);
+              } else if (data.type === 'error') {
+                throw new Error(data.error);
+              }
+            } catch (e) {
+              console.error('Error parsing streaming data:', e);
+            }
+          }
+        }
+      }
+
+      // Create bot message for UI
+      const botMessage: Message = {
+        id: `Harper-${Date.now()}`,
+        sender: "Harper",
+        text: fullResponse,
+        timestamp: new Date(),
+      };
+
+      // Add bot message to UI
+      setMessages(prevMessages => [...prevMessages, botMessage]);
+
+      // Save bot message to database
+      console.log('💾 Saving bot message to database...');
+      try {
+        await ChatStorageService.saveMessage(
+          sessionId,
+          'Harper',
+          botMessage.text,
+          {
+            selectedVoice,
+            metadata: {
+              timestamp: new Date().toISOString(),
+              messageId: botMessage.id,
+              streaming: true
+            }
+          }
+        );
+      } catch (saveError) {
+        console.error('❌ Error saving bot message:', saveError);
+      }
+
+    } catch (error: any) {
+      console.error('❌ Chat error:', error);
+      
+      if (error.name !== 'AbortError') {
+        const errorMessage = "I'm having trouble connecting. Please try again.";
+        setMessages(prevMessages => [...prevMessages, {
+          id: `error-${Date.now()}`,
+          sender: "Harper",
+          text: errorMessage,
+          timestamp: new Date(),
+        }]);
+      }
+    } finally {
+      isProcessingRef.current = false;
+      setIsLoading(false);
+      setIsBotThinking(false);
+      setIsBotTyping(false);
+      setTypingBotMsg(null);
+      setCurrentTypingText('');
+    }
+    
+    console.log('🏁 ===== STREAMING SEND MESSAGE COMPLETED =====');
+  }, [sessionId, selectedVoice, unlockAudio]);
+
   // COMBINED sendMessage with typing effects AND AI Router
   const sendMessage = useCallback(async (text: string, isVoiceInput: boolean = false) => {
     console.log('📨 ===== SEND MESSAGE STARTED =====');
@@ -278,6 +515,17 @@ export const useChat = ({
         console.error('❌ Error saving user message:', saveError);
       }
 
+      // Get and play filler response immediately for better UX
+      let fillerAudioPromise: Promise<any> | null = null;
+      const fillerResponse = IntentDetectorService.getFillerResponse(text);
+      if (fillerResponse && speakText) {
+        console.log('🎤 Playing immediate filler response:', fillerResponse);
+        fillerAudioPromise = speakText(fillerResponse).catch(error => {
+          console.log('⚠️ Filler response TTS failed, continuing without filler:', error);
+          return null;
+        });
+      }
+
       // Show thinking dots
       setIsBotThinking(true);
 
@@ -312,9 +560,6 @@ export const useChat = ({
       // Use data.response instead of data.response
       const responseText = data.response;
 
-      // Show typing effect with voice (enhanced version)
-      await showTypingEffect(responseText, true);
-
       // Create bot message for UI
       const botMessage: Message = {
         id: `Harper-${Date.now()}`,
@@ -323,44 +568,50 @@ export const useChat = ({
         timestamp: new Date(),
       };
 
-      // Add bot message to UI
+      // Add bot message to UI immediately
       setMessages(prevMessages => [...prevMessages, botMessage]);
 
-      // Save bot message to database with metadata
-      console.log('💾 Saving bot message to database...');
-      try {
-        const savedBotMessage = await ChatStorageService.saveMessage(
-          sessionId,
-          'Harper',
-          botMessage.text,
-          {
-            selectedVoice,
-            metadata: {
-              timestamp: new Date().toISOString(),
-              messageId: botMessage.id,
-              provider: data.provider,
-              cost: data.cost,
-              responseTime: data.responseTime,
-              tokensUsed: data.tokensUsed,
-              questionCategory: categorizeQuestion(text.trim()),
-              hasConferenceData: true
+      // Start TTS and database save in parallel for better performance
+      const ttsPromise = showTypingEffect(responseText, true, fillerAudioPromise);
+      const dbPromise = (async () => {
+        console.log('💾 Saving bot message to database...');
+        try {
+          const savedBotMessage = await ChatStorageService.saveMessage(
+            sessionId,
+            'Harper',
+            botMessage.text,
+            {
+              selectedVoice,
+              metadata: {
+                timestamp: new Date().toISOString(),
+                messageId: botMessage.id,
+                provider: data.provider,
+                cost: data.cost,
+                responseTime: data.responseTime,
+                tokensUsed: data.tokensUsed,
+                questionCategory: categorizeQuestion(text.trim()),
+                hasConferenceData: true
+              }
             }
+          );
+        
+          // Update the local message with the saved ID
+          if (savedBotMessage) {
+            setMessages(prev => prev.map(msg => 
+              msg.id === botMessage.id 
+                ? { ...msg, id: savedBotMessage.id }
+                : msg
+            ));
           }
-        );
-        
-        // Update the local message with the saved ID
-        if (savedBotMessage) {
-          setMessages(prev => prev.map(msg => 
-            msg.id === botMessage.id 
-              ? { ...msg, id: savedBotMessage.id }
-              : msg
-          ));
+          
+          console.log('✅ Bot message saved to database with metadata');
+        } catch (saveError) {
+          console.error('❌ Error saving bot message:', saveError);
         }
-        
-        console.log('✅ Bot message saved to database with metadata');
-      } catch (saveError) {
-        console.error('❌ Error saving bot message:', saveError);
-      }
+      })();
+
+      // Wait for both TTS and database save to complete
+      await Promise.all([ttsPromise, dbPromise]);
 
     } catch (error: any) {
       console.error('❌ Error in sendMessage:', error);
@@ -516,7 +767,7 @@ export const useChat = ({
     isBotTyping,
     isBotThinking,
     typingBotMsg,
-    sendMessage,
+    sendMessage, // Use optimized non-streaming version
     sendBotMessage,
     sendIntroMessage,
     stopTyping,
@@ -529,5 +780,8 @@ export const useChat = ({
     
     // Combined functionality
     isProcessing: isProcessingRef.current,
+    
+    // Legacy functions (if needed)
+    sendMessageNonStreaming: sendMessage,
   };
 };

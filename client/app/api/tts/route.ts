@@ -1,7 +1,8 @@
 // app/api/tts/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 
-export const runtime = 'edge';
+// Remove edge runtime as it's causing compatibility issues
+// export const runtime = 'edge';
 
 // Simple in-memory cache for TTS responses
 const ttsCache = new Map<string, { data: ArrayBuffer; timestamp: number }>();
@@ -14,7 +15,7 @@ export async function POST(req: NextRequest) {
       voice = 'nova', 
       model = 'tts-1', // Use fastest model 
       response_format = 'mp3',
-      speed = 1.2 // Slightly faster speech speed
+      speed = 1.05 // Slightly faster speech speed
     } = await req.json();
 
     const apiKey = process.env.OPENAI_API_KEY;
@@ -85,9 +86,16 @@ export async function POST(req: NextRequest) {
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      console.error('🔊 OpenAI TTS API error:', error);
-      return NextResponse.json({ error }, { status: response.status });
+      const errorText = await response.text();
+      console.error('🔊 OpenAI TTS API error:', {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorText
+      });
+      return NextResponse.json({ 
+        error: `OpenAI TTS API error: ${response.status} ${response.statusText}`,
+        details: errorText 
+      }, { status: response.status });
     }
 
     const audioBuffer = await response.arrayBuffer();
@@ -125,7 +133,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error('🔊 TTS API error:', error);
     return NextResponse.json(
-      { error: 'Failed to generate speech' }, 
+      { error: 'Failed to generate speech', details: error instanceof Error ? error.message : 'Unknown error' }, 
       { status: 500 }
     );
   }
