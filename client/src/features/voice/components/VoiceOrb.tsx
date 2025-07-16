@@ -11,6 +11,7 @@ interface VoiceOrbProps {
   isChatOpen?: boolean;
   isHarperSpeaking?: boolean;
   isHarperActivated?: boolean; // New prop for activated state
+  isThinking?: boolean; // New prop for thinking state
 }
 
 const IconGradient: React.FC<{ id: string }> = ({ id }) => (
@@ -46,6 +47,7 @@ const VoiceOrb: React.FC<VoiceOrbProps> = ({
   isChatOpen = false,
   isHarperSpeaking = false,
   isHarperActivated = false,
+  isThinking = false,
 }) => {
   const [showSpeaker, setShowSpeaker] = useState(false);
 
@@ -53,6 +55,8 @@ const VoiceOrb: React.FC<VoiceOrbProps> = ({
   const isActivelyRecording = isVoiceInputActive;
   const isListeningForWakeWord = listening && !isVoiceInputActive && !isHarperActivated;
   const shouldShowRecordingState = isActivelyRecording;
+  const isProcessingQuery = isNavigating && !isHarperActivated;
+  const isThinkingState = isThinking && !isHarperSpeaking;
 
   useEffect(() => {
     let timer: NodeJS.Timeout | undefined;
@@ -69,12 +73,12 @@ const VoiceOrb: React.FC<VoiceOrbProps> = ({
     };
   }, [isListeningForWakeWord]);
 
-  // Debug current state (commented out to reduce noise)
-  // console.log("🔍 VoiceOrb State:", {
-  //   listening, HarperDetected, isNavigating, isVoiceInputActive,
-  //   isHarperSpeaking, isHarperActivated, isActivelyRecording,
-  //   isListeningForWakeWord, shouldShowRecordingState, showSpeaker
-  // });
+  // Debug current state
+  console.log("🔍 VoiceOrb State:", {
+    listening, HarperDetected, isNavigating, isVoiceInputActive,
+    isHarperSpeaking, isHarperActivated, isActivelyRecording,
+    isListeningForWakeWord, shouldShowRecordingState, showSpeaker, isProcessingQuery, isThinkingState
+  });
 
   // Handle click - only allow when Harper is activated and not speaking
   const handleClick = () => {
@@ -108,13 +112,20 @@ const VoiceOrb: React.FC<VoiceOrbProps> = ({
       <Orb
         hoverIntensity={0.6}
         rotateOnHover={true}
-        hue={0}
+        hue={
+          isHarperSpeaking ? 120 : // Green for speaking
+          shouldShowRecordingState ? 0 : // Red for recording
+          isThinkingState ? 60 : // Yellow for thinking
+          isProcessingQuery ? 30 : // Orange for processing
+          isListeningForWakeWord ? 240 : // Blue for wake word listening
+          0 // Default purple
+        }
         forceHoverState={
-          HarperDetected || 
-          (isNavigating && !isHarperActivated) || 
+          isListeningForWakeWord || 
           shouldShowRecordingState || 
           isHarperSpeaking ||
-          (listening && !isHarperActivated)
+          isProcessingQuery ||
+          isThinkingState
         }
       />
       
@@ -124,8 +135,8 @@ const VoiceOrb: React.FC<VoiceOrbProps> = ({
             isListeningForWakeWord || shouldShowRecordingState ? "scale-110 opacity-90" : "scale-100 opacity-70"
           }`}
         >
-          {/* Microphone Icon - Default state or when actively recording */}
-          <IconWrapper show={(!showSpeaker && !isNavigating && !isHarperActivated) || shouldShowRecordingState || (isHarperActivated && !isVoiceInputActive && !isHarperSpeaking)}>
+          {/* Microphone Icon - Default state or when actively recording (but not when thinking) */}
+          <IconWrapper show={(!showSpeaker && !isNavigating && !isHarperActivated) || shouldShowRecordingState || (isHarperActivated && !isVoiceInputActive && !isHarperSpeaking && !isThinkingState)}>
             <svg
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 24 24"
@@ -169,7 +180,7 @@ const VoiceOrb: React.FC<VoiceOrbProps> = ({
           </IconWrapper>
 
           {/* Processing Icon - Show microphone instead of spinning arrows */}
-          <IconWrapper show={isNavigating && !isHarperActivated}>
+          <IconWrapper show={isProcessingQuery}>
             <svg
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 24 24"
@@ -190,15 +201,84 @@ const VoiceOrb: React.FC<VoiceOrbProps> = ({
               </circle>
             </svg>
           </IconWrapper>
+
+          {/* Thinking Icon - Animated dots */}
+          <IconWrapper show={isThinkingState}>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              className="w-full h-full"
+              fill="none"
+            >
+              <IconGradient id="thinking-gradient" />
+              <circle cx="6" cy="12" r="2" fill="url(#thinking-gradient)">
+                <animate attributeName="opacity" values="0.3;1;0.3" dur="1.5s" repeatCount="indefinite" begin="0s"/>
+              </circle>
+              <circle cx="12" cy="12" r="2" fill="url(#thinking-gradient)">
+                <animate attributeName="opacity" values="0.3;1;0.3" dur="1.5s" repeatCount="indefinite" begin="0.5s"/>
+              </circle>
+              <circle cx="18" cy="12" r="2" fill="url(#thinking-gradient)">
+                <animate attributeName="opacity" values="0.3;1;0.3" dur="1.5s" repeatCount="indefinite" begin="1s"/>
+              </circle>
+            </svg>
+          </IconWrapper>
+
+          {/* Speaking Icon - Animated sound waves */}
+          <IconWrapper show={isHarperSpeaking}>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              className="w-full h-full"
+              fill="none"
+              stroke="url(#speaking-gradient)"
+              strokeWidth="1.5"
+            >
+              <IconGradient id="speaking-gradient" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z"
+              />
+              {/* Animated sound waves */}
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M16.463 8.288a5.25 5.25 0 010 7.424"
+                opacity="0.7"
+              >
+                <animate attributeName="opacity" values="0.7;0.3;0.7" dur="1s" repeatCount="indefinite"/>
+              </path>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M19.114 5.636a9 9 0 010 12.728"
+                opacity="0.5"
+              >
+                <animate attributeName="opacity" values="0.5;0.2;0.5" dur="1.2s" repeatCount="indefinite"/>
+              </path>
+            </svg>
+          </IconWrapper>
         </div>
       </div>
 
-      {/* Click hint when Harper is activated - INSIDE THE ORB */}
-      {isHarperActivated && !isHarperSpeaking && (
-        <div className="absolute bottom-16 left-1/2 transform -translate-x-1/2 text-sm text-indigo-200 font-medium text-center z-20">
-          {isVoiceInputActive ? 'Recording...' : 'Click to speak'}
-        </div>
-      )}
+      {/* State feedback text */}
+      <div className="absolute bottom-16 left-1/2 transform -translate-x-1/2 text-sm font-medium text-center z-20">
+        {isHarperSpeaking ? (
+          <div className="text-green-300 animate-pulse">Speaking...</div>
+        ) : shouldShowRecordingState ? (
+          <div className="text-red-300 animate-pulse">Recording...</div>
+        ) : isThinkingState ? (
+          <div className="text-yellow-300 animate-pulse">Thinking...</div>
+        ) : isProcessingQuery ? (
+          <div className="text-orange-300 animate-pulse">Processing...</div>
+        ) : isListeningForWakeWord ? (
+          <div className="text-blue-300">Listening for "Hey Harper"</div>
+        ) : isHarperActivated ? (
+          <div className="text-indigo-200">Click to speak</div>
+        ) : (
+          <div className="text-gray-400">Say "Hey Harper" or click button below</div>
+        )}
+      </div>
 
       {/* Visual feedback for active recording */}
       {shouldShowRecordingState && (

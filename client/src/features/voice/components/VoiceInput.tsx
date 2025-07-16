@@ -161,9 +161,18 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
       console.log('🎤 Recognition ended');
       recognitionRef.current = null;
       
-      if (!isStoppingRef.current && isListening) {
+      // Only restart if we're intentionally listening AND not stopping AND we haven't finished with a transcript
+      // AND we haven't received any speech (which would indicate we're done)
+      if (!isStoppingRef.current && isListening && !finalTranscriptRef.current && !hasReceivedSpeechRef.current) {
         console.log('🎤 Recognition ended unexpectedly, restarting...');
-        setTimeout(startRecognition, 100);
+        setTimeout(() => {
+          // Double-check that we should still be listening
+          if (isListening && !isStoppingRef.current && !finalTranscriptRef.current) {
+            startRecognition();
+          }
+        }, 100);
+      } else {
+        console.log('🎤 Recognition ended normally, not restarting');
       }
     };
 
