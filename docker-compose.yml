@@ -9,7 +9,8 @@ services:
       - "3000:3000"
     volumes:
       - ./client:/app
-      - /app/node_modules # Ensures host node_modules don’t overwrite container's
+      - /app/node_modules # Ensures host node_modules don't overwrite container's
+      - /app/.next # Ignore .next directory to prevent permission issues
     environment:
       - NODE_ENV=development
       - CHOKIDAR_USEPOLLING=true # Important for file change detection in Docker
