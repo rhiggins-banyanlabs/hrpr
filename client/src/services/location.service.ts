@@ -288,7 +288,15 @@ export class LocationService {
       console.log(`🗺️ Searching for places: type=${type}, keyword=${keyword}, radius=${radius}`);
 
       const response = await fetch(
-        `https://maps.googleapis.com/maps/api/place/nearbysearch/json?${params.toString()}`
+        `https://maps.googleapis.com/maps/api/place/nearbysearch/json?${params.toString()}`,
+        { 
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+          },
+          // 2-second timeout for Google Maps API
+          signal: AbortSignal.timeout(2000)
+        }
       );
       
       if (response.ok) {
@@ -308,7 +316,15 @@ export class LocationService {
           });
           
           const broaderResponse = await fetch(
-            `https://maps.googleapis.com/maps/api/place/nearbysearch/json?${broaderParams.toString()}`
+            `https://maps.googleapis.com/maps/api/place/nearbysearch/json?${broaderParams.toString()}`,
+            { 
+              method: 'GET',
+              headers: {
+                'Accept': 'application/json',
+              },
+              // 2-second timeout for Google Maps API
+              signal: AbortSignal.timeout(2000)
+            }
           );
           
           if (broaderResponse.ok) {

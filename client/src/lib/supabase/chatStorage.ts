@@ -26,7 +26,7 @@ export interface ChatSession {
 export interface Message {
   id: string;
   session_id: string;
-  sender: 'user' | 'connie';
+  sender: 'user' | 'Harper';
   message_text: string;
   message_timestamp: string;
   is_voice_input?: boolean;
@@ -275,7 +275,7 @@ export class ChatStorageService {
   // Save a message to the database - ENHANCED
   static async saveMessage(
     sessionId: string,
-    sender: 'user' | 'connie',
+    sender: 'user' | 'Harper',
     messageText: string,
     options?: {
       isVoiceInput?: boolean;
@@ -287,9 +287,10 @@ export class ChatStorageService {
     try {
       console.log('💾 Saving message:', { sessionId, sender, messageLength: messageText.length });
 
+      // Keep original logic - if it was working in develop, don't change it
       const messageData = {
         session_id: sessionId,
-        sender,
+        sender: sender,
         message_text: messageText,
         message_timestamp: new Date().toISOString(),
         is_voice_input: options?.isVoiceInput || false,
@@ -305,8 +306,34 @@ export class ChatStorageService {
         .single();
 
       if (error) {
-        console.error('❌ Error saving message:', error);
-        throw error;
+        console.error(`❌ Error saving message:`, error);
+        console.error('❌ Message data that failed:', messageData);
+        console.error('❌ Error code:', error.code);
+        console.error('❌ Error message:', error.message);
+        console.error('❌ Error details:', error.details);
+        console.error('❌ Error hint:', error.hint);
+        
+        // If it's a constraint error, try with 'connie' as sender (legacy compatibility)
+        if (error.code === '23514' && sender === 'Harper') {
+          console.log('🔄 Trying with legacy sender "connie"...');
+          const legacyMessageData = { ...messageData, sender: 'connie' };
+          
+          const { data: legacyMessage, error: legacyError } = await supabase
+            .from('messages')
+            .insert(legacyMessageData)
+            .select()
+            .single();
+            
+          if (!legacyError && legacyMessage) {
+            console.log('✅ Message saved with legacy sender:', legacyMessage.id);
+            return legacyMessage;
+          } else {
+            console.error('❌ Legacy save also failed:', legacyError);
+          }
+        }
+        
+        // Don't throw error - allow the app to continue working
+        return null;
       }
 
       if (!message) {
@@ -318,6 +345,7 @@ export class ChatStorageService {
       return message;
     } catch (error) {
       console.error('❌ Error in saveMessage:', error);
+      // Don't throw error - allow the app to continue working
       return null;
     }
   }

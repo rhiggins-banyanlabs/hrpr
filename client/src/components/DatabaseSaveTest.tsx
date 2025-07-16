@@ -55,8 +55,8 @@ export function DatabaseSaveTest() {
       addResult("3️⃣ Saving bot message...");
       const botMessage = await ChatStorageService.saveMessage(
         session.id,
-        'connie',
-        'Hello! This is a test response from Connie.',
+        'Harper',
+        'Hello! This is a test response from Harper.',
         {
           selectedVoice: 'shimmer',
           metadata: { test: true, provider: 'test' }

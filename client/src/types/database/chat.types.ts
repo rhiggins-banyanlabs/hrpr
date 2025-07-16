@@ -14,7 +14,7 @@ export interface ChatSession {
 export interface Message {
   id: string;
   session_id: string;
-  sender: 'user' | 'connie';
+  sender: 'user' | 'Harper' | 'assistant';
   message_text: string;
   message_timestamp: string;
   is_voice_input?: boolean;

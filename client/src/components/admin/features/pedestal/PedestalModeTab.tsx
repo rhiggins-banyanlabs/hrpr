@@ -24,7 +24,7 @@ export default function PedestalModeTab() {
 
   const [showRedirectModal, setShowRedirectModal] = useState(false);
 
-  const handleRedirectToConnie = () => {
+  const handleRedirectToHarper = () => {
     setShowRedirectModal(false);
     router.push('/');
   };
@@ -52,8 +52,8 @@ export default function PedestalModeTab() {
                 <h3 className="text-xl font-semibold text-white">Pedestal Mode</h3>
                 <p className="text-gray-400">
                   {isPedestalMode 
-                    ? 'Currently active - Connie is ready for public interaction'
-                    : 'Currently inactive - Connie is in admin mode'
+                    ? 'Currently active - Harper is ready for public interaction'
+                    : 'Currently inactive - Harper is in admin mode'
                   }
                 </p>
               </div>
@@ -77,7 +77,7 @@ export default function PedestalModeTab() {
               <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
                 <h4 className="font-medium text-blue-400 mb-2">Enable Pedestal Mode</h4>
                 <p className="text-gray-300 text-sm mb-4">
-                  This will activate public mode, allowing conference attendees to interact with Connie. 
+                  This will activate public mode, allowing conference attendees to interact with Harper. 
                   The system will remain in this mode until manually disabled by an admin.
                 </p>
                 <button
@@ -94,7 +94,7 @@ export default function PedestalModeTab() {
               <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4">
                 <h4 className="font-medium text-amber-400 mb-2">Pedestal Mode Active</h4>
                 <p className="text-gray-300 text-sm mb-4">
-                  Connie is currently in public mode. Conference attendees can interact with the system.
+                  Harper is currently in public mode. Conference attendees can interact with the system.
                   Click below to return to admin mode.
                 </p>
                 <div className="flex gap-3">
@@ -125,7 +125,7 @@ export default function PedestalModeTab() {
             <div className="flex items-start gap-3">
               <div className="w-2 h-2 bg-indigo-400 rounded-full mt-2 flex-shrink-0"></div>
               <p className="text-sm">
-                <strong className="text-white">Public Access:</strong> When enabled, attendees can interact with Connie without admin privileges
+                <strong className="text-white">Public Access:</strong> When enabled, attendees can interact with Harper without admin privileges
               </p>
             </div>
             <div className="flex items-start gap-3">
@@ -191,7 +191,7 @@ export default function PedestalModeTab() {
               </div>
               <h3 className="text-xl font-semibold text-white mb-2">Pedestal Mode Enabled!</h3>
               <p className="text-gray-400">
-                Would you like to be redirected to the public Connie interface?
+                Would you like to be redirected to the public Harper interface?
               </p>
             </div>
             <div className="flex gap-3">
@@ -202,10 +202,10 @@ export default function PedestalModeTab() {
                 Stay in Admin
               </button>
               <button
-                onClick={handleRedirectToConnie}
+                onClick={handleRedirectToHarper}
                 className="flex-1 px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:from-indigo-700 hover:to-purple-700 transition-all cursor-pointer"
               >
-                Go to Connie
+                Go to Harper
               </button>
             </div>
           </div>

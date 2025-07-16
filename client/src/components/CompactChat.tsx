@@ -206,7 +206,7 @@ const CompactChatComponent = ({
   useEffect(() => {
     if (messages.length > 0) {
       const lastMessage = messages[messages.length - 1]
-      if (lastMessage.sender === 'connie' && !isBotTyping && !isProcessing && !isBotThinking) {
+      if (lastMessage.sender === 'Harper' && !isBotTyping && !isProcessing && !isBotThinking) {
         console.log("🤖 Bot message completed, ensuring all states are clear")
         isProcessingVoiceQueryRef.current = false
 
@@ -350,7 +350,7 @@ const CompactChatComponent = ({
           selectedVoice={selectedVoice}
           onVoiceChange={setSelectedVoice}
           voiceTranscript={voiceTranscript}
-          isConnieSpeaking={isSpeaking}
+          isHarperSpeaking={isSpeaking}
           showMicrophoneButton={false} // Hide the microphone button
         />
       </div>

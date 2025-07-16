@@ -26,7 +26,7 @@ export function AdminAuthProvider({ children }: AdminAuthProviderProps) {
 
   // Check for existing pedestal mode on mount (but NOT authentication)
   useEffect(() => {
-    const pedestalStatus = localStorage.getItem('connie-pedestal-mode');
+    const pedestalStatus = localStorage.getItem('Harper-pedestal-mode');
     
     // Only restore pedestal mode if it was explicitly set
     if (pedestalStatus === 'true') {
@@ -71,14 +71,14 @@ export function AdminAuthProvider({ children }: AdminAuthProviderProps) {
   const enablePedestalMode = () => {
     setIsPedestalMode(true);
     setIsSystemLocked(false);
-    localStorage.setItem('connie-pedestal-mode', 'true');
+    localStorage.setItem('Harper-pedestal-mode', 'true');
     console.log('🏛️ Pedestal mode enabled - System unlocked for public use');
   };
 
   const disablePedestalMode = () => {
     setIsPedestalMode(false);
     setIsSystemLocked(true);
-    localStorage.removeItem('connie-pedestal-mode');
+    localStorage.removeItem('Harper-pedestal-mode');
     console.log('🏛️ Pedestal mode disabled - System locked');
   };
 

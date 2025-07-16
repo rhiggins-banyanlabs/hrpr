@@ -4,7 +4,7 @@ export interface SpeechRecognitionState {
   listening: boolean;
   transcript: string;
   permissionError: string | null;
-  connieDetected: boolean;
+  HarperDetected: boolean;
   isNavigating: boolean;
 }
 
@@ -16,7 +16,7 @@ export interface SpeechRecognitionActions {
 }
 
 export const useSpeechRecognition = (
-  onConnieDetected: (transcript: string) => void
+  onHarperDetected: (transcript: string) => void
 ): [SpeechRecognitionState, SpeechRecognitionActions] => {
   const [listening, setListening] = useState(false);
   const [transcript, setTranscript] = useState("");
@@ -25,9 +25,9 @@ export const useSpeechRecognition = (
   
   const recognitionRef = useRef<any>(null);
   const isNavigatingRef = useRef<boolean>(false);
-  const connieDetectedRef = useRef<boolean>(false);
+  const HarperDetectedRef = useRef<boolean>(false);
 
-  const CONNIE_VARIATIONS = ["connie", "conny", "coni", "koni", "honey"];
+  const Harper_VARIATIONS = ["harper", "conny", "coni", "koni", "honey"];
 
   // Initialize speech recognition
   useEffect(() => {
@@ -46,6 +46,8 @@ export const useSpeechRecognition = (
     recognitionRef.current = new SpeechRecognition();
     recognitionRef.current.continuous = true;
     recognitionRef.current.interimResults = true;
+    recognitionRef.current.maxAlternatives = 1;
+    recognitionRef.current.lang = 'en-US';
 
     recognitionRef.current.onresult = handleSpeechResult;
     recognitionRef.current.onaudiostart = () => {
@@ -57,12 +59,31 @@ export const useSpeechRecognition = (
     recognitionRef.current.onspeechend = () => {
       console.log("🔚 Speech ended");
       
-      // If Connie was detected, immediately navigate
-      if (connieDetectedRef.current && !isNavigatingRef.current) {
+      // If Harper was detected, immediately navigate
+      if (HarperDetectedRef.current && !isNavigatingRef.current) {
         console.log("🎯 Triggering immediate navigation from speech end");
-        handleConnieDetection(transcript);
+        handleHarperDetection(transcript);
       }
     };
+    
+    recognitionRef.current.onend = () => {
+      console.log("🔚 Recognition ended");
+      
+      // If we're still supposed to be listening and Harper wasn't detected, restart
+      if (listening && !HarperDetectedRef.current && !isNavigatingRef.current) {
+        console.log("🔄 Restarting recognition to continue wake word detection");
+        setTimeout(() => {
+          if (listening && recognitionRef.current) {
+            try {
+              recognitionRef.current.start();
+            } catch (error) {
+              console.error("Error restarting recognition:", error);
+            }
+          }
+        }, 100);
+      }
+    };
+    
     recognitionRef.current.onerror = handleSpeechError;
 
     return cleanup;
@@ -85,19 +106,19 @@ export const useSpeechRecognition = (
     setTranscript(currentTranscript);
     console.log("🎤 Heard:", currentTranscript);
 
-    const foundConnie = detectConnieInTranscript(currentTranscript);
-    console.log("🔍 Connie detection result:", foundConnie);
+    const foundHarper = detectHarperInTranscript(currentTranscript);
+    console.log("🔍 Harper detection result:", foundHarper);
 
-    if (foundConnie && !connieDetectedRef.current) {
-      console.log("✅ Detected Connie! Immediately navigating...");
-      connieDetectedRef.current = true;
+    if (foundHarper && !HarperDetectedRef.current) {
+      console.log("✅ Detected Harper! Immediately navigating...");
+      HarperDetectedRef.current = true;
       
       // Force a state update to trigger UI changes
-      setTranscript(currentTranscript + " [CONNIE DETECTED - NAVIGATING]");
+      setTranscript(currentTranscript + " [Harper DETECTED - NAVIGATING]");
       
       // Immediate navigation - don't wait for speech to end
       setTimeout(() => {
-        handleConnieDetection(currentTranscript);
+        handleHarperDetection(currentTranscript);
       }, 100); // Even faster - just 100ms for UI feedback
     }
   };
@@ -111,17 +132,29 @@ export const useSpeechRecognition = (
       );
       setListening(false);
     } else if (event.error === "no-speech") {
-      console.log("No speech detected");
+      console.log("No speech detected - continuing to listen...");
+      // Don't stop listening for no-speech errors, just continue
+    } else if (event.error === "network") {
+      console.log("Network error - restarting recognition...");
+      setTimeout(() => {
+        if (listening) {
+          restartRecognition();
+        }
+      }, 1000);
     } else {
-      setPermissionError(`Error: ${event.error}. Please try again.`);
-      setListening(false);
+      console.log(`Speech error: ${event.error} - restarting recognition...`);
+      setTimeout(() => {
+        if (listening) {
+          restartRecognition();
+        }
+      }, 1000);
     }
   };
 
-  const detectConnieInTranscript = (transcript: string): boolean => {
-    console.log("🔍 Checking transcript for Connie variations:", transcript);
+  const detectHarperInTranscript = (transcript: string): boolean => {
+    console.log("🔍 Checking transcript for Harper variations:", transcript);
     
-    const result = CONNIE_VARIATIONS.some(variation => {
+    const result = Harper_VARIATIONS.some(variation => {
       const heyVariation = transcript.includes(`hey ${variation}`);
       const justVariation = transcript.includes(variation);
       
@@ -134,8 +167,8 @@ export const useSpeechRecognition = (
     return result;
   };
 
-  const handleConnieDetection = (fullTranscript: string) => {
-    console.log("🎯 handleConnieDetection called with:", fullTranscript);
+  const handleHarperDetection = (fullTranscript: string) => {
+    console.log("🎯 handleHarperDetection called with:", fullTranscript);
     console.log("🎯 isNavigatingRef.current:", isNavigatingRef.current);
     
     if (isNavigatingRef.current) {
@@ -166,7 +199,7 @@ export const useSpeechRecognition = (
     
     // Immediate navigation - no waiting
     setTimeout(() => {
-      onConnieDetected(query);
+      onHarperDetected(query);
     }, 50); // Minimal delay just for UI feedback
   };
 
@@ -174,7 +207,7 @@ export const useSpeechRecognition = (
     let query = "";
 
     // Try with "hey" prefix first
-    for (const variation of CONNIE_VARIATIONS) {
+    for (const variation of Harper_VARIATIONS) {
       if (fullTranscript.includes(`hey ${variation}`)) {
         query = fullTranscript.split(`hey ${variation}`)[1]?.trim();
         break;
@@ -183,7 +216,7 @@ export const useSpeechRecognition = (
 
     // If not found with "hey", try just the name
     if (!query) {
-      for (const variation of CONNIE_VARIATIONS) {
+      for (const variation of Harper_VARIATIONS) {
         if (fullTranscript.includes(variation)) {
           query = fullTranscript.split(variation)[1]?.trim();
           break;
@@ -192,7 +225,7 @@ export const useSpeechRecognition = (
     }
 
     // If no additional query found, return just the greeting
-    return query || "hey connie";
+    return query || "hey Harper";
   };
 
   const requestMicrophonePermission = async () => {
@@ -246,7 +279,7 @@ export const useSpeechRecognition = (
     setTranscript("");
     setPermissionError(null);
     setIsNavigating(false);
-    connieDetectedRef.current = false;
+    HarperDetectedRef.current = false;
     isNavigatingRef.current = false;
   };
 
@@ -282,7 +315,7 @@ export const useSpeechRecognition = (
     setTranscript("");
     setIsNavigating(false);
     isNavigatingRef.current = false;
-    connieDetectedRef.current = false;
+    HarperDetectedRef.current = false;
   };
 
   const cleanup = () => {
@@ -300,7 +333,7 @@ export const useSpeechRecognition = (
       listening,
       transcript,
       permissionError,
-      connieDetected: connieDetectedRef.current,
+      HarperDetected: HarperDetectedRef.current,
       isNavigating,
     },
     {

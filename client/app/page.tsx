@@ -5,19 +5,21 @@ import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition"
 import { useChatStorage } from "@/hooks/useChatStorage"
 import { useAdminAuth } from "@/components/admin/security/AdminAuthContext"
+import { useVoiceChat } from "@/hooks/useVoiceChat"
+import { useOptimizedVoice } from "@/hooks/useOptimizedVoice"
 import Waves from "@/components/waves"
 import { useState, useRef, useCallback, useEffect } from "react"
 import { MorphingText } from "@/components/MorphingText"
 import { VoiceButton } from "@/components/VoiceButton"
-import { CompactChat } from "@/components/CompactChat"
-import { ChatToggleButton } from "@/components/ToggleChatButton"
 import { AdminButton } from "@/components/admin/ui/AdminButton"
+import { VoiceInput } from "@/features/voice"
 import { useRouter } from "next/navigation"
 
 export default function Home() {
-  const [isChatOpen, setIsChatOpen] = useState(false)
   const [isVoiceInputActive, setIsVoiceInputActive] = useState(false)
-  const [isConnieSpeaking, setIsConnieSpeaking] = useState(false)
+  const [isHarperSpeaking, setIsHarperSpeaking] = useState(false)
+  const [voiceTranscript, setVoiceTranscript] = useState("")
+  const [isHarperActivated, setIsHarperActivated] = useState(false) // Track if Harper has been activated
   const router = useRouter()
   const { isPedestalMode, isSystemLocked } = useAdminAuth()
 
@@ -25,12 +27,28 @@ export default function Home() {
   const hasPlayedIntroRef = useRef(false)
   const isProcessingVoiceQueryRef = useRef(false)
   const initializationAttemptedRef = useRef(false)
+  const hasSessionRef = useRef(false)
 
   // Chat storage hook
   const { currentSession, startNewSession, endSession } = useChatStorage()
+  
+  // Voice hooks
+  const { speakText, isSpeaking, selectedVoice, setSelectedVoice, unlockAudio, preCacheIntroMessage } = useOptimizedVoice()
+  
+  // Stable callback for speaking state changes
+  const handleSpeakingChange = useCallback((isSpeaking: boolean) => {
+    setIsHarperSpeaking(isSpeaking)
+  }, [])
+  
+  // Voice chat hook
+  const { processVoiceQuery, sendIntroMessage, isProcessing } = useVoiceChat({
+    sessionId: currentSession?.id || null,
+    speakText,
+    onSpeakingChange: handleSpeakingChange
+  })
 
-  const handleConnieDetected = async (query: string) => {
-    console.log("🏠 HOME: handleConnieDetected called with query:", query || "no query")
+  const handleHarperDetected = async (query: string) => {
+    console.log("🏠 HOME: handleHarperDetected called with query:", query || "no query")
 
     // Prevent multiple activations while processing
     if (isProcessingVoiceQueryRef.current) {
@@ -38,29 +56,69 @@ export default function Home() {
       return
     }
 
-    // Create session if needed, then open chat
-    if (!currentSession?.id) {
-      console.log("📝 Creating session for voice query");
-      await startNewSession({
-        source: "voice_activation",
-        initial_query: query,
-        timestamp: new Date().toISOString(),
-      });
-    }
+    try {
+      // Create session if needed for voice processing
+      let sessionId = currentSession?.id;
+      if (!sessionId) {
+        console.log("📝 Creating session for voice query");
+        const newSession = await startNewSession({
+          source: "voice_activation",
+          initial_query: query,
+          timestamp: new Date().toISOString(),
+        });
+        sessionId = newSession?.id;
+        console.log("✅ Session created successfully:", sessionId);
+      } else {
+        console.log("✅ Using existing session:", sessionId);
+      }
 
-    // Open chat
-    setIsChatOpen(true)
+      if (!sessionId) {
+        console.error("❌ Failed to create or get session ID");
+        return;
+      }
+
+      // Process voice query directly
+      isProcessingVoiceQueryRef.current = true
+      console.log("🎯 Starting voice processing...");
+      
+      // Send intro message if this is the first interaction
+      if (!hasPlayedIntroRef.current) {
+        console.log("🎯 Sending intro message...");
+        hasPlayedIntroRef.current = true
+        
+        // Activate Harper mode - switch to microphone interface
+        setIsHarperActivated(true)
+        
+        // Stop wake word detection since we're now in active mode
+        speechActions.stopListening()
+        
+        // Send intro message immediately (pre-cached)
+        await sendIntroMessage(sessionId)
+        console.log("✅ Intro message sent");
+      }
+      
+      // Then process the query
+      console.log("🎯 Processing query:", query);
+      await processVoiceQuery(query, sessionId)
+      console.log("✅ Query processed successfully");
+      
+    } catch (error) {
+      console.error("❌ Error in handleHarperDetected:", error);
+    } finally {
+      isProcessingVoiceQueryRef.current = false
+      console.log("🏁 handleHarperDetected completed");
+    }
   }
 
-  const [speechState, speechActions] = useSpeechRecognition(handleConnieDetected)
+  const [speechState, speechActions] = useSpeechRecognition(handleHarperDetected)
 
   // Handle voice input toggle for the unified orb
-  const handleVoiceInputToggle = useCallback(() => {
+  const handleVoiceInputToggle = useCallback(async () => {
     console.log("🎤 🔄 Voice input toggle called from VoiceOrb, current state:", isVoiceInputActive)
 
-    // Don't allow voice input while wake word detection is active or Connie is speaking
-    if (speechState.listening || isConnieSpeaking) {
-      console.log("🎤 ❌ Wake word detection is active or Connie is speaking, not toggling voice input")
+    // Don't allow voice input while Harper is speaking or processing
+    if (isHarperSpeaking || isProcessing) {
+      console.log("🎤 ❌ Harper is speaking/processing, not toggling voice input")
       return
     }
 
@@ -69,89 +127,57 @@ export default function Home() {
     
     if (!newState) {
       console.log("🎤 Stopping voice input from VoiceOrb")
+      setVoiceTranscript("")
     } else {
       console.log("🎤 Starting voice input from VoiceOrb")
-    }
-  }, [isVoiceInputActive, speechState.listening, isConnieSpeaking])
-
-  // Stable callback for speaking state changes
-  const handleSpeakingChange = useCallback((isSpeaking: boolean) => {
-    setIsConnieSpeaking(isSpeaking)
-  }, [])
-
-  // RESET STATES ONLY WHEN CHAT INITIALLY OPENS - not on subsequent state changes
-  const [hasInitializedChat, setHasInitializedChat] = useState(false)
-  
-  useEffect(() => {
-    // Only reset when chat transitions from closed to open for the first time
-    if (isChatOpen && !hasInitializedChat) {
-      console.log("🔄 Chat opened for first time - RESETTING MAIN INTERFACE STATES")
-      setHasInitializedChat(true)
-
-      // Reset speech recognition states immediately
-      speechActions.resetStates()
-
-      // Reset processing flags
-      isProcessingVoiceQueryRef.current = false
-
-      // Reset initialization flags - but don't reset hasPlayedIntroRef here
-      initializationAttemptedRef.current = false
-
-      console.log("✅ Main interface states reset for new chat session")
-    } else if (!isChatOpen) {
-      // Reset the initialization flag when chat closes
-      setHasInitializedChat(false)
-    }
-  }, [isChatOpen, hasInitializedChat, speechActions])
-
-  // Disable main speech recognition when chat is open OR voice input is active
-  useEffect(() => {
-    if (isChatOpen || isVoiceInputActive) {
-      console.log("🔇 Chat is open or voice input active, ensuring main speech recognition is disabled")
-      if (speechState.listening) {
-        speechActions.stopListening()
-      }
-    }
-  }, [isChatOpen, isVoiceInputActive, speechState.listening, speechActions])
-
-  // Handle chat open/close
-  const handleChatToggle = useCallback(async () => {
-    console.log("🔘 Chat toggle clicked, current state:", isChatOpen)
-    
-    if (!isChatOpen) {
-      // Create session before opening chat if none exists
-      if (!currentSession?.id) {
-        console.log("📝 Creating session before opening chat");
+      
+      // Create session if needed (for activated mode)
+      if (isHarperActivated && !currentSession?.id) {
+        console.log("📝 Creating session for voice input");
         await startNewSession({
-          source: "chat_toggle",
+          source: "voice_orb_click",
           initial_query: null,
           timestamp: new Date().toISOString(),
         });
       }
+      
+      // Unlock audio on user interaction
+      if (unlockAudio) {
+        await unlockAudio();
+      }
     }
-    
-    setIsChatOpen(!isChatOpen)
-  }, [isChatOpen, currentSession?.id, startNewSession])
+  }, [isVoiceInputActive, isHarperSpeaking, isProcessing, isHarperActivated, currentSession?.id, startNewSession, unlockAudio])
 
-  const handleChatClose = useCallback(() => {
-    console.log("🔄 Closing chat and resetting states")
-    setIsChatOpen(false)
-
-    // End the session when closing chat
-    if (currentSession?.id) {
-      console.log("🔚 Ending session on chat close:", currentSession.id);
-      endSession();
+  // Disable main speech recognition when voice input is active OR when Harper is activated
+  useEffect(() => {
+    if (isVoiceInputActive || isHarperActivated) {
+      console.log("🔇 Voice input active or Harper activated, ensuring main speech recognition is disabled")
+      if (speechState.listening) {
+        speechActions.stopListening()
+      }
     }
+  }, [isVoiceInputActive, isHarperActivated, speechState.listening, speechActions])
 
-    // Additional cleanup when closing (redundant but safe)
-    speechActions.resetStates()
-    isProcessingVoiceQueryRef.current = false
-    hasPlayedIntroRef.current = false
-    initializationAttemptedRef.current = false
-    
-    // Reset voice input when actually closing chat
-    setIsVoiceInputActive(false)
-  }, [speechActions, currentSession?.id, endSession])
+  // Pre-cache intro message on page load
+  useEffect(() => {
+    const initializeVoice = async () => {
+      console.log("🔄 Initializing voice and pre-caching intro message...");
+      try {
+        // Pre-cache the intro message for instant playback
+        await preCacheIntroMessage();
+        console.log("✅ Intro message pre-cached successfully");
+      } catch (error) {
+        console.error("❌ Error pre-caching intro message:", error);
+      }
+    };
+
+    // Initialize voice after a short delay
+    const timeout = setTimeout(initializeVoice, 500);
+    return () => clearTimeout(timeout);
+  }, [preCacheIntroMessage]);
+
+  // Only start wake word detection when user manually clicks the voice button (before activation)
+  // No auto-start of listening
 
   if (speechState.permissionError) {
     return <ErrorBoundary error={speechState.permissionError} />
@@ -170,12 +196,12 @@ export default function Home() {
             </div>
             <h1 className="text-2xl font-bold text-white mb-2">System Locked</h1>
             <p className="text-gray-300 mb-6">
-              Connie is currently offline. Please wait for a conference administrator to enable the system.
+              Harper is currently offline. Please wait for a conference administrator to enable the system.
             </p>
             <div className="bg-yellow-900 border border-yellow-600 rounded-lg p-4 mb-6">
               <p className="text-sm text-yellow-200">
                 <strong>For Conference Staff:</strong><br />
-                Sign in to the admin panel to enable pedestal mode and activate Connie for attendees.
+                Sign in to the admin panel to enable pedestal mode and activate Harper for attendees.
               </p>
             </div>
           </div>
@@ -187,10 +213,9 @@ export default function Home() {
     );
   }
 
-  // Normal Mode UI with Integrated Chat
+  // Normal Mode UI - Voice Only
   return (
     <div className="relative min-h-screen w-screen overflow-x-hidden bg-black">
-      <ChatToggleButton isOpen={isChatOpen} onClick={handleChatToggle} />
       <AdminButton />
 
       <Waves
@@ -210,38 +235,31 @@ export default function Home() {
       {/* Main Content Container */}
       <div className="relative z-10 flex flex-col h-full min-h-screen">
         {/* Main Content */}
-        <div
-          className={`flex-1 flex flex-col items-center justify-center transition-all duration-700 ease-in-out px-4 ${
-            isChatOpen ? "transform scale-75 translate-y-4" : "py-2"
-          }`}
-        >
+        <div className="flex-1 flex flex-col items-center justify-center transition-all duration-700 ease-in-out px-4 py-2">
           <div className="flex flex-col items-center justify-center gap-4">
             <div className="text-center">
               <h1
-                className={`font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-500 to-blue-400 transition-all duration-700 ${
-                  isChatOpen ? "text-4xl sm:text-5xl md:text-6xl" : "text-5xl sm:text-6xl md:text-7xl"
-                }`}
+                className="font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-500 to-blue-400 transition-all duration-700 text-5xl sm:text-6xl md:text-7xl"
               >
-                CONNIE
+                Harper
               </h1>
               <p
-                className={`mt-2 text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 via-purple-300 to-blue-300 transition-all duration-700 ${
-                  isChatOpen ? "text-sm sm:text-base" : "text-lg sm:text-xl"
-                }`}
+                className="mt-2 text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 via-purple-300 to-blue-300 transition-all duration-700 text-lg sm:text-xl"
               >
                 Your AI Event Assistant
               </p>
             </div>
 
-            <div className={`transition-all duration-700 ${isChatOpen ? "scale-90" : "scale-100"}`}>
+            <div className="transition-all duration-700 scale-100">
               <VoiceOrb
-                listening={speechState.listening}
-                connieDetected={speechState.connieDetected}
+                listening={isHarperActivated ? isVoiceInputActive : false}
+                HarperDetected={speechState.HarperDetected}
                 isNavigating={speechState.isNavigating}
                 isVoiceInputActive={isVoiceInputActive}
                 onVoiceInputToggle={handleVoiceInputToggle}
-                isChatOpen={isChatOpen}
-                isConnieSpeaking={isConnieSpeaking}
+                isChatOpen={false}
+                isHarperSpeaking={isHarperSpeaking}
+                isHarperActivated={isHarperActivated}
               />
             </div>
 
@@ -262,44 +280,47 @@ export default function Home() {
             )}
 
             <div className="flex flex-col items-center gap-4">
-              {/* Control Buttons - Only show VoiceButton when chat is closed */}
-              <div className="flex flex-col items-center gap-4">
-                {!isChatOpen && (
-                  <>
-                    <VoiceButton
-                      listening={speechState.listening}
-                      isNavigating={speechState.isNavigating}
-                      connieDetected={speechState.connieDetected}
-                      onToggle={speechActions.toggleListening}
-                    />
-                  </>
-                )}
-              </div>
-
-              {!isChatOpen }
-
-              {/* Instructions for chat mode */}
-              {isChatOpen}
+              {/* Control Buttons - Only show before Harper is activated */}
+              {!isHarperActivated && (
+                <div className="flex flex-col items-center gap-4">
+                  <VoiceButton
+                    listening={speechState.listening}
+                    isNavigating={speechState.isNavigating}
+                    HarperDetected={speechState.HarperDetected}
+                    onToggle={speechActions.toggleListening}
+                  />
+                </div>
+              )}
             </div>
           </div>
         </div>
-
-        {/* Chat Interface - Much higher positioning and smaller */}
-        {isChatOpen && (
-          <div className="relative z-20 flex-shrink-0 p-4 pb-4">
-            {/* Compact Chat Component - Smaller height */}
-            <div className="h-72 max-h-[40vh] -mt-16">
-              <CompactChat 
-                onClose={handleChatClose}
-                sessionId={currentSession?.id || null}
-                isVoiceInputActive={isVoiceInputActive}
-                onVoiceInputToggle={handleVoiceInputToggle}
-                onSpeakingChange={handleSpeakingChange}
-              />
-            </div>
-          </div>
-        )}
       </div>
+      
+      {/* Voice Input Component - Only active when Harper is activated */}
+      {isHarperActivated && (
+        <VoiceInput
+          onSpeechEnd={async (text) => {
+            console.log("🎤 Voice input received:", text);
+            setVoiceTranscript("");
+            setIsVoiceInputActive(false);
+            
+            if (text.trim()) {
+              await processVoiceQuery(text, currentSession?.id);
+            }
+          }}
+          onTranscriptUpdate={(transcript, isInterim) => {
+            console.log("🎤 Voice transcript update:", transcript, "isInterim:", isInterim);
+            setVoiceTranscript(transcript);
+          }}
+          isListening={isVoiceInputActive}
+          onListeningChange={(listening) => {
+            if (!listening && isVoiceInputActive) {
+              setIsVoiceInputActive(false);
+              setVoiceTranscript("");
+            }
+          }}
+        />
+      )}
     </div>
   )
 }

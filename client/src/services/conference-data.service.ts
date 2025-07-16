@@ -2,19 +2,36 @@
 import { ConferenceStorageService } from '@/lib/supabase/chatStorage';
 import { Speaker, Session } from '@/types/conference.types';
 
+// Module-level cache to persist across instances
+let globalSpeakers: Speaker[] = [];
+let globalSessions: Session[] = [];
+let globalLastDataFetch: number = 0;
+const globalDataFreshDuration: number = 10 * 60 * 1000; // 10 minutes (increased for better caching)
+
 export class ConferenceDataService {
   private speakers: Speaker[] = [];
   private sessions: Session[] = [];
   private lastDataFetch: number = 0;
-  private readonly dataFreshDuration: number = 5 * 60 * 1000; // 5 minutes
+  private readonly dataFreshDuration: number = 10 * 60 * 1000; // 10 minutes
 
   /**
-   * Fetch fresh conference data from Supabase
+   * Fetch fresh conference data from Supabase with global caching
    */
   async ensureConferenceData(): Promise<void> {
     const now = Date.now();
     
+    // Check global cache first (module-level persistence)
+    if (now - globalLastDataFetch < globalDataFreshDuration && globalSpeakers.length > 0) {
+      console.log('🚀 Using cached conference data (global cache hit)');
+      this.speakers = globalSpeakers;
+      this.sessions = globalSessions;
+      this.lastDataFetch = globalLastDataFetch;
+      return;
+    }
+    
+    // Check instance cache
     if (now - this.lastDataFetch < this.dataFreshDuration && this.speakers.length > 0) {
+      console.log('🚀 Using cached conference data (instance cache hit)');
       return;
     }
 
@@ -26,9 +43,14 @@ export class ConferenceDataService {
         ConferenceStorageService.getAllSessions()
       ]);
 
+      // Update both instance and global cache
       this.speakers = speakersResult || [];
       this.sessions = sessionsResult || [];
       this.lastDataFetch = now;
+      
+      globalSpeakers = this.speakers;
+      globalSessions = this.sessions;
+      globalLastDataFetch = now;
 
       console.log(`✅ Conference Data Service loaded ${this.speakers.length} speakers and ${this.sessions.length} sessions`);
       
