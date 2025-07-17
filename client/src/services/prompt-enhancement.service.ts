@@ -19,9 +19,15 @@ export class PromptEnhancementService {
   private async initializeVenueLookupIfNeeded() {
     if (!this.venueLookupInitialized) {
       console.log('⚡ Initializing venue lookup (lazy loading)...');
-      this.venueLookup = await VenueLookupService.getInstance();
-      this.venueLookupInitialized = true;
-      console.log('✅ Venue lookup initialized');
+      try {
+        this.venueLookup = await VenueLookupService.getInstance();
+        this.venueLookupInitialized = true;
+        console.log('✅ Venue lookup initialized');
+      } catch (error) {
+        console.log('⚠️ Failed to initialize venue lookup:', error);
+        this.venueLookupInitialized = true; // Mark as attempted to avoid retry
+        this.venueLookup = null;
+      }
     }
   }
 
@@ -69,7 +75,8 @@ export class PromptEnhancementService {
           }
         }
       } catch (error) {
-        console.log('⚠️ Venue lookup failed, continuing without venue data');
+        console.log('⚠️ Venue lookup failed, continuing without venue data:', error);
+        // Don't rethrow the error - continue with basic prompt
       }
     } else {
       console.log('⚡ Skipping venue lookup - not a venue query');
