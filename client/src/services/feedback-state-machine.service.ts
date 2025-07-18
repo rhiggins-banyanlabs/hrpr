@@ -7,6 +7,7 @@ export class FeedbackStateMachine {
   private config: FeedbackConfig;
   private transitions: Map<string, FeedbackTransition> = new Map();
   private stateChangeCallbacks: ((newState: FeedbackState, oldState: FeedbackState) => void)[] = [];
+  private feedbackWasProvided: boolean = false; // Track if feedback was actually provided
 
   constructor(config: FeedbackConfig = DEFAULT_FEEDBACK_CONFIG) {
     this.config = config;
@@ -112,6 +113,11 @@ export class FeedbackStateMachine {
     return this.config;
   }
 
+  // Check if feedback was provided in this session
+  wasFeedbackProvided(): boolean {
+    return this.feedbackWasProvided;
+  }
+
   // Get the appropriate message for current state
   getStateMessage(): string | null {
     switch (this.currentState) {
@@ -122,7 +128,12 @@ export class FeedbackStateMachine {
       case FeedbackState.COLLECTING_FEEDBACK:
         return this.config.messages.requestFeedback;
       case FeedbackState.THANKING_USER:
-        return this.config.messages.thankYou;
+        // Return appropriate message based on whether feedback was actually provided
+        if (this.feedbackWasProvided) {
+          return this.config.messages.thankYou;
+        } else {
+          return this.config.messages.goodbye;
+        }
       case FeedbackState.IDLE:
         // Special case - return ready message when transitioning back to IDLE from questions
         return this.config.messages.readyToHelp;
@@ -170,6 +181,12 @@ export class FeedbackStateMachine {
     const oldState = this.currentState;
     this.currentState = transition.to;
 
+    // Track if feedback was actually provided
+    if (oldState === FeedbackState.COLLECTING_FEEDBACK && trigger === 'user_response') {
+      this.feedbackWasProvided = true;
+      console.log('✅ Feedback was provided by user');
+    }
+
     console.log(`Feedback state transition: ${oldState} -> ${this.currentState} (trigger: ${trigger})`);
 
     // Notify callbacks
@@ -194,6 +211,7 @@ export class FeedbackStateMachine {
   // Reset state machine
   reset() {
     this.currentState = FeedbackState.IDLE;
+    this.feedbackWasProvided = false; // Reset feedback tracking
     console.log('Feedback state machine reset to IDLE');
   }
 
