@@ -41,9 +41,9 @@ export interface FeedbackConfig {
 }
 
 export const DEFAULT_FEEDBACK_CONFIG: FeedbackConfig = {
-  initialSilenceTimeout: 3000,
-  feedbackSilenceTimeout: 10000, // 10 seconds for feedback collection
-  moreQuestionsTimeout: 10000, // Increased to 10 seconds for more questions
+  initialSilenceTimeout: 5000, // 5 seconds to account for API latency
+  feedbackSilenceTimeout: 15000, // 15 seconds for feedback collection
+  moreQuestionsTimeout: 20000, // 20 seconds to allow for more natural conversation and API latency
   messages: {
     moreQuestions: "Do you have any more questions for me?",
     readyToHelp: "I am ready to answer all your conference needs!",

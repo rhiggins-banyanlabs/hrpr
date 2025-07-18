@@ -374,14 +374,15 @@ export const useVoiceChat = ({
   }, [sessionId, onSessionReset, stopSilenceDetection]);
 
   // Start silence detection with given timeout
-  const startSilenceDetection = useCallback((timeout: number) => {
+  const startSilenceDetection = useCallback((timeout: number, customCallback?: () => void) => {
     stopSilenceDetection();
     
     silenceDetectorRef.current = createSilenceDetector(
       timeout,
-      () => {
-        // Silence detected - trigger appropriate transition
+      customCallback || (() => {
+        // Default silence detected behavior - trigger appropriate transition
         const currentState = feedbackStateMachine.getCurrentState();
+        console.log(`🔇 Silence timeout triggered in state: ${currentState}`);
         
         if (currentState === FeedbackState.WAITING_FOR_SILENCE) {
           feedbackStateMachine.transition('silence');
@@ -389,11 +390,15 @@ export const useVoiceChat = ({
           console.log('⏰ More questions timeout - user didn\'t respond, assuming done');
           // Don't set satisfaction here - let it remain null for timeout scenario
           feedbackStateMachine.transition('timeout');
+        } else if (currentState === FeedbackState.ASKING_SATISFACTION) {
+          console.log('⏰ Satisfaction timeout - user didn\'t respond, assuming satisfied');
+          userSatisfactionRef.current = true; // Assume satisfied if no response
+          feedbackStateMachine.transition('timeout');
         } else if (currentState === FeedbackState.COLLECTING_FEEDBACK) {
           console.log('📝 Feedback collection timed out - no user input received');
           feedbackStateMachine.transition('timeout');
         }
-      },
+      }),
       () => {
         // Activity detected - reset timer
         console.log('🎤 Activity detected, resetting silence timer');
@@ -401,7 +406,7 @@ export const useVoiceChat = ({
     );
     
     silenceDetectorRef.current.start();
-  }, [stopSilenceDetection]);
+  }, [stopSilenceDetection, isSpeaking]);
 
   // Handle feedback state changes
   const handleFeedbackStateChange = useCallback(async (newState: FeedbackState, oldState: FeedbackState) => {
@@ -409,11 +414,20 @@ export const useVoiceChat = ({
     
     // Helper function to start silence detection after TTS completes
     const startSilenceDetectionAfterSpeech = (timeout: number) => {
-      // Wait a bit longer after TTS completes before starting silence detection
-      setTimeout(() => {
-        console.log(`🔇 Starting silence detection (${timeout}ms) after TTS completed`);
-        startSilenceDetection(timeout);
-      }, 1000); // 1 second buffer after TTS
+      // Wait for TTS to actually complete before starting silence detection
+      const startDetection = () => {
+        // Only start if we're not currently speaking
+        if (!isSpeaking) {
+          console.log(`🔇 Starting silence detection (${timeout}ms) after TTS completed`);
+          startSilenceDetection(timeout);
+        } else {
+          // If still speaking, wait a bit longer
+          setTimeout(startDetection, 500);
+        }
+      };
+      
+      // Add a 2-second buffer after TTS to ensure natural conversation flow
+      setTimeout(startDetection, 2000);
     };
     
     if (message && speakText && !isProcessingRef.current) {
@@ -437,6 +451,10 @@ export const useVoiceChat = ({
         
       case FeedbackState.ASKING_MORE_QUESTIONS:
         startSilenceDetectionAfterSpeech(feedbackStateMachine.getConfig().moreQuestionsTimeout);
+        break;
+        
+      case FeedbackState.ASKING_SATISFACTION:
+        startSilenceDetectionAfterSpeech(feedbackStateMachine.getConfig().feedbackSilenceTimeout);
         break;
         
       case FeedbackState.COLLECTING_FEEDBACK:
@@ -510,12 +528,19 @@ export const useVoiceChat = ({
       
       if (intent === 'yes') {
         feedbackStateMachine.transition('user_yes');
-        return; // Ready to help message will be spoken by state handler
+        // Don't return here - continue with normal query processing since user likely has a question
       } else if (intent === 'no') {
         feedbackStateMachine.transition('user_no');
         return; // Satisfaction question will be spoken by state handler
+      } else {
+        // User asked a new question instead of yes/no - treat as implicit "yes"
+        console.log('🔄 User asked new question while in ASKING_MORE_QUESTIONS - treating as implicit yes');
+        feedbackStateMachine.transition('user_yes');
+        // Continue with normal query processing
       }
-      // If neither yes nor no, fall through to normal processing
+    } else if (currentState === FeedbackState.RESETTING_SESSION) {
+      console.log('🔄 Session is resetting - ignoring input:', text);
+      return; // Don't process during reset
     } else if (currentState === FeedbackState.ASKING_SATISFACTION) {
       const intent = FeedbackStateMachine.detectUserIntent(text);
       console.log(`🔄 ASKING_SATISFACTION - intent detected: ${intent}`);
@@ -543,13 +568,22 @@ export const useVoiceChat = ({
     conversationCountRef.current++;
     await processVoiceQuery(text);
     
-    // Only start feedback flow after user has asked at least one question
-    // (not after Harper's introduction)
-    if (currentState === FeedbackState.IDLE && conversationCountRef.current > 0) {
-      console.log(`🔄 Starting feedback flow - conversation count: ${conversationCountRef.current}`);
-      feedbackStateMachine.transition('user_response');
-    } else {
-      console.log(`🔄 Not starting feedback flow - state: ${currentState}, count: ${conversationCountRef.current}`);
+    // REMOVED: Don't start feedback flow immediately after every question
+    // The feedback flow should only be initiated naturally through silence detection
+    // or when user explicitly indicates they're done. This prevents premature resets
+    // during active conversations.
+    console.log(`🔄 Question processed - state: ${feedbackStateMachine.getCurrentState()}, count: ${conversationCountRef.current}`);
+    
+    // Start a longer silence detection period to naturally trigger feedback flow
+    // only if user goes silent for an extended period (indicating they might be done)
+    if (feedbackStateMachine.getCurrentState() === FeedbackState.IDLE && conversationCountRef.current > 0 && !isInFeedbackFlowRef.current) {
+      console.log('🔇 Starting extended silence detection to detect end of conversation...');
+      startSilenceDetection(10000, () => {
+        // Custom callback for extended silence - start feedback flow
+        console.log('🔇 Extended silence detected - user appears to be done, starting feedback flow');
+        isInFeedbackFlowRef.current = true;
+        feedbackStateMachine.transition('user_response');
+      });
     }
   }, [processVoiceQuery]);
 

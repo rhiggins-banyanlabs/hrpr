@@ -45,14 +45,14 @@ export class FeedbackStateMachine {
       // Timeout on asking more questions - assume user is done, say farewell
       {
         from: FeedbackState.ASKING_MORE_QUESTIONS,
-        to: FeedbackState.RESETTING_SESSION,
+        to: FeedbackState.THANKING_USER,
         trigger: 'timeout'
       },
       
-      // User satisfied - end session
+      // User satisfied - thank them and end session
       {
         from: FeedbackState.ASKING_SATISFACTION,
-        to: FeedbackState.RESETTING_SESSION,
+        to: FeedbackState.THANKING_USER,
         trigger: 'user_yes'
       },
       
@@ -61,6 +61,13 @@ export class FeedbackStateMachine {
         from: FeedbackState.ASKING_SATISFACTION,
         to: FeedbackState.COLLECTING_FEEDBACK,
         trigger: 'user_no'
+      },
+      
+      // Timeout on satisfaction question - assume user is satisfied
+      {
+        from: FeedbackState.ASKING_SATISFACTION,
+        to: FeedbackState.THANKING_USER,
+        trigger: 'timeout'
       },
       
       // Feedback provided or timeout
@@ -122,7 +129,7 @@ export class FeedbackStateMachine {
       case FeedbackState.RESETTING_SESSION:
         // Don't return a message for RESETTING_SESSION - it's just a processing state
         // The actual farewell message is handled by THANKING_USER or timeout farewell
-        return this.config.messages.goodbye;
+        return null;
       default:
         return null;
     }
@@ -195,23 +202,38 @@ export class FeedbackStateMachine {
     const lowerText = text.toLowerCase().trim();
     console.log(`🔍 Intent detection for: "${lowerText}"`);
     
-    // Common yes responses
-    const yesPatterns = ['yes', 'yeah', 'yep', 'sure', 'ok', 'okay', 'correct', 'right', 'absolutely', 'definitely', 'of course', 'please', 'do', 'yup'];
+    // Use word boundaries to avoid false matches (like "no" in "keynote")
+    const createWordBoundaryRegex = (word: string) => new RegExp(`\\b${word}\\b`, 'i');
     
-    // Common no responses  
-    const noPatterns = ['no', 'nope', 'not', 'negative', 'nah', 'wrong', 'incorrect', 'don\'t', 'dont', 'stop', 'enough', 'done', 'finished'];
+    // Common yes responses - check for exact word matches
+    const yesPatterns = [
+      'yes', 'yeah', 'yep', 'sure', 'ok', 'okay', 'correct', 'right', 
+      'absolutely', 'definitely', 'of course', 'please', 'yup'
+    ];
     
-    // Check for yes
-    const yesMatch = yesPatterns.find(pattern => lowerText.includes(pattern));
+    // Common no responses - check for exact word matches
+    const noPatterns = [
+      'no', 'nope', 'negative', 'nah', 'wrong', 'incorrect', 
+      'stop', 'enough', 'done', 'finished'
+    ];
+    
+    // Check for yes - use word boundaries
+    const yesMatch = yesPatterns.find(pattern => createWordBoundaryRegex(pattern).test(lowerText));
     if (yesMatch) {
       console.log(`✅ Intent: YES (matched pattern: "${yesMatch}")`);
       return 'yes';
     }
     
-    // Check for no
-    const noMatch = noPatterns.find(pattern => lowerText.includes(pattern));
+    // Check for no - use word boundaries
+    const noMatch = noPatterns.find(pattern => createWordBoundaryRegex(pattern).test(lowerText));
     if (noMatch) {
       console.log(`❌ Intent: NO (matched pattern: "${noMatch}")`);
+      return 'no';
+    }
+    
+    // Special case: if text starts with "no " or is exactly "no", it's a no
+    if (lowerText === 'no' || lowerText.startsWith('no ')) {
+      console.log(`❌ Intent: NO (starts with "no")`);
       return 'no';
     }
     

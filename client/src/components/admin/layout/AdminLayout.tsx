@@ -11,13 +11,15 @@ import ConferenceTab from '../features/conference/ConferenceTab'
 import ChatSessionsTab from '../features/chat-sessions/ChatSessionsTab'
 import DatabaseTab from '../features/database/DatabaseTab'
 import PedestalModeTab from '../features/pedestal/PedestalModeTab'
-import { BarChart3, Calendar, MessageSquare, Database, Monitor, LogOut } from 'lucide-react'
+import { FeedbackAnalytics } from '../features/feedback/FeedbackAnalytics'
+import { BarChart3, Calendar, MessageSquare, Database, Monitor, LogOut, ThumbsUp } from 'lucide-react'
 
 const tabs: TabItem[] = [
   { id: 'pedestal', label: 'Pedestal Mode', icon: <Monitor className="h-4 w-4" /> },
   { id: 'analytics', label: 'Analytics', icon: <BarChart3 className="h-4 w-4" /> },
   { id: 'agenda', label: 'Conference Agenda', icon: <Calendar className="h-4 w-4" /> },
   { id: 'chats', label: 'Chat Sessions', icon: <MessageSquare className="h-4 w-4" /> },
+  { id: 'feedback', label: 'Session Feedback', icon: <ThumbsUp className="h-4 w-4" /> },
   { id: 'database', label: 'Database', icon: <Database className="h-4 w-4" /> }
 ]
 
@@ -45,6 +47,8 @@ export default function AdminLayout() {
         return <ConferenceTab />
       case 'chats':
         return <ChatSessionsTab />
+      case 'feedback':
+        return <FeedbackAnalytics />
       case 'database':
         return <DatabaseTab />
       default:
