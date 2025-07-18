@@ -6,6 +6,7 @@ import { feedbackStateMachine, FeedbackStateMachine } from '@/services/feedback-
 import { feedbackStorage } from '@/services/feedback-storage.service';
 import { createSilenceDetector, SilenceDetectionService } from '@/services/silence-detection.service';
 import { FeedbackState } from '@/types/feedback.types';
+import { latencyTracker } from '@/services/latency-tracker.service';
 // import { StreamingTTSService } from '@/services/streaming-tts.service'; // Removed for performance
 
 interface UseVoiceChatProps {
@@ -143,8 +144,10 @@ export const useVoiceChat = ({
       // Create new abort controller for this request
       abortControllerRef.current = new AbortController();
 
-      // Get AI response from API route
+      // Get AI response from API route with latency tracking
       console.log('🤖 Getting AI response...');
+      const apiStartTime = performance.now();
+      
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
@@ -161,6 +164,10 @@ export const useVoiceChat = ({
       }
 
       const aiResponse = await response.json();
+      const apiEndTime = performance.now();
+      
+      // Track API response time
+      latencyTracker.trackApiResponse(apiStartTime, apiEndTime);
       
       if (!aiResponse.success || !aiResponse.response) {
         throw new Error(aiResponse.error || 'No response from AI');
@@ -215,19 +222,37 @@ export const useVoiceChat = ({
             }
           }
           
-          // Now play the main AI response
+          // Now play the main AI response with latency tracking
+          const ttsStartTime = performance.now();
           const audioResult = await speakText(aiResponse.response);
+          const ttsEndTime = performance.now();
+          
+          // Track TTS generation time
+          latencyTracker.trackTTSGeneration(ttsStartTime, ttsEndTime);
           
           // Track the current audio to prevent overlaps
           if (audioResult && audioResult.audio) {
             currentAudioRef.current = audioResult.audio;
             
-            // Wait for audio to actually complete
+            // Wait for audio to actually complete and track playback time
+            const audioStartTime = performance.now();
             await new Promise<void>((resolve) => {
               const audio = audioResult.audio;
               
               const handleEnded = () => {
+                const audioEndTime = performance.now();
                 console.log('🔊 Speech completed');
+                
+                // Track audio playback time
+                latencyTracker.trackAudioPlayback(audioStartTime, audioEndTime);
+                
+                // Track complete interaction
+                latencyTracker.trackCompleteInteraction(
+                  apiEndTime - apiStartTime,
+                  ttsEndTime - ttsStartTime,
+                  audioEndTime - audioStartTime
+                );
+                
                 audio.removeEventListener('ended', handleEnded);
                 currentAudioRef.current = null;
                 resolve();
@@ -237,7 +262,12 @@ export const useVoiceChat = ({
               
               // Fallback timeout
               setTimeout(() => {
+                const audioEndTime = performance.now();
                 console.log('🔊 Speech timeout - assuming completed');
+                
+                // Track audio playback time even on timeout
+                latencyTracker.trackAudioPlayback(audioStartTime, audioEndTime);
+                
                 audio.removeEventListener('ended', handleEnded);
                 currentAudioRef.current = null;
                 resolve();
@@ -655,9 +685,18 @@ export const useVoiceChat = ({
         // Now start silence detection after a short delay
         setTimeout(() => {
           if (feedbackStateMachine.getCurrentState() === FeedbackState.IDLE && !isInFeedbackFlowRef.current) {
-            startSilenceDetection(10000, () => {
+            // Use dynamic timeout for initial silence detection
+            const config = feedbackStateMachine.getConfig();
+            const dynamicTimeout = latencyTracker.calculateDynamicTimeout(
+              6000, // Base 6 seconds as requested
+              config.latencyBufferMultiplier,
+              config.minTimeout,
+              config.maxTimeout
+            );
+            
+            startSilenceDetection(dynamicTimeout, () => {
               // Custom callback for extended silence - start feedback flow
-              console.log('🔇 Extended silence detected - user appears to be done, starting feedback flow');
+              console.log(`🔇 Extended silence detected after ${dynamicTimeout}ms - user appears to be done, starting feedback flow`);
               isInFeedbackFlowRef.current = true;
               feedbackStateMachine.transition('user_response');
             });

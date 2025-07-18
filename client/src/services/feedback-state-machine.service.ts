@@ -1,6 +1,7 @@
 // Feedback conversation state machine service
 
 import { FeedbackState, FeedbackTransition, FeedbackConfig, DEFAULT_FEEDBACK_CONFIG } from '@/types/feedback.types';
+import { latencyTracker } from './latency-tracker.service';
 
 export class FeedbackStateMachine {
   private currentState: FeedbackState = FeedbackState.IDLE;
@@ -146,17 +147,34 @@ export class FeedbackStateMachine {
     }
   }
 
-  // Get timeout for current state
+  // Get timeout for current state (with dynamic latency adjustment)
   getStateTimeout(): number | null {
+    const config = this.config;
+    
     switch (this.currentState) {
       case FeedbackState.WAITING_FOR_SILENCE:
-        return this.config.initialSilenceTimeout;
+        return latencyTracker.calculateDynamicTimeout(
+          config.initialSilenceTimeout,
+          config.latencyBufferMultiplier,
+          config.minTimeout,
+          config.maxTimeout
+        );
       case FeedbackState.ASKING_MORE_QUESTIONS:
-        return this.config.moreQuestionsTimeout;
+        return latencyTracker.calculateDynamicTimeout(
+          config.moreQuestionsTimeout,
+          config.latencyBufferMultiplier,
+          config.minTimeout,
+          config.maxTimeout
+        );
       case FeedbackState.COLLECTING_FEEDBACK:
-        return this.config.feedbackSilenceTimeout;
+        return latencyTracker.calculateDynamicTimeout(
+          config.feedbackSilenceTimeout,
+          config.latencyBufferMultiplier,
+          config.minTimeout,
+          config.maxTimeout
+        );
       case FeedbackState.THANKING_USER:
-        return 2000; // 2 seconds before reset
+        return 2000; // Fixed 2 seconds before reset (no latency adjustment needed)
       default:
         return null;
     }

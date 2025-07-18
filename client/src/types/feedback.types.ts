@@ -26,10 +26,21 @@ export interface FeedbackTransition {
   action?: () => Promise<void>;
 }
 
+export interface LatencyMetrics {
+  apiResponseTime: number; // ms
+  ttsGenerationTime: number; // ms
+  audioPlaybackTime: number; // ms
+  averageLatency: number; // ms
+}
+
 export interface FeedbackConfig {
   initialSilenceTimeout: number; // 3 seconds after answer
   feedbackSilenceTimeout: number; // 5 seconds during feedback
   moreQuestionsTimeout: number; // 5 seconds after asking "more questions"
+  // Latency adjustment settings
+  latencyBufferMultiplier: number; // Multiplier for average latency (e.g., 1.5x)
+  minTimeout: number; // Minimum timeout regardless of latency
+  maxTimeout: number; // Maximum timeout to prevent excessive waits
   messages: {
     moreQuestions: string;
     readyToHelp: string;
@@ -41,9 +52,13 @@ export interface FeedbackConfig {
 }
 
 export const DEFAULT_FEEDBACK_CONFIG: FeedbackConfig = {
-  initialSilenceTimeout: 5000, // 5 seconds to account for API latency
+  initialSilenceTimeout: 5000, // 5 seconds base timeout
   feedbackSilenceTimeout: 15000, // 15 seconds for feedback collection
-  moreQuestionsTimeout: 20000, // 20 seconds to allow for more natural conversation and API latency
+  moreQuestionsTimeout: 20000, // 20 seconds base timeout
+  // Latency adjustment settings
+  latencyBufferMultiplier: 1.5, // Add 50% buffer on top of measured latency
+  minTimeout: 3000, // Minimum 3 seconds regardless of latency
+  maxTimeout: 30000, // Maximum 30 seconds to prevent excessive waits
   messages: {
     moreQuestions: "Do you have any more questions for me?",
     readyToHelp: "I am ready to answer all your conference needs!",
