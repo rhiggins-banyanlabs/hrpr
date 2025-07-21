@@ -18,16 +18,11 @@ export class FeedbackStateMachine {
   private initializeTransitions() {
     // Define all valid state transitions
     const transitions: FeedbackTransition[] = [
-      // After answering, wait for silence then ask if more questions
+      // After answering, immediately ask if more questions
       {
         from: FeedbackState.IDLE,
-        to: FeedbackState.WAITING_FOR_SILENCE,
-        trigger: 'user_response'
-      },
-      {
-        from: FeedbackState.WAITING_FOR_SILENCE,
         to: FeedbackState.ASKING_MORE_QUESTIONS,
-        trigger: 'silence'
+        trigger: 'user_response'
       },
       
       // User says YES to more questions
@@ -44,10 +39,10 @@ export class FeedbackStateMachine {
         trigger: 'user_no'
       },
       
-      // Timeout on asking more questions - assume user is done, say farewell
+      // Timeout on asking more questions - assume user is done, ask satisfaction
       {
         from: FeedbackState.ASKING_MORE_QUESTIONS,
-        to: FeedbackState.THANKING_USER,
+        to: FeedbackState.ASKING_SATISFACTION,
         trigger: 'timeout'
       },
       

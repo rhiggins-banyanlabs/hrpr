@@ -450,9 +450,7 @@ export const useVoiceChat = ({
         const currentState = feedbackStateMachine.getCurrentState();
         console.log(`🔇 Silence timeout triggered in state: ${currentState}`);
         
-        if (currentState === FeedbackState.WAITING_FOR_SILENCE) {
-          feedbackStateMachine.transition('silence');
-        } else if (currentState === FeedbackState.ASKING_MORE_QUESTIONS) {
+        if (currentState === FeedbackState.ASKING_MORE_QUESTIONS) {
           console.log('⏰ More questions timeout - user didn\'t respond, assuming done');
           // Don't set satisfaction here - let it remain null for timeout scenario
           feedbackStateMachine.transition('timeout');
@@ -543,10 +541,6 @@ export const useVoiceChat = ({
 
     // Handle state-specific logic AFTER TTS completes
     switch (newState) {
-      case FeedbackState.WAITING_FOR_SILENCE:
-        startSilenceDetectionAfterSpeech(feedbackStateMachine.getConfig().initialSilenceTimeout);
-        break;
-        
       case FeedbackState.ASKING_MORE_QUESTIONS:
         startSilenceDetectionAfterSpeech(feedbackStateMachine.getConfig().moreQuestionsTimeout);
         break;
@@ -680,28 +674,16 @@ export const useVoiceChat = ({
           await new Promise(resolve => setTimeout(resolve, 500));
         }
         
-        console.log('🔇 Harper finished speaking - starting extended silence detection...');
+        console.log('🔇 Harper finished speaking - immediately starting feedback flow...');
         
-        // Now start silence detection after a short delay
+        // Immediately trigger feedback flow after Harper finishes speaking
         setTimeout(() => {
           if (feedbackStateMachine.getCurrentState() === FeedbackState.IDLE && !isInFeedbackFlowRef.current) {
-            // Use dynamic timeout for initial silence detection
-            const config = feedbackStateMachine.getConfig();
-            const dynamicTimeout = latencyTracker.calculateDynamicTimeout(
-              6000, // Base 6 seconds as requested
-              config.latencyBufferMultiplier,
-              config.minTimeout,
-              config.maxTimeout
-            );
-            
-            startSilenceDetection(dynamicTimeout, () => {
-              // Custom callback for extended silence - start feedback flow
-              console.log(`🔇 Extended silence detected after ${dynamicTimeout}ms - user appears to be done, starting feedback flow`);
-              isInFeedbackFlowRef.current = true;
-              feedbackStateMachine.transition('user_response');
-            });
+            console.log('🔄 Immediately starting feedback flow - asking more questions');
+            isInFeedbackFlowRef.current = true;
+            feedbackStateMachine.transition('user_response');
           }
-        }, 1000); // 1 second delay after Harper finishes speaking
+        }, 500); // Very short delay (0.5 seconds) to ensure TTS completes
       };
       
       // Start waiting asynchronously
