@@ -1,4 +1,4 @@
-// hooks/useChat.ts - OPTIMIZED VERSION without console logs or typing animation
+// hooks/useChat.ts - COMBINED VERSION with typing effects and AI Router
 import { useState, useRef, useCallback } from 'react';
 import { ChatStorageService } from '@/lib/supabase/chatStorage';
 import { IntentDetectorService } from '@/services/intent-detector.service';
@@ -42,6 +42,9 @@ export const useChat = ({
   const isProcessingRef = useRef(false);
   const mountedRef = useRef(true);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const typingUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Remove excessive logging for performance
 
   // Categorize questions for analytics
   const categorizeQuestion = (question: string): string => {
@@ -69,10 +72,12 @@ export const useChat = ({
         category: categorizeQuestion(question),
         timestamp: new Date().toISOString()
       });
+      // User question cached for analytics
     } catch (error) {
-      // Silently fail
+      console.error('❌ Error caching user question:', error);
     }
   };
+
 
   // Simplified voice playback without typing animation
   const playVoiceResponse = async (text: string, fillerAudioPromise?: Promise<any> | null) => {
@@ -110,6 +115,7 @@ export const useChat = ({
       await speakText(text);
       
     } catch (voiceError) {
+      console.error('Voice error:', voiceError);
       setIsBotThinking(false);
     }
   };
@@ -117,10 +123,13 @@ export const useChat = ({
   // Initialize chat with Harper's intro message
   const initializeChat = useCallback(async () => {
     if (!sessionId) {
+      console.log('❌ No session ID provided for chat initialization');
       return;
     }
 
     try {
+      console.log('🎯 Initializing chat for session:', sessionId);
+      
       const introMessage: Message = {
         id: `intro-${Date.now()}`,
         text: "Hi! I'm Harper, your conference assistant. How can I help you today?",
@@ -150,18 +159,25 @@ export const useChat = ({
               : msg
           ));
         }
+        
+        console.log('💾 Intro message saved to database');
       } catch (error) {
-        // Silently fail
+        console.warn('⚠️ Failed to save intro message:', error);
       }
 
     } catch (error) {
-      // Silently fail
+      console.error('❌ Error initializing chat:', error);
     }
   }, [sessionId]);
 
-  // Optimized sendMessage without console logs
-  const sendMessage = useCallback(async (text: string, isVoiceInput: boolean = false) => {
+  // Streaming version for faster responses
+  const sendMessageStreaming = useCallback(async (text: string, isVoiceInput: boolean = false) => {
+    console.log('🚀 ===== STREAMING SEND MESSAGE STARTED =====');
+    console.log('🚀 Message text:', text);
+    console.log('🚀 Session ID:', sessionId);
+    
     if (isProcessingRef.current || !text.trim() || !sessionId) {
+      console.log('⏹️ Skipping - already processing, empty text, or no session');
       return;
     }
 
@@ -193,6 +209,212 @@ export const useChat = ({
       setMessages(prevMessages => [...prevMessages, userMessage]);
       
       // Save user message to database
+      console.log('💾 Saving user message to database...');
+      try {
+        const savedUserMessage = await ChatStorageService.saveMessage(
+          sessionId,
+          'user',
+          userMessage.text,
+          {
+            isVoiceInput,
+            metadata: {
+              timestamp: new Date().toISOString(),
+              messageId: userMessage.id,
+              category: categorizeQuestion(text.trim())
+            }
+          }
+        );
+        
+        if (savedUserMessage) {
+          setMessages(prev => prev.map(msg => 
+            msg.id === userMessage.id 
+              ? { ...msg, id: savedUserMessage.id }
+              : msg
+          ));
+        }
+      } catch (saveError) {
+        console.error('❌ Error saving user message:', saveError);
+      }
+
+      // Show thinking dots
+      setIsBotThinking(true);
+
+      // Create new abort controller for this request
+      abortControllerRef.current = new AbortController();
+
+      // Create streaming TTS service instance
+      const { StreamingTTSService } = await import('@/services/streaming-tts.service');
+      const streamingTTS = new StreamingTTSService();
+      
+      // Start streaming request
+      const response = await fetch('/api/chat-stream', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ prompt: text }),
+        signal: abortControllerRef.current.signal
+      });
+
+      if (!response.ok) {
+        throw new Error(`Chat API request failed: ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('No response body');
+
+      let fullResponse = '';
+      let ttsStarted = false;
+      
+      // Hide thinking dots and show typing as soon as streaming starts
+      setIsBotThinking(false);
+      setIsBotTyping(true);
+      setTypingBotMsg('');
+      
+      // Read streaming response
+      const decoder = new TextDecoder();
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              
+              if (data.type === 'sentence') {
+                const sentence = data.content;
+                fullResponse += sentence + ' ';
+                
+                // Update typing display
+                setTypingBotMsg(fullResponse.trim());
+                
+                // Start TTS immediately with the full response so far
+                if (!ttsStarted) {
+                  ttsStarted = true;
+                  
+                  // Use the full text for TTS to ensure smooth playback
+                  streamingTTS.generateAndPlayStreaming(
+                    fullResponse.trim(),
+                    selectedVoice,
+                    () => console.log('🔊 TTS started'),
+                    () => {
+                      console.log('🔊 TTS completed');
+                      setIsBotTyping(false);
+                      setTypingBotMsg(null);
+                    }
+                  );
+                }
+              } else if (data.type === 'complete') {
+                fullResponse = data.fullText;
+                setTypingBotMsg(fullResponse);
+              } else if (data.type === 'error') {
+                throw new Error(data.error);
+              }
+            } catch (e) {
+              console.error('Error parsing streaming data:', e);
+            }
+          }
+        }
+      }
+
+      // Create bot message for UI
+      const botMessage: Message = {
+        id: `Harper-${Date.now()}`,
+        sender: "Harper",
+        text: fullResponse,
+        timestamp: new Date(),
+      };
+
+      // Add bot message to UI
+      setMessages(prevMessages => [...prevMessages, botMessage]);
+
+      // Save bot message to database
+      console.log('💾 Saving bot message to database...');
+      try {
+        await ChatStorageService.saveMessage(
+          sessionId,
+          'Harper',
+          botMessage.text,
+          {
+            selectedVoice,
+            metadata: {
+              timestamp: new Date().toISOString(),
+              messageId: botMessage.id,
+              streaming: true
+            }
+          }
+        );
+      } catch (saveError) {
+        console.error('❌ Error saving bot message:', saveError);
+      }
+
+    } catch (error: any) {
+      console.error('❌ Chat error:', error);
+      
+      if (error.name !== 'AbortError') {
+        const errorMessage = "I'm having trouble connecting. Please try again.";
+        setMessages(prevMessages => [...prevMessages, {
+          id: `error-${Date.now()}`,
+          sender: "Harper",
+          text: errorMessage,
+          timestamp: new Date(),
+        }]);
+      }
+    } finally {
+      isProcessingRef.current = false;
+      setIsLoading(false);
+      setIsBotThinking(false);
+      setIsBotTyping(false);
+      setTypingBotMsg(null);
+      setCurrentTypingText('');
+    }
+    
+    console.log('🏁 ===== STREAMING SEND MESSAGE COMPLETED =====');
+  }, [sessionId, selectedVoice, unlockAudio]);
+
+  // COMBINED sendMessage with typing effects AND AI Router
+  const sendMessage = useCallback(async (text: string, isVoiceInput: boolean = false) => {
+    // Send message with optimized performance
+    
+    if (isProcessingRef.current || !text.trim() || !sessionId) {
+      console.log('⏹️ Skipping - already processing, empty text, or no session');
+      return;
+    }
+
+    // Cancel any ongoing request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    isProcessingRef.current = true;
+    setIsLoading(true);
+    
+    if (unlockAudio) {
+      await unlockAudio();
+    }
+
+    try {
+      // Cache the user question for analytics
+      await cacheUserQuestion(text.trim());
+
+      // Create user message for UI
+      const userMessage: Message = {
+        id: `user-${Date.now()}`,
+        sender: "user",
+        text: text.trim(),
+        timestamp: new Date(),
+      };
+
+      // Add user message to UI immediately
+      setMessages(prevMessages => [...prevMessages, userMessage]);
+      
+      // Save user message to database
+      console.log('💾 Saving user message to database...');
       try {
         const savedUserMessage = await ChatStorageService.saveMessage(
           sessionId,
@@ -216,15 +438,19 @@ export const useChat = ({
               : msg
           ));
         }
+        
+        console.log('✅ User message saved to database');
       } catch (saveError) {
-        // Silently fail
+        console.error('❌ Error saving user message:', saveError);
       }
 
       // Get and play filler response immediately for better UX
       let fillerAudioPromise: Promise<any> | null = null;
       const fillerResponse = IntentDetectorService.getFillerResponse(text);
       if (fillerResponse && speakText) {
+        console.log('🎤 Playing immediate filler response:', fillerResponse);
         fillerAudioPromise = speakText(fillerResponse).catch(error => {
+          console.log('⚠️ Filler response TTS failed, continuing without filler:', error);
           return null;
         });
       }
@@ -256,7 +482,11 @@ export const useChat = ({
       if (!data.success || !data.response) {
         throw new Error(data.error || 'No response from OpenAI');
       }
+
+      console.log(`✅ OpenAI response received (${data.responseTime}ms, $${data.cost?.toFixed(4) || '0'})`);
+      console.log(`📊 Tokens used: ${data.tokensUsed.total} (${data.tokensUsed.input} input + ${data.tokensUsed.output} output)`);
       
+      // Use data.response instead of data.response
       const responseText = data.response;
 
       // Create bot message for UI
@@ -273,6 +503,7 @@ export const useChat = ({
       // Start TTS and database save in parallel for better performance
       const ttsPromise = playVoiceResponse(responseText, fillerAudioPromise);
       const dbPromise = (async () => {
+        console.log('💾 Saving bot message to database...');
         try {
           const savedBotMessage = await ChatStorageService.saveMessage(
             sessionId,
@@ -301,8 +532,10 @@ export const useChat = ({
                 : msg
             ));
           }
+          
+          console.log('✅ Bot message saved to database with metadata');
         } catch (saveError) {
-          // Silently fail
+          console.error('❌ Error saving bot message:', saveError);
         }
       })();
 
@@ -310,7 +543,10 @@ export const useChat = ({
       await Promise.all([ttsPromise, dbPromise]);
 
     } catch (error: any) {
+      console.error('❌ Error in sendMessage:', error);
+      
       if (error.name === 'AbortError') {
+        console.log('🚫 Request was cancelled');
         return;
       }
       
@@ -336,30 +572,40 @@ export const useChat = ({
       }
       isProcessingRef.current = false;
       abortControllerRef.current = null;
+      console.log('🏁 ===== SEND MESSAGE COMPLETED =====');
     }
   }, [sessionId, selectedVoice, speakText, unlockAudio]);
 
-  // Enhanced sendBotMessage with proper database saving
+  // Enhanced sendBotMessage with proper database saving and typing
   const sendBotMessage = useCallback(async (text: string, isIntro: boolean = false) => {
+    console.log('🤖 sendBotMessage called:', text.substring(0, 30));
+    console.log('🤖 Session ID:', sessionId);
+    console.log('🤖 Is intro message:', isIntro);
+  
     const botMsg: Message = {
       id: `bot-${Date.now()}`,
       sender: "Harper",
       text,
       timestamp: new Date(),
-      isIntro: isIntro
+      isIntro: isIntro  // ✅ Renamed for UI compatibility
     };
+  
+    console.log('🤖 Bot message created:', botMsg.id);
   
     // Play voice response
     await playVoiceResponse(text);
   
     // Add to UI messages
+    console.log('🤖 Adding message to UI...');
     setMessages(prevMessages => {
       const newMessages = [...prevMessages, botMsg];
+      console.log('🤖 Messages after adding:', newMessages.length);
       return newMessages;
     });
   
     // Save to database if session exists
     if (sessionId) {
+      console.log('💾 Saving bot message to database...');
       try {
         const savedBotMessage = await ChatStorageService.saveMessage(
           sessionId,
@@ -370,7 +616,7 @@ export const useChat = ({
             metadata: {
               timestamp: new Date().toISOString(),
               messageId: botMsg.id,
-              isIntroMessage: isIntro
+              isIntroMessage: isIntro  // ✅ Keep this for storage
             }
           }
         );
@@ -383,23 +629,40 @@ export const useChat = ({
               : msg
           ));
         }
+  
+        console.log('✅ Bot message saved to database');
       } catch (saveError) {
-        // Silently fail
+        console.error('❌ Error saving bot message:', saveError);
       }
+    } else {
+      console.warn('⚠️ No session ID - bot message will appear in UI but not be saved to database');
     }
   }, [sessionId, selectedVoice, speakText]);
   
+
   // Send intro message with proper tracking
   const sendIntroMessage = useCallback(() => {
+    console.log('🚀 sendIntroMessage called');
+    console.log('🚀 Session ID:', sessionId);
+    
     if (sessionId) {
+      console.log('🚀 ✅ Sending intro message');
+  
       const introText = "Hi! I'm Harper, your conference assistant. How can I help you today?";
+      
+      // Pass isIntro as metadata
       sendBotMessage(introText, true);
+    } else {
+      console.log('🚀 ❌ No session ID, skipping intro');
     }
   }, [sendBotMessage, sessionId]);
   
+
   // Handle voice input
   const handleVoiceInput = useCallback(async (transcript: string) => {
     if (!transcript.trim()) return;
+
+    console.log('🎤 Voice input received:', transcript);
 
     // Log voice input analytics
     try {
@@ -410,7 +673,7 @@ export const useChat = ({
         success: true
       });
     } catch (error) {
-      // Silently fail
+      console.warn('⚠️ Failed to log voice input:', error);
     }
 
     // Send as voice message
@@ -419,6 +682,7 @@ export const useChat = ({
 
   // Stop typing function
   const stopTyping = useCallback(() => {
+    console.log('🛑 Stopping typing effects');
     setIsBotTyping(false);
     setIsBotThinking(false);
     setTypingBotMsg(null);
@@ -431,7 +695,7 @@ export const useChat = ({
     isBotTyping,
     isBotThinking,
     typingBotMsg,
-    sendMessage,
+    sendMessage, // Use optimized non-streaming version
     sendBotMessage,
     sendIntroMessage,
     stopTyping,

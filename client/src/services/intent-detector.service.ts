@@ -89,7 +89,7 @@ export class IntentDetectorService {
       if (lowerQuery.includes('shop') || lowerQuery.includes('shopping')) {
         return "Let me find shopping areas near the conference";
       }
-      return "Let me check our venue recommendations for you";
+      return "Let me get that information for you";
     }
     
     // Conference schedule filler responses

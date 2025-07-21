@@ -181,10 +181,24 @@ export default function Orb({
     const container = ctnDom.current;
     if (!container) return;
 
-    const renderer = new Renderer({ alpha: true, premultipliedAlpha: false });
-    const gl = renderer.gl;
-    gl.clearColor(0, 0, 0, 0);
-    container.appendChild(gl.canvas);
+    let renderer: Renderer;
+    let gl: WebGLRenderingContext;
+    
+    try {
+      renderer = new Renderer({ alpha: true, premultipliedAlpha: false });
+      gl = renderer.gl;
+      
+      if (!gl) {
+        console.warn('WebGL not supported, skipping orb rendering');
+        return;
+      }
+      
+      gl.clearColor(0, 0, 0, 0);
+      container.appendChild(gl.canvas);
+    } catch (error) {
+      console.warn('Failed to create WebGL context, skipping orb rendering:', error);
+      return;
+    }
 
     const geometry = new Triangle(gl);
     const program = new Program(gl, {
@@ -283,8 +297,10 @@ export default function Orb({
       window.removeEventListener("resize", resize);
       container.removeEventListener("mousemove", handleMouseMove);
       container.removeEventListener("mouseleave", handleMouseLeave);
-      container.removeChild(gl.canvas);
-      gl.getExtension("WEBGL_lose_context")?.loseContext();
+      if (gl && gl.canvas && gl.canvas instanceof HTMLCanvasElement && container.contains(gl.canvas)) {
+        container.removeChild(gl.canvas);
+        gl.getExtension("WEBGL_lose_context")?.loseContext();
+      }
     };
   }, [hue, hoverIntensity, rotateOnHover, forceHoverState]);
 

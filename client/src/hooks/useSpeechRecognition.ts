@@ -286,6 +286,7 @@ export const useSpeechRecognition = (
   };
 
   const toggleListening = useCallback(() => {
+    console.log('🔘 toggleListening called', { listening, currentState: { listening } });
     if (listening) {
       stopListening();
     } else {

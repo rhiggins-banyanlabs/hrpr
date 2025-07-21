@@ -40,7 +40,14 @@ export default function Home() {
   useEffect(() => {
     console.log('🔊 Voice hook isSpeaking changed:', isSpeaking)
     setIsHarperSpeaking(isSpeaking)
-  }, [isSpeaking])
+    
+    // Automatically stop voice input when Harper starts speaking
+    if (isSpeaking && isVoiceInputActive) {
+      console.log('🔊 Harper started speaking, stopping voice input')
+      setIsVoiceInputActive(false)
+      setVoiceTranscript("")
+    }
+  }, [isSpeaking, isVoiceInputActive])
   
   // Stable callback for speaking state changes (kept for useVoiceChat compatibility)
   const handleSpeakingChange = useCallback((isSpeaking: boolean) => {
@@ -48,15 +55,73 @@ export default function Home() {
     // But keeping it for compatibility with useVoiceChat
     console.log('🔊 handleSpeakingChange called:', isSpeaking)
   }, [])
+
+  // Create a ref to store the callback
+  const handleHarperDetectedRef = useRef<(query: string) => Promise<void>>()
+
+  // Speech recognition callback wrapper
+  const speechRecognitionCallback = useCallback(async (query: string) => {
+    console.log('🎤 Speech recognition callback called with:', query)
+    console.log('🎤 Callback reference status:', !!handleHarperDetectedRef.current)
+    if (handleHarperDetectedRef.current) {
+      await handleHarperDetectedRef.current(query)
+    } else {
+      console.log('🎤 No callback reference available!')
+    }
+  }, [])
+
+  // Initialize speech recognition
+  const [speechState, speechActions] = useSpeechRecognition(speechRecognitionCallback)
+
+  // Session reset callback for feedback timeout
+  const handleSessionReset = useCallback(() => {
+    console.log('🔄 Resetting session to initial state')
+    
+    // Stop all voice activities first
+    speechActions.stopListening()
+    speechActions.resetStates()
+    
+    // Force stop voice input if it's still active
+    if (isVoiceInputActive) {
+      console.log('🔄 Force stopping voice input during session reset')
+      setIsVoiceInputActive(false)
+    }
+    
+    // Reset to initial state
+    setIsHarperActivated(false)
+    setIsVoiceInputActive(false)
+    setVoiceTranscript("")
+    setIsThinking(false)
+    
+    // Reset refs
+    hasPlayedIntroRef.current = false
+    isProcessingVoiceQueryRef.current = false
+    hasSessionRef.current = false
+    
+    // End current session
+    if (currentSession) {
+      endSession()
+    }
+    
+    // After reset, don't auto-start wake word detection
+    // User must click the button to activate Harper
+    console.log('🔄 Session reset - waiting for user to click button')
+    console.log('🔄 Callback reference available:', !!handleHarperDetectedRef.current)
+    console.log('🔄 Speech actions available:', !!speechActions.toggleListening)
+    
+    console.log('✅ Session reset complete - ready for new user')
+  }, [currentSession, endSession, speechActions, speechState])
   
   // Voice chat hook
   const { processVoiceQuery, sendIntroMessage, isProcessing } = useVoiceChat({
     sessionId: currentSession?.id || null,
     speakText,
-    onSpeakingChange: handleSpeakingChange
+    onSpeakingChange: handleSpeakingChange,
+    onSessionReset: handleSessionReset
   })
 
-  const handleHarperDetected = async (query: string) => {
+  // Forward declaration for speech recognition
+  const handleHarperDetected = useCallback(async (query: string) => {
     console.log("🏠 HOME: handleHarperDetected called with query:", query || "no query")
 
     // Prevent multiple activations while processing
@@ -106,14 +171,20 @@ export default function Home() {
         console.log("✅ Intro message sent");
       }
       
-      // Then process the query
-      console.log("🎯 Processing query:", query);
-      setIsThinking(true);
-      try {
-        await processVoiceQuery(query, sessionId)
-        console.log("✅ Query processed successfully");
-      } finally {
-        setIsThinking(false);
+      // Only process actual queries, not greetings
+      const isJustGreeting = /^(hey|hi|hello)?\s*(harper|conny|coni|koni|honey)\s*$/i.test(query.trim());
+      
+      if (!isJustGreeting && query.trim()) {
+        console.log("🎯 Processing query:", query);
+        setIsThinking(true);
+        try {
+          await processVoiceQuery(query, sessionId)
+          console.log("✅ Query processed successfully");
+        } finally {
+          setIsThinking(false);
+        }
+      } else {
+        console.log("👋 Just a greeting detected, skipping query processing");
       }
       
       // Reset speech recognition states after processing
@@ -125,9 +196,14 @@ export default function Home() {
       isProcessingVoiceQueryRef.current = false
       console.log("🏁 handleHarperDetected completed");
     }
-  }
+  }, [currentSession, startNewSession, sendIntroMessage, processVoiceQuery, setIsThinking, setIsHarperActivated])
 
-  const [speechState, speechActions] = useSpeechRecognition(handleHarperDetected)
+  // Set the callback reference
+  useEffect(() => {
+    console.log('🔄 Updating handleHarperDetected callback reference')
+    handleHarperDetectedRef.current = handleHarperDetected
+  }, [handleHarperDetected])
+
 
   // Handle voice input toggle for the unified orb
   const handleVoiceInputToggle = useCallback(async () => {
@@ -325,7 +401,9 @@ export default function Home() {
             if (text.trim()) {
               setIsThinking(true);
               try {
-                await processVoiceQuery(text, currentSession?.id);
+                // Use the feedback wrapper instead of direct processVoiceQuery
+                console.log('🎤 VoiceInput calling processVoiceQuery with:', text);
+                await processVoiceQuery(text);
               } finally {
                 setIsThinking(false);
               }
