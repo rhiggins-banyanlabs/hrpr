@@ -29,8 +29,11 @@ export function AdminLoginModal({ isOpen, onClose }: AdminLoginModalProps) {
       
       if (success) {
         setPassword('');
-        onClose();
-        router.push('/admin');
+        // Add small delay to ensure auth context updates
+        setTimeout(() => {
+          onClose();
+          router.push('/admin');
+        }, 100);
       } else {
         setError('Invalid password. Please try again.');
       }

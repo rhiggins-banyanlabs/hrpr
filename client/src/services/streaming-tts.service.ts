@@ -44,11 +44,26 @@ export class StreamingTTSService {
           const url = URL.createObjectURL(blob);
           const audio = new Audio(url);
           
-          // Preload the audio
+          // Preload the audio with better buffering
           return new Promise<{ audio: HTMLAudioElement; index: number }>((resolve, reject) => {
-            audio.oncanplaythrough = () => resolve({ audio, index });
-            audio.onerror = reject;
-            audio.load();
+            const timeout = setTimeout(() => reject(new Error('Audio preload timeout')), 8000);
+            
+            audio.oncanplaythrough = () => {
+              clearTimeout(timeout);
+              resolve({ audio, index });
+            };
+            audio.onerror = (e) => {
+              clearTimeout(timeout);
+              reject(e);
+            };
+            
+            // Check if already ready
+            if (audio.readyState >= 4) {
+              clearTimeout(timeout);
+              resolve({ audio, index });
+            } else {
+              audio.load();
+            }
           });
         } catch (error) {
           console.error(`❌ TTS failed for sentence ${index}:`, error);
@@ -111,9 +126,25 @@ export class StreamingTTSService {
         } catch (error) {
           console.error(`❌ Error playing audio ${this.currentIndex}:`, error);
         }
+        this.currentIndex++;
+      } else {
+        // Wait for missing audio segment before continuing
+        console.log(`⏳ Waiting for audio segment ${this.currentIndex}...`);
+        await new Promise(resolve => setTimeout(resolve, 100));
+        // Don't increment index - keep waiting for this segment
+        
+        // Timeout after 5 seconds to prevent infinite wait
+        const startWait = Date.now();
+        while (!this.audioQueue[this.currentIndex] && (Date.now() - startWait) < 5000) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        
+        // If still no audio after timeout, skip this segment
+        if (!this.audioQueue[this.currentIndex]) {
+          console.warn(`⚠️ Skipping missing audio segment ${this.currentIndex} after timeout`);
+          this.currentIndex++;
+        }
       }
-      
-      this.currentIndex++;
     }
     
     this.isPlaying = false;

@@ -54,7 +54,7 @@ export class OpenAIService {
     return Math.ceil(text.length / 4);
   }
 
-  async sendMessage(prompt: string, options?: { stream?: boolean }): Promise<OpenAIResponse> {
+  async sendMessage(prompt: string, options?: { stream?: boolean; userName?: string }): Promise<OpenAIResponse> {
     const startTime = Date.now();
     
     try {
@@ -72,7 +72,9 @@ export class OpenAIService {
           messages: [
             {
               role: 'system',
-              content: `You are Harper, a helpful AI assistant for the AIDA conference. You're friendly, conversational, and knowledgeable about the conference and Denver area.
+              content: `You are Harper, a helpful AI assistant for the ACA conference. You're friendly, conversational, empathetic, funny, and knowledgeable about the conference and Denver area.
+
+${options?.userName ? `USER'S NAME: ${options.userName} - The user shared their name. Only use it if it would be natural in your response. Don't add extra greetings since the user was already welcomed.` : ''}
 
 RULES:
 - Use provided conference information when available - never make up conference data
@@ -80,7 +82,7 @@ RULES:
 - Be conversational and natural - avoid overly formal language
 - Keep responses focused but complete (aim for 1-3 sentences for most queries)
 - If specific conference data isn't available, suggest checking with organizers
-- For general questions about Denver, technology, or AIDA, provide helpful context
+- For general questions about Denver, technology, or ACA, provide helpful context
 
 You help with: conference schedules, speakers, sessions, Denver area recommendations, dining, transportation, and general conference questions.`
             },

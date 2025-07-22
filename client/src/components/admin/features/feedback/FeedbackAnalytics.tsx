@@ -70,7 +70,7 @@ export const FeedbackAnalytics: React.FC = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">Loading feedback analytics...</div>
+        <div className="text-white/50">Loading feedback analytics...</div>
       </div>
     );
   }
@@ -78,7 +78,7 @@ export const FeedbackAnalytics: React.FC = () => {
   if (error) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-red-500">Error: {error}</div>
+        <div className="text-red-400">Error: {error}</div>
       </div>
     );
   }
@@ -86,7 +86,7 @@ export const FeedbackAnalytics: React.FC = () => {
   if (!analytics) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">No feedback data available</div>
+        <div className="text-white/50">No feedback data available</div>
       </div>
     );
   }
@@ -111,7 +111,7 @@ export const FeedbackAnalytics: React.FC = () => {
           color="green"
         />
         <StatCard
-          title="Avg. Conversations"
+          title="Avg. Questions"
           value={analytics.averageConversations}
           color="purple"
         />
@@ -119,7 +119,7 @@ export const FeedbackAnalytics: React.FC = () => {
 
       {/* Satisfaction Breakdown */}
       <Card>
-        <h3 className="text-lg font-semibold mb-4">Satisfaction Breakdown</h3>
+        <h3 className="text-lg font-semibold mb-4 text-white">Satisfaction Breakdown</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="bg-green-50 p-4 rounded-lg">
             <h4 className="font-medium text-green-800">Satisfied Users</h4>
@@ -152,7 +152,7 @@ export const FeedbackAnalytics: React.FC = () => {
       {/* Recent Text Feedback */}
       {analytics.recentTextFeedback.length > 0 && (
         <Card>
-          <h3 className="text-lg font-semibold mb-4">Recent Text Feedback</h3>
+          <h3 className="text-lg font-semibold mb-4 text-white">Recent Text Feedback</h3>
           <div className="space-y-3">
             {analytics.recentTextFeedback.map((feedback, index) => (
               <div key={index} className="bg-gray-50 p-3 rounded-lg">
@@ -169,7 +169,7 @@ export const FeedbackAnalytics: React.FC = () => {
       {/* All Feedback Sessions */}
       <Card>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold">All Feedback Sessions</h3>
+          <h3 className="text-lg font-semibold text-white">All Feedback Sessions</h3>
           <button
             onClick={loadFeedbackData}
             className="px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600"
@@ -179,26 +179,26 @@ export const FeedbackAnalytics: React.FC = () => {
         </div>
         
         {recentFeedback.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
+          <div className="text-center py-8 text-white/50">
             No feedback sessions found
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm text-white">
               <thead>
-                <tr className="border-b">
-                  <th className="text-left p-2">Date</th>
-                  <th className="text-left p-2">Session ID</th>
-                  <th className="text-left p-2">Satisfaction</th>
-                  <th className="text-left p-2">Conversations</th>
-                  <th className="text-left p-2">Feedback</th>
+                <tr className="border-b border-white/10">
+                  <th className="text-left p-2 text-white/70">Date</th>
+                  <th className="text-left p-2 text-white/70">Session ID</th>
+                  <th className="text-left p-2 text-white/70">Satisfaction</th>
+                  <th className="text-left p-2 text-white/70">Questions</th>
+                  <th className="text-left p-2 text-white/70">Feedback</th>
                 </tr>
               </thead>
               <tbody>
                 {recentFeedback.map((session) => (
-                  <tr key={session.sessionId} className="border-b hover:bg-gray-50">
-                    <td className="p-2">{formatDate(session.timestamp)}</td>
-                    <td className="p-2 font-mono text-xs">
+                  <tr key={session.sessionId} className="border-b border-white/10 hover:bg-white/5">
+                    <td className="p-2 text-white/80">{formatDate(session.timestamp)}</td>
+                    <td className="p-2 font-mono text-xs text-white/70">
                       {session.sessionId.substring(0, 8)}...
                     </td>
                     <td className="p-2">
@@ -206,14 +206,14 @@ export const FeedbackAnalytics: React.FC = () => {
                         {getSatisfactionText(session.satisfied)}
                       </Badge>
                     </td>
-                    <td className="p-2">{session.conversationCount}</td>
-                    <td className="p-2 max-w-xs">
+                    <td className="p-2 text-white/80">{session.conversationCount}</td>
+                    <td className="p-2 max-w-xs text-white/80">
                       {session.feedbackText ? (
-                        <div className="truncate" title={session.feedbackText}>
+                        <div className="truncate text-white/80" title={session.feedbackText}>
                           {session.feedbackText}
                         </div>
                       ) : (
-                        <span className="text-gray-400">No text feedback</span>
+                        <span className="text-white/40">No text feedback</span>
                       )}
                     </td>
                   </tr>

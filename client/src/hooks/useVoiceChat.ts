@@ -4,6 +4,7 @@ import { ChatStorageService } from '@/lib/supabase/chatStorage';
 import { IntentDetectorService } from '@/services/intent-detector.service';
 import { feedbackStateMachine, FeedbackStateMachine } from '@/services/feedback-state-machine.service';
 import { feedbackStorage } from '@/services/feedback-storage.service';
+import { NameExtractorService } from '@/services/name-extractor.service';
 import { createSilenceDetector, SilenceDetectionService } from '@/services/silence-detection.service';
 import { FeedbackState } from '@/types/feedback.types';
 import { latencyTracker } from '@/services/latency-tracker.service';
@@ -35,6 +36,7 @@ export const useVoiceChat = ({
   const feedbackTextRef = useRef<string>('');
   const isInFeedbackFlowRef = useRef(false);
   const userSatisfactionRef = useRef<boolean | null>(null); // Track user satisfaction
+  const userNameRef = useRef<string | null>(null); // Track user name
   const currentAudioRef = useRef<HTMLAudioElement | null>(null); // Track current audio to prevent overlaps
   // const streamingTTSRef = useRef(new StreamingTTSService()); // Removed for performance
 
@@ -64,7 +66,7 @@ export const useVoiceChat = ({
   };
 
   // Process voice input and get response
-  const processVoiceQuery = useCallback(async (text: string, overrideSessionId?: string): Promise<void> => {
+  const processVoiceQuery = useCallback(async (text: string, overrideSessionId?: string, customFillerPromise?: Promise<any>): Promise<void> => {
     const activeSessionId = overrideSessionId || sessionId;
     console.log('🎤 ===== PROCESS VOICE QUERY STARTED =====');
     console.log('🎤 Query text:', text);
@@ -103,14 +105,30 @@ export const useVoiceChat = ({
     
     try {
       // Get and play filler response immediately for better UX
-      const fillerResponse = IntentDetectorService.getFillerResponse(text);
-      if (fillerResponse && speakText) {
-        console.log('🎤 Playing immediate filler response:', fillerResponse);
-        // Keep track of the filler audio promise so we can wait for it later
-        fillerAudioPromise = speakText(fillerResponse).catch(error => {
-          console.log('⚠️ Filler response TTS failed, continuing without filler:', error);
-          return null;
-        });
+      // BUT skip filler if we're in a feedback collection state
+      const currentState = feedbackStateMachine.getCurrentState();
+      const isInFeedbackState = currentState === FeedbackState.ASKING_SATISFACTION || 
+                               currentState === FeedbackState.COLLECTING_FEEDBACK ||
+                               currentState === FeedbackState.ASKING_MORE_QUESTIONS;
+      
+      if (!isInFeedbackState) {
+        // Use custom filler if provided, otherwise generate one
+        if (customFillerPromise) {
+          console.log('🎤 Using custom personalized filler response');
+          fillerAudioPromise = customFillerPromise;
+        } else {
+          const fillerResponse = IntentDetectorService.getFillerResponse(text);
+          if (fillerResponse && speakText) {
+            console.log('🎤 Playing immediate filler response:', fillerResponse);
+            // Keep track of the filler audio promise so we can wait for it later
+            fillerAudioPromise = speakText(fillerResponse).catch(error => {
+              console.log('⚠️ Filler response TTS failed, continuing without filler:', error);
+              return null;
+            });
+          }
+        }
+      } else {
+        console.log('🔇 Skipping filler response - in feedback state:', currentState);
       }
 
       // Log analytics event
@@ -154,7 +172,8 @@ export const useVoiceChat = ({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          prompt: text
+          prompt: text,
+          userName: userNameRef.current
         }),
         signal: abortControllerRef.current.signal
       });
@@ -345,7 +364,7 @@ export const useVoiceChat = ({
       return;
     }
 
-    const introMessage = "Hi! I'm Harper, your conference assistant. How can I help you today?";
+    const introMessage = "Hi! I'm Harper, your conference assistant. How can I help? Feel free to share your name if you'd like a more personal experience!";
 
     try {
       console.log('🎯 Sending intro message for session:', activeSessionId);
@@ -397,11 +416,13 @@ export const useVoiceChat = ({
     // (e.g., timeout scenario), so default to true (satisfied)
     const satisfied = userSatisfactionRef.current !== null ? userSatisfactionRef.current : true;
 
+    const feedbackText = feedbackTextRef.current?.trim();
     console.log('💾 Saving feedback and resetting session...', { 
       satisfied, 
-      feedbackText: feedbackTextRef.current,
+      feedbackText,
       userSatisfactionRef: userSatisfactionRef.current,
-      conversationCount: conversationCountRef.current
+      conversationCount: conversationCountRef.current,
+      hasFeedbackText: !!feedbackText
     });
 
     // Save feedback
@@ -409,7 +430,7 @@ export const useVoiceChat = ({
       await feedbackStorage.saveFeedback({
         sessionId,
         satisfied,
-        feedbackText: feedbackTextRef.current || undefined,
+        feedbackText: feedbackText || undefined,
         conversationCount: conversationCountRef.current
       });
       console.log('✅ Feedback saved successfully');
@@ -422,6 +443,7 @@ export const useVoiceChat = ({
     feedbackTextRef.current = '';
     isInFeedbackFlowRef.current = false;
     userSatisfactionRef.current = null; // Reset satisfaction tracking
+    userNameRef.current = null; // Reset user name tracking
     
     // Stop any ongoing silence detection
     stopSilenceDetection();
@@ -603,6 +625,40 @@ export const useVoiceChat = ({
     };
   }, [handleFeedbackStateChange]);
 
+  // Personalized wrapper for processVoiceQuery
+  const processVoiceQueryWithPersonalization = useCallback(async (
+    text: string, 
+    isNewNameIntroduction: boolean = false, 
+    extractedName: string | null = null
+  ) => {
+    // If we have a new name introduction with a query, we need to personalize the filler
+    if (isNewNameIntroduction && extractedName) {
+      console.log('👋 Processing query with name introduction for:', extractedName);
+      
+      // Get the original filler response and personalize it
+      const originalFillerResponse = IntentDetectorService.getFillerResponse(text);
+      if (originalFillerResponse && speakText) {
+        const personalizedFiller = `It's nice to meet you, ${extractedName}! ${originalFillerResponse}`;
+        console.log('🎤 Playing personalized filler response:', personalizedFiller);
+        
+        // Play the personalized filler immediately
+        const fillerAudioPromise = speakText(personalizedFiller).catch(error => {
+          console.log('⚠️ Personalized filler response TTS failed:', error);
+          return null;
+        });
+        
+        // Process the query with our custom personalized filler
+        await processVoiceQuery(text, undefined, fillerAudioPromise);
+      } else {
+        // Fallback to normal processing
+        await processVoiceQuery(text);
+      }
+    } else {
+      // Process normally
+      await processVoiceQuery(text);
+    }
+  }, [processVoiceQuery, speakText]);
+
   // Modified processVoiceQuery to handle feedback flow
   const processVoiceQueryWithFeedback = useCallback(async (text: string) => {
     const currentState = feedbackStateMachine.getCurrentState();
@@ -637,6 +693,10 @@ export const useVoiceChat = ({
       const intent = FeedbackStateMachine.detectUserIntent(text);
       console.log(`🔄 ASKING_SATISFACTION - intent detected: ${intent}`);
       
+      // ALWAYS capture the user's response as feedback text, regardless of intent
+      feedbackTextRef.current = text;
+      console.log('📝 Satisfaction feedback captured:', text);
+      
       if (intent === 'yes') {
         console.log('✅ User is satisfied');
         userSatisfactionRef.current = true; // User is satisfied
@@ -647,18 +707,49 @@ export const useVoiceChat = ({
         userSatisfactionRef.current = false; // User is not satisfied
         feedbackStateMachine.transition('user_no');
         return; // Request feedback
+      } else {
+        // For responses that don't clearly indicate yes/no, treat as satisfied but still save the feedback
+        console.log('🤔 Unclear satisfaction response, treating as satisfied but saving feedback');
+        userSatisfactionRef.current = true; // Default to satisfied for unclear responses
+        feedbackStateMachine.transition('user_yes');
+        return; // Goodbye message and reset
       }
     } else if (currentState === FeedbackState.COLLECTING_FEEDBACK) {
-      // Store feedback text
-      console.log('📝 Feedback collected:', text);
-      feedbackTextRef.current = text;
+      // Store additional feedback text (append if there was already feedback from satisfaction question)
+      console.log('📝 Additional feedback collected:', text);
+      const existingFeedback = feedbackTextRef.current;
+      feedbackTextRef.current = existingFeedback ? `${existingFeedback}. Additional feedback: ${text}` : text;
       feedbackStateMachine.transition('user_response');
       return; // Thank you message and reset
     }
 
-    // Normal query processing
+    // Check for name extraction before processing query
+    let isNewNameIntroduction = false;
+    let extractedName: string | null = null;
+    
+    if (!userNameRef.current) {
+      const nameInfo = NameExtractorService.extractName(text);
+      if (nameInfo.name && nameInfo.confidence !== 'low') {
+        userNameRef.current = nameInfo.name;
+        extractedName = nameInfo.name;
+        isNewNameIntroduction = true;
+        console.log('👤 User name extracted:', userNameRef.current);
+        
+        // If this was just a name introduction, acknowledge it and don't process as a normal query
+        if (nameInfo.confidence === 'high' && text.trim().split(/\s+/).length <= 4) {
+          console.log('👋 Name introduction detected, acknowledging...');
+          const acknowledgment = `Nice to meet you, ${nameInfo.name}! How can I help you with the conference?`;
+          if (speakText) {
+            await speakText(acknowledgment);
+          }
+          return;
+        }
+      }
+    }
+
+    // Normal query processing with personalization info
     conversationCountRef.current++;
-    await processVoiceQuery(text);
+    await processVoiceQueryWithPersonalization(text, isNewNameIntroduction, extractedName);
     
     // IMPORTANT: Wait for Harper to finish speaking before starting silence detection
     // This prevents the feedback flow from interrupting Harper mid-speech
@@ -666,30 +757,20 @@ export const useVoiceChat = ({
     
     // Check if we should start monitoring for end of conversation
     if (feedbackStateMachine.getCurrentState() === FeedbackState.IDLE && conversationCountRef.current > 0 && !isInFeedbackFlowRef.current) {
-      // Wait for Harper to finish speaking before starting silence detection
-      const waitForSpeechCompletion = async () => {
-        // Poll until Harper is done speaking
-        while (isSpeaking) {
-          console.log('🔊 Waiting for Harper to finish speaking...');
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
-        
-        console.log('🔇 Harper finished speaking - immediately starting feedback flow...');
-        
-        // Immediately trigger feedback flow after Harper finishes speaking
-        setTimeout(() => {
-          if (feedbackStateMachine.getCurrentState() === FeedbackState.IDLE && !isInFeedbackFlowRef.current) {
-            console.log('🔄 Immediately starting feedback flow - asking more questions');
-            isInFeedbackFlowRef.current = true;
-            feedbackStateMachine.transition('user_response');
-          }
-        }, 500); // Very short delay (0.5 seconds) to ensure TTS completes
-      };
+      console.log('🔄 Scheduling feedback flow to start after response completes');
       
-      // Start waiting asynchronously
-      waitForSpeechCompletion();
+      // Start feedback flow after a reasonable delay to ensure TTS completes
+      setTimeout(() => {
+        if (feedbackStateMachine.getCurrentState() === FeedbackState.IDLE && !isInFeedbackFlowRef.current) {
+          console.log('🔄 Starting feedback flow - asking more questions');
+          isInFeedbackFlowRef.current = true;
+          feedbackStateMachine.transition('user_response');
+        } else {
+          console.log('🔄 Feedback flow not started - state or flow changed');
+        }
+      }, 2000); // 2 second delay to ensure response TTS completes
     }
-  }, [processVoiceQuery, isSpeaking, startSilenceDetection]);
+  }, [processVoiceQuery, startSilenceDetection]);
 
   return {
     processVoiceQuery: processVoiceQueryWithFeedback,

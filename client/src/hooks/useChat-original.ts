@@ -132,7 +132,7 @@ export const useChat = ({
       
       const introMessage: Message = {
         id: `intro-${Date.now()}`,
-        text: "Hi! I'm Harper, your conference assistant. How can I help you today?",
+        text: "Hi! I'm Harper, your conference assistant. How can I help? Feel free to share your name if you'd like a more personal experience!",
         sender: 'Harper',
         timestamp: new Date(),
         isIntroMessage: true
@@ -648,7 +648,7 @@ export const useChat = ({
     if (sessionId) {
       console.log('🚀 ✅ Sending intro message');
   
-      const introText = "Hi! I'm Harper, your conference assistant. How can I help you today?";
+      const introText = "Hi! I'm Harper, your conference assistant. How can I help? Feel free to share your name if you'd like a more personal experience!";
       
       // Pass isIntro as metadata
       sendBotMessage(introText, true);

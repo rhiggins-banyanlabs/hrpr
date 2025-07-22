@@ -86,7 +86,10 @@ export function AdminAuthProvider({ children }: AdminAuthProviderProps) {
   if (!isInitialized) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-white">Loading...</div>
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-8 h-8 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
+          <div className="text-white text-sm">Initializing system...</div>
+        </div>
       </div>
     );
   }

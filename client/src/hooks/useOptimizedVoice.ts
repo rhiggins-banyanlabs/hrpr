@@ -152,13 +152,29 @@ export const useOptimizedVoice = () => {
         currentAudioRef.current = null;
       };
 
-      // Ensure audio is ready before playing to prevent cutoff
+      // Ensure audio is fully loaded before playing to prevent cutoff
       audio.load();
-      await new Promise(resolve => {
-        audio.oncanplaythrough = resolve;
-        if (audio.readyState >= 3) resolve(undefined); // Already ready
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Audio load timeout')), 5000);
+        
+        audio.oncanplaythrough = () => {
+          clearTimeout(timeout);
+          resolve(undefined);
+        };
+        audio.onerror = () => {
+          clearTimeout(timeout);
+          reject(new Error('Audio load error'));
+        };
+        
+        // Check if already ready
+        if (audio.readyState >= 4) { // HAVE_ENOUGH_DATA
+          clearTimeout(timeout);
+          resolve(undefined);
+        }
       });
       
+      // Small delay to ensure audio buffer is stable
+      await new Promise(resolve => setTimeout(resolve, 100));
       await audio.play();
       return { audio, duration };
     },
@@ -169,7 +185,7 @@ export const useOptimizedVoice = () => {
   /*  PRE-CACHE INTRO MESSAGE                                           */
   /* ------------------------------------------------------------------ */
   const preCacheIntroMessage = useCallback(async () => {
-    const introMessage = "Hi! I'm Harper, your conference assistant. How can I help you today?";
+    const introMessage = "Hi! I'm Harper, your conference assistant. How can I help? Feel free to share your name if you'd like a more personal experience!";
     
     try {
       console.log('🔄 Pre-caching intro message...');
@@ -187,7 +203,7 @@ export const useOptimizedVoice = () => {
     async (voice: OpenAIVoice) => {
       try {
         await speakText(
-          `Hi! I'm Harper, your conference assistant. How can I help you today?`,
+          `Hi! I'm Harper, your conference assistant. How can I help? Feel free to share your name if you'd like a more personal experience!`,
           voice
         );
       } catch (err) {

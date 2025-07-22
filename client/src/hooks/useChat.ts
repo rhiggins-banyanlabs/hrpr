@@ -2,6 +2,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { ChatStorageService } from '@/lib/supabase/chatStorage';
 import { IntentDetectorService } from '@/services/intent-detector.service';
+import { NameExtractorService } from '@/services/name-extractor.service';
 
 interface Message {
   id: string;
@@ -42,6 +43,7 @@ export const useChat = ({
   const isProcessingRef = useRef(false);
   const mountedRef = useRef(true);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const userNameRef = useRef<string | null>(null);
 
   // Categorize questions for analytics
   const categorizeQuestion = (question: string): string => {
@@ -123,7 +125,7 @@ export const useChat = ({
     try {
       const introMessage: Message = {
         id: `intro-${Date.now()}`,
-        text: "Hi! I'm Harper, your conference assistant. How can I help you today?",
+        text: "Hi! I'm Harper, your conference assistant. How can I help? Feel free to share your name if you'd like a more personal experience!",
         sender: 'Harper',
         timestamp: new Date(),
         isIntroMessage: true
@@ -180,6 +182,15 @@ export const useChat = ({
     try {
       // Cache the user question for analytics
       await cacheUserQuestion(text.trim());
+
+      // Check for name extraction
+      if (!userNameRef.current) {
+        const nameInfo = NameExtractorService.extractName(text);
+        if (nameInfo.name && nameInfo.confidence !== 'low') {
+          userNameRef.current = nameInfo.name;
+          console.log('👤 User name extracted:', userNameRef.current);
+        }
+      }
 
       // Create user message for UI
       const userMessage: Message = {
@@ -242,7 +253,8 @@ export const useChat = ({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          prompt: text
+          prompt: text,
+          userName: userNameRef.current
         }),
         signal: abortControllerRef.current.signal
       });
@@ -392,7 +404,7 @@ export const useChat = ({
   // Send intro message with proper tracking
   const sendIntroMessage = useCallback(() => {
     if (sessionId) {
-      const introText = "Hi! I'm Harper, your conference assistant. How can I help you today?";
+      const introText = "Hi! I'm Harper, your conference assistant. How can I help? Feel free to share your name if you'd like a more personal experience!";
       sendBotMessage(introText, true);
     }
   }, [sendBotMessage, sessionId]);

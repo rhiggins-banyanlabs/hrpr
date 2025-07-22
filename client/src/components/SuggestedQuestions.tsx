@@ -9,12 +9,15 @@ interface SuggestedQuestionsProps {
 }
 
 const questions = [
-  "What is AIDA and how does it work?",
-  "Can you tell me about the technology behind AIDA?",
-  "What time is the keynote?",
-  "How could AIDA help my organization?",
-  "Can you tell me about the conference?",
-  "What speakers are at the conference?"
+  "Can you tell me about the correctional facility tours?",
+  "What is the ACA conference?",
+  "Are there any coffee shops in the area?",
+  "What organizations are attending the conference?",
+  "What is the weather like in Denver?",
+  "Are there any good restaurants in the area?",
+  "What booth is Vantage located in?",
+  "Who is speaking at the conference on Saturday?",
+  "Can you tell me the conference schedule for this afternoon?",
 ];
 
 export const SuggestedQuestions = ({ onSelect, isConversationStarted, isHarperSpeaking = false }: SuggestedQuestionsProps) => {

@@ -36,7 +36,7 @@ export const useChat = ({ sessionId, onClose }: UseChatProps) => {
       
       const introMessage: Message = {
         id: `intro-${Date.now()}`,
-        text: "Hi! I'm Harper, your conference assistant. How can I help you today?",
+        text: "Hi! I'm Harper, your conference assistant. How can I help? Feel free to share your name if you'd like a more personal experience!",
         isUser: false,
         timestamp: new Date(),
         isIntroMessage: true
