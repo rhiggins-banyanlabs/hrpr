@@ -3,6 +3,7 @@ import { OpenAIService } from '@/services/openai.service';
 
 export interface ChatRequest {
   prompt: string;
+  userName?: string;
 }
 
 export interface ChatResponse {
@@ -22,7 +23,7 @@ export interface ChatResponse {
 export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>> {
   try {
     const body: ChatRequest = await req.json();
-    const { prompt } = body;
+    const { prompt, userName } = body;
 
     if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
       return NextResponse.json({
@@ -47,7 +48,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
     }
 
     const openaiService = OpenAIService.getInstance();
-    const result = await openaiService.sendMessage(prompt);
+    const result = await openaiService.sendMessage(prompt, { userName });
 
     if (result.success) {
       return NextResponse.json({

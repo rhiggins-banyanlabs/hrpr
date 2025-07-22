@@ -25,7 +25,7 @@ A complete end-of-session feedback system for Harper that automatically engages 
 ### 4. Satisfaction Assessment
 
 #### If User Says YES (Satisfied):
-- Harper responds: **"Please feel free to come ask me any questions you may have throughout the AIDA conference. Have a great day!"**
+- Harper responds: **"Please feel free to come ask me any questions you may have throughout the ACA conference. Have a great day!"**
 - System resets for next user
 - Satisfaction recorded as `true`
 
@@ -181,4 +181,4 @@ The system is designed to be:
 - **Developer-friendly**: Clean code, good documentation, and comprehensive tests
 - **Scalable**: Built to handle high-volume conference usage
 
-By implementing this system, the AIDA conference can gather valuable insights about attendee satisfaction while maintaining the quality of the Harper experience.
+By implementing this system, the ACA conference can gather valuable insights about attendee satisfaction while maintaining the quality of the Harper experience.

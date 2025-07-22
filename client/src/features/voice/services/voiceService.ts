@@ -57,7 +57,7 @@ class VoiceService {
   }
 
   async testVoice(voice: string, text?: string): Promise<void> {
-    const testText = text || `Hi! I'm Harper, your conference assistant. How can I help you today?`;
+    const testText = text || `Hi! I'm Harper, your conference assistant. How can I help? Feel free to share your name if you'd like a more personal experience!`;
     
     const audioBlob = await this.textToSpeech({
       text: testText,

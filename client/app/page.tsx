@@ -169,6 +169,16 @@ export default function Home() {
         // Send intro message immediately (pre-cached)
         await sendIntroMessage(sessionId)
         console.log("✅ Intro message sent");
+        
+        // Auto-start listening after intro with timeout
+        console.log("⏳ Setting up auto-listen timeout after intro (8 seconds)...");
+        setTimeout(() => {
+          if (!isVoiceInputActive && !isHarperSpeaking && !isProcessing) {
+            console.log("🎤 Auto-starting voice input after intro timeout");
+            setIsVoiceInputActive(true);
+            speechActions.startListening();
+          }
+        }, 8000); // 8 second timeout after intro
       }
       
       // Only process actual queries, not greetings
@@ -361,12 +371,12 @@ export default function Home() {
               <div className="transition-all duration-700">
                 <MorphingText
                   texts={[
-                    "What is AIDA and how does it work?",
-                    "Can you tell me about the technology behind AIDA?",
-                    "What time is the keynote?",
-                    "How could AIDA help my organization?",
-                    "Can you tell me about the conference?",
-                    "What speakers are at the conference?",
+                    "Can you tell me about the correctional facility tours?",
+                    "What is the ACA conference?",
+                    "Are there any coffee shops in the area?",
+                    "What organizations are attending the conference?",
+                    "What is the weather like in Denver?",
+                    "Are there any good restaurants in the area?",
                   ]}
                   className="-my-3 w-screen"
                 />

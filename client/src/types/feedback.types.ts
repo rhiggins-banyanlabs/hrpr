@@ -52,7 +52,7 @@ export interface FeedbackConfig {
 }
 
 export const DEFAULT_FEEDBACK_CONFIG: FeedbackConfig = {
-  initialSilenceTimeout: 2000, // 2 seconds base timeout
+  initialSilenceTimeout: 2000, // 2 seconds base timeout 
   feedbackSilenceTimeout: 15000, // 15 seconds for feedback collection
   moreQuestionsTimeout: 20000, // 20 seconds base timeout
   // Latency adjustment settings
@@ -62,9 +62,9 @@ export const DEFAULT_FEEDBACK_CONFIG: FeedbackConfig = {
   messages: {
     moreQuestions: "Do you have any more questions for me?",
     readyToHelp: "I am ready to answer all your conference needs!",
-    satisfaction: "Did I answer your inquiries to your satisfaction?",
-    goodbye: "Please feel free to come ask me any questions you may have throughout the AIDA conference. Have a great day!",
-    requestFeedback: "Please provide feedback to help me assist you better in the future.",
+    satisfaction: "How was your experience with me today? I'd love to hear your feedback!",
+    goodbye: "Thank you for your feedback! Please feel free to come ask me any questions you may have throughout the ACA conference. Have a great day!",
+    requestFeedback: "Could you share what went well or what could be improved? All feedback - positive or negative - helps me serve you better!",
     thankYou: "Thank you for your feedback. I hope you have a wonderful conference experience!"
   }
 };
