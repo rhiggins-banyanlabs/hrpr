@@ -322,6 +322,9 @@ export const useVoiceChat = ({
         console.log('⚠️ Continuing despite database error');
       }
 
+      // Increment conversation count after successful response
+      conversationCountRef.current++;
+      
     } catch (error) {
       console.error('❌ Error processing voice query:', error);
       
@@ -351,6 +354,23 @@ export const useVoiceChat = ({
       isProcessingRef.current = false;
       setIsProcessing(false);
       abortControllerRef.current = null;
+      
+      // Check if we should start feedback flow after audio completes
+      // Always ask "Do you have any more questions?" after answering
+      if (feedbackStateMachine.getCurrentState() === FeedbackState.IDLE && conversationCountRef.current > 0) {
+        // Use setTimeout to ensure state change happens after current execution context
+        setTimeout(() => {
+          console.log('🔄 Audio complete - starting feedback flow', {
+            currentState: feedbackStateMachine.getCurrentState(),
+            conversationCount: conversationCountRef.current,
+            isInFeedbackFlow: isInFeedbackFlowRef.current,
+            isProcessing: isProcessingRef.current
+          });
+          isInFeedbackFlowRef.current = true;
+          const transitionResult = feedbackStateMachine.transition('user_response');
+          console.log('🔄 Transition result:', transitionResult, 'New state:', feedbackStateMachine.getCurrentState());
+        }, 100); // Small delay to ensure clean state transition
+      }
     }
   }, [sessionId, speakText]);
 
@@ -496,7 +516,29 @@ export const useVoiceChat = ({
 
   // Handle feedback state changes
   const handleFeedbackStateChange = useCallback(async (newState: FeedbackState, oldState: FeedbackState) => {
-    const message = feedbackStateMachine.getStateMessage();
+    let message = feedbackStateMachine.getStateMessage();
+    
+    // Personalize goodbye/thank you message with user's name if available
+    if (message && newState === FeedbackState.THANKING_USER && userNameRef.current) {
+      if (message.includes("Thank you for your feedback!")) {
+        // Goodbye message - add name at the end
+        message = message.replace("I hope you have a great day!", `I hope you have a great day ${userNameRef.current}!`);
+        console.log('✨ Personalized goodbye message with user name:', userNameRef.current);
+      } else if (message.includes("Thank you for your feedback.")) {
+        // Thank you message - add name at the end  
+        message = message.replace("conference experience!", `conference experience ${userNameRef.current}!`);
+        console.log('✨ Personalized thank you message with user name:', userNameRef.current);
+      }
+    }
+    
+    console.log('🎯 handleFeedbackStateChange:', {
+      oldState,
+      newState,
+      message,
+      userName: userNameRef.current,
+      isProcessing: isProcessingRef.current,
+      hasSpeakText: !!speakText
+    });
     
     // Helper function to start silence detection after TTS completes
     const startSilenceDetectionAfterSpeech = (timeout: number) => {
@@ -516,6 +558,13 @@ export const useVoiceChat = ({
       setTimeout(startDetection, 2000);
     };
     
+    console.log('🎯 Checking if should speak message:', {
+      hasMessage: !!message,
+      hasSpeakText: !!speakText,
+      isProcessing: isProcessingRef.current,
+      willSpeak: !!(message && speakText && !isProcessingRef.current)
+    });
+    
     if (message && speakText && !isProcessingRef.current) {
       // Stop any currently playing audio to prevent overlap
       if (currentAudioRef.current) {
@@ -525,6 +574,7 @@ export const useVoiceChat = ({
       }
       
       // Play the appropriate message for the state
+      console.log(`🔊 Speaking feedback message for state ${newState}: "${message}"`);
       setIsSpeaking(true);
       try {
         const audioResult = await speakText(message);
@@ -748,28 +798,11 @@ export const useVoiceChat = ({
     }
 
     // Normal query processing with personalization info
-    conversationCountRef.current++;
     await processVoiceQueryWithPersonalization(text, isNewNameIntroduction, extractedName);
     
-    // IMPORTANT: Wait for Harper to finish speaking before starting silence detection
-    // This prevents the feedback flow from interrupting Harper mid-speech
+    // The feedback flow will be triggered automatically after audio completes
+    // in the processVoiceQueryWithPersonalization function
     console.log(`🔄 Question processed - state: ${feedbackStateMachine.getCurrentState()}, count: ${conversationCountRef.current}`);
-    
-    // Check if we should start monitoring for end of conversation
-    if (feedbackStateMachine.getCurrentState() === FeedbackState.IDLE && conversationCountRef.current > 0 && !isInFeedbackFlowRef.current) {
-      console.log('🔄 Scheduling feedback flow to start after response completes');
-      
-      // Start feedback flow after a reasonable delay to ensure TTS completes
-      setTimeout(() => {
-        if (feedbackStateMachine.getCurrentState() === FeedbackState.IDLE && !isInFeedbackFlowRef.current) {
-          console.log('🔄 Starting feedback flow - asking more questions');
-          isInFeedbackFlowRef.current = true;
-          feedbackStateMachine.transition('user_response');
-        } else {
-          console.log('🔄 Feedback flow not started - state or flow changed');
-        }
-      }, 2000); // 2 second delay to ensure response TTS completes
-    }
   }, [processVoiceQuery, startSilenceDetection]);
 
   return {

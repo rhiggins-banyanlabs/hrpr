@@ -24,9 +24,10 @@ export function AdminAuthProvider({ children }: AdminAuthProviderProps) {
   const [isSystemLocked, setIsSystemLocked] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
 
-  // Check for existing pedestal mode on mount (but NOT authentication)
+  // Check for existing pedestal mode and admin session on mount
   useEffect(() => {
     const pedestalStatus = localStorage.getItem('Harper-pedestal-mode');
+    const adminSession = localStorage.getItem('Harper-admin-session');
     
     // Only restore pedestal mode if it was explicitly set
     if (pedestalStatus === 'true') {
@@ -39,13 +40,37 @@ export function AdminAuthProvider({ children }: AdminAuthProviderProps) {
       setIsSystemLocked(true);
     }
     
-    // Never restore authentication - always require fresh login
-    setIsAuthenticated(false);
+    // Check for valid admin session (expires after 30 minutes)
+    if (adminSession) {
+      try {
+        const sessionData = JSON.parse(adminSession);
+        const now = Date.now();
+        const sessionAge = now - sessionData.timestamp;
+        const thirtyMinutes = 30 * 60 * 1000; // 30 minutes in milliseconds
+        
+        if (sessionAge < thirtyMinutes) {
+          console.log('🔄 Restoring admin session from localStorage');
+          setIsAuthenticated(true);
+        } else {
+          console.log('⏰ Admin session expired, removing');
+          localStorage.removeItem('Harper-admin-session');
+          setIsAuthenticated(false);
+        }
+      } catch (error) {
+        console.log('❌ Invalid admin session data, removing');
+        localStorage.removeItem('Harper-admin-session');
+        setIsAuthenticated(false);
+      }
+    } else {
+      setIsAuthenticated(false);
+    }
+    
     setIsInitialized(true);
     
     console.log('🏁 Auth context initialized', {
       pedestalMode: pedestalStatus === 'true',
-      systemLocked: pedestalStatus !== 'true'
+      systemLocked: pedestalStatus !== 'true',
+      adminAuthenticated: !!adminSession
     });
   }, []);
 
@@ -54,6 +79,14 @@ export function AdminAuthProvider({ children }: AdminAuthProviderProps) {
     
     if (password === adminPassword) {
       setIsAuthenticated(true);
+      
+      // Save admin session with timestamp (expires in 30 minutes)
+      const sessionData = {
+        timestamp: Date.now(),
+        authenticated: true
+      };
+      localStorage.setItem('Harper-admin-session', JSON.stringify(sessionData));
+      
       console.log('✅ Admin authenticated successfully');
       return true;
     }
@@ -64,6 +97,7 @@ export function AdminAuthProvider({ children }: AdminAuthProviderProps) {
 
   const logout = () => {
     setIsAuthenticated(false);
+    localStorage.removeItem('Harper-admin-session');
     // Note: We don't change pedestal mode on logout
     console.log('🚪 Admin logged out (pedestal mode unchanged)');
   };
