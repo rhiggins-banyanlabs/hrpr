@@ -63,7 +63,7 @@ export const DEFAULT_FEEDBACK_CONFIG: FeedbackConfig = {
     moreQuestions: "Do you have any more questions for me?",
     readyToHelp: "I am ready to answer all your conference needs!",
     satisfaction: "How was your experience with me today? I'd love to hear your feedback!",
-    goodbye: "Thank you for your feedback! Please feel free to come ask me any questions you may have throughout the ACA conference. Have a great day!",
+    goodbye: "Thank you for your feedback! Please feel free to come ask me any questions you may have throughout the ACA conference. I hope you have a great day!",
     requestFeedback: "Could you share what went well or what could be improved? All feedback - positive or negative - helps me serve you better!",
     thankYou: "Thank you for your feedback. I hope you have a wonderful conference experience!"
   }

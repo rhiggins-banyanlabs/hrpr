@@ -170,15 +170,8 @@ export default function Home() {
         await sendIntroMessage(sessionId)
         console.log("✅ Intro message sent");
         
-        // Auto-start listening after intro with timeout
-        console.log("⏳ Setting up auto-listen timeout after intro (8 seconds)...");
-        setTimeout(() => {
-          if (!isVoiceInputActive && !isHarperSpeaking && !isProcessing) {
-            console.log("🎤 Auto-starting voice input after intro timeout");
-            setIsVoiceInputActive(true);
-            speechActions.startListening();
-          }
-        }, 8000); // 8 second timeout after intro
+        // Don't auto-start listening - wait for user to click the button
+        console.log("⏳ Waiting for user to click the voice button to start recording");
       }
       
       // Only process actual queries, not greetings
@@ -188,7 +181,7 @@ export default function Home() {
         console.log("🎯 Processing query:", query);
         setIsThinking(true);
         try {
-          await processVoiceQuery(query, sessionId)
+          await processVoiceQuery(query)
           console.log("✅ Query processed successfully");
         } finally {
           setIsThinking(false);

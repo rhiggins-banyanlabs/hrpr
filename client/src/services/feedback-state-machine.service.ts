@@ -116,10 +116,13 @@ export class FeedbackStateMachine {
 
   // Get the appropriate message for current state
   getStateMessage(): string | null {
+    console.log('🔍 getStateMessage called for state:', this.currentState);
     switch (this.currentState) {
       case FeedbackState.ASKING_MORE_QUESTIONS:
+        console.log('📢 Returning moreQuestions message:', this.config.messages.moreQuestions);
         return this.config.messages.moreQuestions;
       case FeedbackState.ASKING_SATISFACTION:
+        console.log('📢 Returning satisfaction message:', this.config.messages.satisfaction);
         return this.config.messages.satisfaction;
       case FeedbackState.COLLECTING_FEEDBACK:
         return this.config.messages.requestFeedback;
@@ -185,6 +188,8 @@ export class FeedbackStateMachine {
   transition(trigger: FeedbackTransition['trigger']): boolean {
     const key = `${this.currentState}-${trigger}`;
     const transition = this.transitions.get(key);
+    
+    console.log(`🔄 Attempting transition: ${key}`);
 
     if (!transition) {
       console.warn(`Invalid transition: ${key}`);
@@ -193,6 +198,7 @@ export class FeedbackStateMachine {
 
     const oldState = this.currentState;
     this.currentState = transition.to;
+    console.log(`✅ Transition successful: ${oldState} -> ${this.currentState}`);
 
     // Track if feedback was actually provided
     if (oldState === FeedbackState.COLLECTING_FEEDBACK && trigger === 'user_response') {
@@ -200,7 +206,8 @@ export class FeedbackStateMachine {
       console.log('✅ Feedback was provided by user');
     }
 
-    console.log(`Feedback state transition: ${oldState} -> ${this.currentState} (trigger: ${trigger})`);
+    console.log(`🚨 FEEDBACK STATE TRANSITION: ${oldState} -> ${this.currentState} (trigger: ${trigger})`);
+    console.trace('State transition stack trace');
 
     // Notify callbacks
     this.stateChangeCallbacks.forEach(cb => cb(this.currentState, oldState));
