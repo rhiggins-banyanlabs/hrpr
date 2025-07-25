@@ -20,6 +20,8 @@ export async function GET(request: NextRequest) {
     const cacheService = LocationCacheService.getInstance();
     
     console.log(`🔍 API Places CACHED request: type=${type}, keyword=${keyword}, radius=${radius}`);
+    console.log(`🔍 Environment check - Supabase URL exists: ${!!process.env.NEXT_PUBLIC_SUPABASE_URL}`);
+    console.log(`🔍 Environment check - Google Maps API exists: ${!!process.env.GOOGLE_MAPS_API_KEY}`);
     
     const startTime = Date.now();
     const places = await cacheService.searchPlaces(
@@ -29,6 +31,8 @@ export async function GET(request: NextRequest) {
       radius
     );
     const duration = Date.now() - startTime;
+    
+    console.log(`🔍 Places returned: ${places.length} places in ${duration}ms`);
     
     return NextResponse.json({ 
       results: places,
