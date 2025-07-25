@@ -97,42 +97,48 @@ export class LocationCacheService {
   }
 
   /**
-   * Save to database and memory cache
+   * Save to location_cache database
    */
   private async saveToCache(query: LocationQuery, places: Place[]): Promise<void> {
     const cacheKey = this.generateCacheKey(query);
     
-    // Save to memory cache immediately
-    this.memoryCache.set(cacheKey, {
-      data: places,
-      expires: Date.now() + this.MEMORY_CACHE_DURATION_MS
-    });
+    console.log(`💾 Attempting to save to location_cache database: ${cacheKey} with ${places.length} places`);
 
-    // Save to database
+    // Save to location_cache database
     try {
       const now = new Date();
       const expiresAt = new Date(now.getTime() + this.CACHE_DURATION_HOURS * 60 * 60 * 1000);
 
+      const dataToSave = {
+        query_type: query.type || 'any',
+        query_keyword: query.keyword || 'any',
+        query_radius: query.radius,
+        places: places,
+        created_at: now.toISOString(),
+        expires_at: expiresAt.toISOString()
+      };
+      
+      console.log(`💾 Saving to database with data:`, {
+        query_type: dataToSave.query_type,
+        query_keyword: dataToSave.query_keyword,
+        query_radius: dataToSave.query_radius,
+        places_count: places.length,
+        expires_at: dataToSave.expires_at
+      });
+
       const { error } = await this.supabase
         .from('location_cache')
-        .upsert({
-          query_type: query.type || 'any',
-          query_keyword: query.keyword || 'any',
-          query_radius: query.radius,
-          places: places,
-          created_at: now.toISOString(),
-          expires_at: expiresAt.toISOString()
-        }, {
+        .upsert(dataToSave, {
           onConflict: 'query_type,query_keyword,query_radius'
         });
 
       if (error) {
-        console.error('Error saving to cache:', error);
+        console.error('❌ Error saving to cache:', error);
       } else {
-        console.log(`💾 Saved to cache: ${cacheKey}`);
+        console.log(`✅ Successfully saved to database cache: ${cacheKey}`);
       }
     } catch (error) {
-      console.error('Error saving to cache:', error);
+      console.error('❌ Exception saving to cache:', error);
     }
   }
 
@@ -199,41 +205,94 @@ export class LocationCacheService {
 
     console.log(`🔍 Location search: type=${type}, keyword=${keyword}, radius=${radius}`);
 
-    // Tier 0: Check scraped venue data first (if we have a keyword)
+    // Step 1: Check scraped venue database first (nearby_venues table)
     if (keyword) {
       const scrapedData = await this.checkScrapedData(keyword);
       if (scrapedData && scrapedData.length > 0) {
-        // Save to memory cache for quick access
-        this.memoryCache.set(cacheKey, {
-          data: scrapedData,
-          expires: Date.now() + this.MEMORY_CACHE_DURATION_MS
-        });
+        console.log(`✅ Found ${scrapedData.length} places in scraped venue database`);
         return scrapedData;
       }
     }
+    console.log(`⚠️ No scraped venue data found, checking location_cache...`);
 
-    // Tier 1: Check memory cache (fastest)
-    const memoryResult = this.checkMemoryCache(cacheKey);
-    if (memoryResult) {
-      return memoryResult;
-    }
-
-    // Tier 2: Check database cache
+    // Step 2: Check location_cache database
     const dbResult = await this.checkDatabaseCache(query);
     if (dbResult) {
+      console.log(`✅ Found ${dbResult.length} places in location_cache database`);
       return dbResult;
     }
+    console.log(`⚠️ No cached data found, calling Google Maps API...`);
 
-    // Tier 3: Call Google Maps API
-    console.log(`🌐 No cache hit, calling Google Maps API`);
-    const places = await locationService.searchNearbyPlaces(type, keyword, radius);
+    // Step 3: Call Google Maps API → Save to location_cache
+    const places = await this.callGoogleMapsAPI(type, keyword, radius);
     
-    // Cache the results if we got any
+    // Save the results to location_cache database
     if (places.length > 0) {
+      console.log(`💾 Saving ${places.length} places to location_cache database...`);
       await this.saveToCache(query, places);
+    } else {
+      console.log(`⚠️ No places returned from Google Maps API`);
     }
 
     return places;
+  }
+
+  /**
+   * Call Google Maps API directly (bypassing LocationService to avoid circular dependency)
+   */
+  private async callGoogleMapsAPI(type?: string, keyword?: string, radius: number = 1500): Promise<Place[]> {
+    const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+    if (!apiKey) {
+      console.error('❌ Google Maps API key not found');
+      return [];
+    }
+
+    const CONFERENCE_VENUE = {
+      lat: 39.7432,
+      lng: -104.9959
+    };
+
+    try {
+      const params = new URLSearchParams({
+        location: `${CONFERENCE_VENUE.lat},${CONFERENCE_VENUE.lng}`,
+        radius: radius.toString(),
+        key: apiKey
+      });
+
+      if (type) {
+        params.append('type', type);
+      }
+
+      if (keyword) {
+        params.append('keyword', keyword);
+      }
+
+      console.log(`🗺️ Direct Google Maps API call: ${params.toString()}`);
+
+      const response = await fetch(
+        `https://maps.googleapis.com/maps/api/place/nearbysearch/json?${params.toString()}`,
+        {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+          },
+          signal: AbortSignal.timeout(5000)
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Google Maps API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log(`📍 Google Maps returned ${data.results?.length || 0} places`);
+      
+      return data.results || [];
+
+    } catch (error) {
+      console.error('❌ Error calling Google Maps API:', error);
+      return [];
+    }
   }
 
   /**
