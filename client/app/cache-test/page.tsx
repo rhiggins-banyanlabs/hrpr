@@ -217,7 +217,7 @@ export default function CacheTestPage() {
                         {place.rating && (
                           <p className="text-sm text-yellow-600">
                             ⭐ {place.rating}
-                            {place.price_level && ` • ${'$'.repeat(place.price_level)}`}
+                            {typeof place.price_level === 'number' && place.price_level > 0 && ` • ${'$'.repeat(place.price_level)}`}
                           </p>
                         )}
                       </div>
