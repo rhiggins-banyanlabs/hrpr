@@ -194,14 +194,14 @@ export default function Orb({
       }
       
       gl.clearColor(0, 0, 0, 0);
-      container.appendChild(gl.canvas);
+      container.appendChild(gl.canvas as any);
     } catch (error) {
       console.warn('Failed to create WebGL context, skipping orb rendering:', error);
       return;
     }
 
-    const geometry = new Triangle(gl);
-    const program = new Program(gl, {
+    const geometry = new Triangle(gl as any);
+    const program = new Program(gl as any, {
       vertex: vert,
       fragment: frag,
       uniforms: {
@@ -220,7 +220,7 @@ export default function Orb({
       },
     });
 
-    const mesh = new Mesh(gl, { geometry, program });
+    const mesh = new Mesh(gl as any, { geometry, program });
 
     function resize() {
       if (!container) return;
@@ -228,12 +228,12 @@ export default function Orb({
       const width = container.clientWidth;
       const height = container.clientHeight;
       renderer.setSize(width * dpr, height * dpr);
-      gl.canvas.style.width = `${width}px`;
-      gl.canvas.style.height = `${height}px`;
+      (gl.canvas as any).style.width = `${width}px`;
+      (gl.canvas as any).style.height = `${height}px`;
       program.uniforms.iResolution.value.set(
-        gl.canvas.width,
-        gl.canvas.height,
-        gl.canvas.width / gl.canvas.height,
+        (gl.canvas as any).width,
+        (gl.canvas as any).height,
+        (gl.canvas as any).width / (gl.canvas as any).height,
       );
     }
     window.addEventListener("resize", resize);
