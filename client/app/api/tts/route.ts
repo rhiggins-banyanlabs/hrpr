@@ -12,10 +12,10 @@ export async function POST(req: NextRequest) {
   try {
     const { 
       text, 
-      voice = 'nova', 
-      model = 'tts-1', // Use fastest model 
+      voice = 'nova', // Default to nova - energetic, friendly voice
+      model = 'tts-1', // Use standard model for consistent speed
       response_format = 'mp3',
-      speed = 1.05 // Slightly faster speech speed
+      speed = 1.0 // Normal speed
     } = await req.json();
 
     const apiKey = process.env.OPENAI_API_KEY;

@@ -52,19 +52,19 @@ export interface FeedbackConfig {
 }
 
 export const DEFAULT_FEEDBACK_CONFIG: FeedbackConfig = {
-  initialSilenceTimeout: 2000, // 2 seconds base timeout 
-  feedbackSilenceTimeout: 15000, // 15 seconds for feedback collection
-  moreQuestionsTimeout: 20000, // 20 seconds base timeout
+  initialSilenceTimeout: 10000, // 10 seconds after response before asking if they need help
+  feedbackSilenceTimeout: 30000, // 30 seconds of silence = timeout and reset
+  moreQuestionsTimeout: 30000, // 30 seconds to respond before timeout
   // Latency adjustment settings
-  latencyBufferMultiplier: 0.5, // Add 50% buffer on top of measured latency
-  minTimeout: 3000, // Minimum 3 seconds regardless of latency
-  maxTimeout: 8000, // Maximum 8 seconds to prevent excessive waits
+  latencyBufferMultiplier: 0, // No buffer needed with longer timeouts
+  minTimeout: 10000, // Minimum 10 seconds
+  maxTimeout: 30000, // Maximum 30 seconds
   messages: {
-    moreQuestions: "Do you have any more questions for me?",
-    readyToHelp: "I am ready to answer all your conference needs!",
-    satisfaction: "How was your experience with me today? I'd love to hear your feedback!",
-    goodbye: "Please feel free to come ask me any questions you may have throughout the ACA conference. I hope you have a great day!",
-    requestFeedback: "Could you share what went well or what could be improved? All feedback - positive or negative - helps me serve you better!",
-    thankYou: "Thank you for your feedback. I hope you have a wonderful conference experience!"
+    moreQuestions: "Is there anything else I can help you with today?",
+    readyToHelp: "What else can I help you with?",
+    satisfaction: "How was your experience with me today?",
+    goodbye: "Thanks for chatting! Feel free to come back anytime during the conference. Have a great day!",
+    requestFeedback: "I'd love to hear what you think - what went well or what could be better?",
+    thankYou: "Thank you for your feedback! Have a wonderful conference experience!"
   }
 };

@@ -1,22 +1,23 @@
 // src/services/prompt-enhancement.service.ts
 import { Strategy } from "@/types/ai-router.types";
-import { ConferenceDataService } from "./conference-data.service";
 import { LocationService } from "./location.service";
 import { VenueLookupService } from "./venue-lookup.service";
 import { IntentDetectorService } from "./intent-detector.service";
 import { LocationCacheService } from "./location-cache.service";
+import { ExhibitorSearchService } from "./exhibitor-search.service";
 
 export class PromptEnhancementService {
   private venueLookup: VenueLookupService | null = null;
   private venueLookupInitialized = false;
   private locationCache: LocationCacheService;
+  private exhibitorService: ExhibitorSearchService;
 
   constructor(
-    private conferenceService: ConferenceDataService,
     private locationService: LocationService
   ) {
     // Don't initialize venue lookup until needed
     this.locationCache = LocationCacheService.getInstance();
+    this.exhibitorService = ExhibitorSearchService.getInstance();
   }
 
   private async initializeVenueLookupIfNeeded() {
@@ -43,25 +44,22 @@ export class PromptEnhancementService {
     // Step 1: Fast intent detection (no database)
     const intent = IntentDetectorService.detectIntent(originalPrompt);
     
-    // Step 2: Add conference data if needed (no database)
-    if (intent.isConferenceQuery) {
-      enhancedPrompt += '\n\nCONFERENCE SCHEDULE:';
-      enhancedPrompt += '\n- 9AM: Opening Keynote by Sarah Chen';
-      enhancedPrompt += '\n- 10:30AM: Deep Learning Fundamentals';
-      enhancedPrompt += '\n- 12PM: Lunch & Networking';
-      enhancedPrompt += '\n- 2PM: AI Ethics Panel';
-      enhancedPrompt += '\n- 3:30PM: Hands-on Workshop';
-      enhancedPrompt += '\n- 5PM: Data Science Trends';
-      enhancedPrompt += '\n- 6:30PM: Closing Reception';
+    // Step 2: Add conference and exhibitor data from exhibitor search service (database only)
+    try {
+      const exhibitorQuery = await this.exhibitorService.processExhibitorQuery(originalPrompt);
+      
+      if (exhibitorQuery.found && exhibitorQuery.data.length > 0) {
+        console.log(`🏢 PromptEnhancement: Found ${exhibitorQuery.data.length} exhibitors from database`);
+        const exhibitorData = this.exhibitorService.formatMultipleExhibitors(exhibitorQuery.data);
+        enhancedPrompt += `\n\n${exhibitorQuery.context.toUpperCase()}\n${exhibitorData}`;
+      }
+      // No fallback - only use actual database data
+    } catch (error) {
+      console.log('⚠️ Exhibitor lookup failed, no data added:', error);
+      // No fallback - only use actual database data
     }
     
-    // Step 3: Add location data if needed (no database)
-    if (intent.isLocationQuery) {
-      enhancedPrompt += '\n\nVENUE INFO:';
-      enhancedPrompt += '\n- Convention Center: 700 14th St, Denver';
-      enhancedPrompt += '\n- Host Hotel: Hyatt Regency (2min walk)';
-      enhancedPrompt += '\n- Parking: $15/day at center, $10/day nearby';
-    }
+    // Step 3: Location data will be handled by venue lookup service below
 
     // Step 4: Tiered location lookup - scraped data → cache → Google Maps API
     if (intent.isVenueQuery || intent.isLocationQuery) {

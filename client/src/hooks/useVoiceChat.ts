@@ -118,6 +118,12 @@ export const useVoiceChat = ({
           fillerAudioPromise = customFillerPromise;
         } else {
           const fillerResponse = IntentDetectorService.getFillerResponse(text);
+          console.log('🎤 Filler response check:', {
+            query: text,
+            fillerResponse,
+            hasSpeakText: !!speakText,
+            willPlayFiller: !!(fillerResponse && speakText)
+          });
           if (fillerResponse && speakText) {
             console.log('🎤 Playing immediate filler response:', fillerResponse);
             // Keep track of the filler audio promise so we can wait for it later
@@ -125,6 +131,8 @@ export const useVoiceChat = ({
               console.log('⚠️ Filler response TTS failed, continuing without filler:', error);
               return null;
             });
+          } else {
+            console.log('🎤 No filler played:', { noFiller: !fillerResponse, noSpeakText: !speakText });
           }
         }
       } else {
@@ -369,7 +377,7 @@ export const useVoiceChat = ({
           isInFeedbackFlowRef.current = true;
           const transitionResult = feedbackStateMachine.transition('user_response');
           console.log('🔄 Transition result:', transitionResult, 'New state:', feedbackStateMachine.getCurrentState());
-        }, 100); // Small delay to ensure clean state transition
+        }, 10000); // 10 second delay before asking if they need more help
       }
     }
   }, [sessionId, speakText]);
@@ -554,8 +562,8 @@ export const useVoiceChat = ({
         }
       };
       
-      // Add a 2-second buffer after TTS to ensure natural conversation flow
-      setTimeout(startDetection, 2000);
+      // Start immediately after TTS completes (no extra buffer needed with longer timeouts)
+      setTimeout(startDetection, 100);
     };
     
     console.log('🎯 Checking if should speak message:', {

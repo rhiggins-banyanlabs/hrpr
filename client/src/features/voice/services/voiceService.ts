@@ -42,17 +42,60 @@ class VoiceService {
       const url = URL.createObjectURL(audioBlob);
       const audio = new Audio(url);
       
-      audio.onended = () => {
-        URL.revokeObjectURL(url);
+      // Preload the audio to prevent delays
+      audio.preload = 'auto';
+      
+      // Set volume to ensure it's audible
+      audio.volume = 0.8;
+      
+      let hasEnded = false;
+      
+      const cleanup = () => {
+        if (!hasEnded) {
+          hasEnded = true;
+          URL.revokeObjectURL(url);
+          audio.removeEventListener('ended', handleEnded);
+          audio.removeEventListener('error', handleError);
+          audio.removeEventListener('canplaythrough', handleCanPlay);
+        }
+      };
+      
+      const handleEnded = () => {
+        console.log('🔊 Audio playback completed');
+        cleanup();
         resolve();
       };
       
-      audio.onerror = (error) => {
-        URL.revokeObjectURL(url);
+      const handleError = (error: any) => {
+        console.error('🔊 Audio playback error:', error);
+        cleanup();
         reject(new Error('Audio playback failed'));
       };
       
-      audio.play().catch(reject);
+      const handleCanPlay = () => {
+        console.log('🔊 Audio ready to play');
+        audio.play().catch((playError) => {
+          console.error('🔊 Play error:', playError);
+          cleanup();
+          reject(playError);
+        });
+      };
+      
+      audio.addEventListener('ended', handleEnded);
+      audio.addEventListener('error', handleError);
+      audio.addEventListener('canplaythrough', handleCanPlay);
+      
+      // Load the audio
+      audio.load();
+      
+      // Fallback timeout to prevent hanging
+      setTimeout(() => {
+        if (!hasEnded) {
+          console.log('🔊 Audio playback timeout - forcing completion');
+          cleanup();
+          resolve();
+        }
+      }, 60000); // 60 second timeout
     });
   }
 
@@ -61,8 +104,9 @@ class VoiceService {
     
     const audioBlob = await this.textToSpeech({
       text: testText,
-      voice: voice as any,
-      model: 'tts-1-hd'
+      voice: voice as ,
+      model: 'tts-1', // Use standard model for consistent speed
+      speed: 1.0 // Normal speed
     });
     
     await this.playAudio(audioBlob);

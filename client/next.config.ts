@@ -41,6 +41,11 @@ const nextConfig: NextConfig = {
       tls: false,
     };
 
+    config.module = {
+      ...config.module,
+      exprContextCritical: false,
+    };
+
     return config;
   },
 };
