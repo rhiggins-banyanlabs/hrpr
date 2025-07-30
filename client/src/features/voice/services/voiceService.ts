@@ -104,7 +104,7 @@ class VoiceService {
     
     const audioBlob = await this.textToSpeech({
       text: testText,
-      voice: voice as ,
+      voice: voice as any,
       model: 'tts-1', // Use standard model for consistent speed
       speed: 1.0 // Normal speed
     });
