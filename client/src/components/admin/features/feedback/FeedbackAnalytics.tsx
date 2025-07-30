@@ -98,22 +98,22 @@ export const FeedbackAnalytics: React.FC = () => {
         <StatCard
           title="Total Feedback"
           value={analytics.totalFeedback}
-          color="blue"
+          iconColor="bg-blue-500"
         />
         <StatCard
           title="Satisfaction Rate"
           value={`${analytics.satisfactionRate}%`}
-          color={analytics.satisfactionRate >= 80 ? 'green' : analytics.satisfactionRate >= 60 ? 'yellow' : 'red'}
+          iconColor={analytics.satisfactionRate >= 80 ? 'green' : analytics.satisfactionRate >= 60 ? 'yellow' : 'red'}
         />
         <StatCard
           title="Satisfied Users"
           value={analytics.satisfiedCount}
-          color="green"
+          iconColor="bg-green-500"
         />
         <StatCard
           title="Avg. Questions"
           value={analytics.averageConversations}
-          color="purple"
+          iconColor="bg-purple-500"
         />
       </div>
 
