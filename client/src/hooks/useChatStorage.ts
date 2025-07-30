@@ -46,13 +46,14 @@ export const useChat = ({ sessionId, onClose }: UseChatProps) => {
 
       // Save intro message to database
       try {
-        await ChatStorageService.saveMessage({
+        await ChatStorageService.saveMessage(
           sessionId,
-          message: introMessage.text,
-          isUser: false,
-          messageId: introMessage.id,
-          metadata: { isIntroMessage: true }
-        });
+          'Harper', // Note: capital 'H' to match the type "user" | "Harper"
+          introMessage.text,
+          {
+            metadata: { isIntroMessage: true }
+          }
+        );
         console.log('💾 Intro message saved to database');
       } catch (error) {
         console.warn('⚠️ Failed to save intro message:', error);
@@ -108,22 +109,26 @@ export const useChat = ({ sessionId, onClose }: UseChatProps) => {
 
     try {
       // Save user message to database immediately
-      await ChatStorageService.saveMessage({
+      await ChatStorageService.saveMessage(
         sessionId,
-        message: userMessage.text,
-        isUser: true,
-        messageId: userMessage.id
-      });
+        'user', 
+        userMessage.text,
+        {
+          metadata: { isUser: true }
+        }
+      );
       console.log('💾 User message saved to database');
 
       // Save question to recent questions with category
       const category = categorizeQuestion(text);
-      await ChatStorageService.saveRecentQuestion({
+      await ChatStorageService.saveMessage(
         sessionId,
-        question: text,
-        category,
-        timestamp: new Date().toISOString()
-      });
+        'user',
+        text,
+        {
+          metadata: { category }
+        }
+      );
       console.log(`📊 Question saved with category: ${category}`);
 
     } catch (error) {
@@ -187,21 +192,14 @@ export const useChat = ({ sessionId, onClose }: UseChatProps) => {
 
       // Save AI message to database with metadata
       try {
-        await ChatStorageService.saveMessage({
+        await ChatStorageService.saveMessage(
           sessionId,
-          message: aiMessage.text,
-          isUser: false,
-          messageId: aiMessage.id,
-          metadata: {
-            provider: data.provider,
-            strategy: strategy,
-            cost: data.cost,
-            responseTime: data.responseTime,
-            tokensUsed: data.tokensUsed,
-            cached: data.cached,
-            optimizations: data.optimizations
+          'Harper',
+          aiMessage.text,
+          {
+            metadata: { provider: data.provider, strategy, cost: data.cost, responseTime: data.responseTime, tokensUsed: data.tokensUsed, cached: data.cached, optimizations: data.optimizations }
           }
-        });
+        );
         console.log('💾 AI message saved to database with metadata');
       } catch (error) {
         console.warn('⚠️ Failed to save AI message:', error);
@@ -285,12 +283,14 @@ export const useChat = ({ sessionId, onClose }: UseChatProps) => {
 
     // Log voice input analytics
     try {
-      await ChatStorageService.logVoiceInput({
-        sessionId: sessionId || 'unknown',
+      await ChatStorageService.saveMessage(
+        sessionId || '',
+        'user',
         transcript,
-        timestamp: new Date().toISOString(),
-        success: true
-      });
+        {
+          metadata: { isVoiceInput: true }
+        }
+      );
     } catch (error) {
       console.warn('⚠️ Failed to log voice input:', error);
     }
