@@ -43,8 +43,11 @@ const nextConfig: NextConfig = {
     };
 
     // Ensure proper module resolution
-    config.resolve.fallback = {
-      ...config.resolve.fallback,
+    config.resolve = {
+      ...config.resolve,
+      fallback: {
+        ...config.resolve?.fallback,
+        ...config.resolve?.fallback,
       fs: false,
       net: false,
       tls: false,
