@@ -107,8 +107,8 @@ export class GoogleMapsService {
   /**
    * Filter places to find fast food establishments
    */
-  private filterFastFoodPlaces(places: any[]): Place[] {
-    return places.filter((place: any) => {
+  private filterFastFoodPlaces(places: Place[]): Place[] {
+    return places.filter((place: Place) => {
       const name = place.name?.toLowerCase() || '';
       const isFastFood = this.fastFoodKeywords.some(keyword => name.includes(keyword));
       const isLowPrice = place.price_level !== undefined && place.price_level <= 2;

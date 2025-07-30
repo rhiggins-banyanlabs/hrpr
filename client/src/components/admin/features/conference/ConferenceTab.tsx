@@ -6,6 +6,7 @@ import SpeakersList from './SpeakersList'
 import SessionsList from './SessionsList'
 import SpeakerModal from './SpeakerModal'
 import SessionModal from './SessionModal'
+import { Speaker, EventSession } from '@/lib/supabase/chatStorage'
 
 export default function ConferenceTab() {
   const {
@@ -25,8 +26,8 @@ export default function ConferenceTab() {
   // Modal states
   const [speakerModalOpen, setSpeakerModalOpen] = useState(false)
   const [sessionModalOpen, setSessionModalOpen] = useState(false)
-  const [editingSpeaker, setEditingSpeaker] = useState<any>(null)
-  const [editingSession, setEditingSession] = useState<any>(null)
+  const [editingSpeaker, setEditingSpeaker] = useState<Speaker | null>(null)
+  const [editingSession, setEditingSession] = useState<EventSession | null>(null)
 
   // Speaker handlers
   const handleAddSpeaker = () => {
@@ -34,12 +35,12 @@ export default function ConferenceTab() {
     setSpeakerModalOpen(true)
   }
 
-  const handleEditSpeaker = (speaker: any) => {
+  const handleEditSpeaker = (speaker: Speaker) => {
     setEditingSpeaker(speaker)
     setSpeakerModalOpen(true)
   }
 
-  const handleSpeakerSubmit = async (speakerData: any) => {
+  const handleSpeakerSubmit = async (speakerData: Omit<Speaker, 'id' | 'created_at' | 'updated_at'>) => {
     if (editingSpeaker) {
       await updateSpeaker(editingSpeaker.id, speakerData)
     } else {
@@ -58,12 +59,12 @@ export default function ConferenceTab() {
     setSessionModalOpen(true)
   }
 
-  const handleEditSession = (session: any) => {
+  const handleEditSession = (session: EventSession) => {
     setEditingSession(session)
     setSessionModalOpen(true)
   }
 
-  const handleSessionSubmit = async (sessionData: any) => {
+  const handleSessionSubmit = async (sessionData: Omit<EventSession, 'id' | 'created_at' | 'updated_at'>) => {
     if (editingSession) {
       await updateSession(editingSession.id, sessionData)
     } else {

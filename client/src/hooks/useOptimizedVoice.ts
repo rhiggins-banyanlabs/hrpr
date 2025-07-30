@@ -161,9 +161,16 @@ export const useOptimizedVoice = () => {
           clearTimeout(timeout);
           resolve(undefined);
         };
-        audio.onerror = () => {
+        audio.onerror = (event) => {
           clearTimeout(timeout);
-          reject(new Error('Audio load error'));
+          console.error('🔊 Audio load error event:', event);
+          console.error('🔊 Audio error details:', {
+            error: audio.error,
+            networkState: audio.networkState,
+            readyState: audio.readyState,
+            src: audio.src
+          });
+          reject(new Error(`Audio load error: ${audio.error?.message || 'Unknown error'}`));
         };
         
         // Check if already ready
@@ -175,7 +182,22 @@ export const useOptimizedVoice = () => {
       
       // Small delay to ensure audio buffer is stable
       await new Promise(resolve => setTimeout(resolve, 100));
-      await audio.play();
+      
+      try {
+        await audio.play();
+      } catch (playError) {
+        console.error('🔊 Audio play error:', playError);
+        console.error('🔊 Audio state at play error:', {
+          readyState: audio.readyState,
+          networkState: audio.networkState,
+          error: audio.error,
+          paused: audio.paused,
+          currentTime: audio.currentTime,
+          duration: audio.duration
+        });
+        throw new Error(`Failed to play audio: ${playError instanceof Error ? playError.message : 'Unknown error'}`);
+      }
+      
       return { audio, duration };
     },
     [unlockAudio, stopSpeaking, speakWithOptimizedTTS]

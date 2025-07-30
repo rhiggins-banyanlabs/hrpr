@@ -1,10 +1,18 @@
 // src/components/ConferenceDataCheck.tsx
 "use client"
 import { useState } from 'react';
-import { ConferenceStorageService } from '@/lib/supabase/chatStorage';
+import { ConferenceStorageService, Speaker, EventSession } from '@/lib/supabase/chatStorage';
+
+interface ConferenceData {
+  speakers: Speaker[];
+  sessions: EventSession[];
+  speakerCount: number;
+  sessionCount: number;
+  error?: string;
+}
 
 export function ConferenceDataCheck() {
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<ConferenceData | null>(null);
   const [loading, setLoading] = useState(false);
 
   const checkData = async () => {
@@ -31,7 +39,7 @@ export function ConferenceDataCheck() {
       
     } catch (error) {
       console.error('❌ Error checking conference data:', error);
-      setData({ error: error.message });
+      setData({ error: (error as Error).message, speakers: [], sessions: [], speakerCount: 0, sessionCount: 0 });
     } finally {
       setLoading(false);
     }
@@ -65,7 +73,7 @@ export function ConferenceDataCheck() {
               {data.speakers.length > 0 && (
                 <div>
                   <div className="text-yellow-400 font-bold">Speakers:</div>
-                  {data.speakers.slice(0, 3).map((speaker: any, i: number) => (
+                  {data.speakers.slice(0, 3).map((speaker: Speaker, i: number) => (
                     <div key={i} className="text-gray-300">
                       • {speaker.name} - {speaker.title}
                     </div>
@@ -76,7 +84,7 @@ export function ConferenceDataCheck() {
               {data.sessions.length > 0 && (
                 <div>
                   <div className="text-yellow-400 font-bold">Sessions:</div>
-                  {data.sessions.slice(0, 3).map((session: any, i: number) => (
+                  {data.sessions.slice(0, 3).map((session: EventSession, i: number) => (
                     <div key={i} className="text-gray-300">
                       • {session.time}: {session.title}
                     </div>

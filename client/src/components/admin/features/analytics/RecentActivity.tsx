@@ -58,7 +58,7 @@ export default function RecentActivity() {
             {analytics.recentEvents.length === 0 ? (
               <p className="text-white/60 text-center py-8">No recent events</p>
             ) : (
-              analytics.recentEvents.map((event: any, index: number) => (
+              analytics.recentEvents.map((event, index) => (
                 <div key={index} className="p-3 bg-white/5 rounded-lg">
                   <div className="flex justify-between items-start">
                     <div className="flex-1">

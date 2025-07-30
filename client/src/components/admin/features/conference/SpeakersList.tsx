@@ -1,16 +1,17 @@
 import Card, { CardContent, CardHeader } from '../../ui/Card'
 import Button from '../../ui/Button'
+import { Speaker } from '@/lib/supabase/chatStorage'
 
 interface SpeakersListProps {
-  speakers: any[]
+  speakers: Speaker[]
   loading: boolean
   onAdd: () => void
-  onEdit: (speaker: any) => void
+  onEdit: (speaker: Speaker) => void
   onDelete: (speakerId: string) => void
 }
 
 export default function SpeakersList({ speakers, loading, onAdd, onEdit, onDelete }: SpeakersListProps) {
-  const handleDelete = async (speaker: any) => {
+  const handleDelete = async (speaker: Speaker) => {
     if (confirm(`Delete speaker "${speaker.name}"?`)) {
       try {
         await onDelete(speaker.id)

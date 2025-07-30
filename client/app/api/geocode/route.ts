@@ -3,8 +3,30 @@ import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
 
 // Type for the geocode response
+type GeocodeResult = {
+  address_components: Array<{
+    long_name: string;
+    short_name: string;
+    types: string[];
+  }>;
+  formatted_address: string;
+  geometry: {
+    location: {
+      lat: number;
+      lng: number;
+    };
+    location_type: string;
+    viewport: {
+      northeast: { lat: number; lng: number };
+      southwest: { lat: number; lng: number };
+    };
+  };
+  place_id: string;
+  types: string[];
+}
+
 type GeocodeResponse = {
-  results: any[];
+  results: GeocodeResult[];
   status: string;
   error_message?: string;
 }

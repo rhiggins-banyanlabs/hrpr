@@ -2,9 +2,17 @@
 
 import { useState } from 'react';
 
+interface PlaceResult {
+  name: string;
+  vicinity?: string;
+  rating?: number;
+  place_id?: string;
+  [key: string]: unknown;
+}
+
 interface TestResult {
   route: string;
-  results: any[];
+  results: PlaceResult[];
   responseTime: number;
   cached?: boolean;
   error?: string;

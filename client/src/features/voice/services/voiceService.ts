@@ -1,4 +1,4 @@
-import { TTSRequest, STTRequest, STTResponse } from '../types/voice.types';
+import { TTSRequest, STTRequest, STTResponse, OpenAIVoice } from '../types/voice.types';
 
 class VoiceService {
   async textToSpeech(request: TTSRequest): Promise<Blob> {
@@ -104,7 +104,7 @@ class VoiceService {
     
     const audioBlob = await this.textToSpeech({
       text: testText,
-      voice: voice as any,
+      voice: voice as OpenAIVoice,
       model: 'tts-1', // Use standard model for consistent speed
       speed: 1.0 // Normal speed
     });

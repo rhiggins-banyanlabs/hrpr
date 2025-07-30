@@ -1,10 +1,18 @@
 import { useState, useEffect } from 'react'
+import { Speaker } from '@/lib/supabase/chatStorage'
+
+interface SpeakerFormData {
+  name: string;
+  title: string;
+  company: string;
+  bio?: string;
+}
 
 interface SpeakerModalProps {
   isOpen: boolean
-  speaker?: any
+  speaker?: Speaker
   onClose: () => void
-  onSubmit: (speakerData: any) => Promise<void>
+  onSubmit: (speakerData: SpeakerFormData) => Promise<void>
 }
 
 export default function SpeakerModal({ isOpen, speaker, onClose, onSubmit }: SpeakerModalProps) {

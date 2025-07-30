@@ -366,19 +366,36 @@ export const useVoiceChat = ({
       
       // Check if we should start feedback flow after audio completes
       // Always ask "Do you have any more questions?" after answering
-      if (feedbackStateMachine.getCurrentState() === FeedbackState.IDLE && conversationCountRef.current > 0) {
+      const currentFeedbackState = feedbackStateMachine.getCurrentState();
+      console.log('🔍 Checking feedback flow conditions:', {
+        currentState: currentFeedbackState,
+        conversationCount: conversationCountRef.current,
+        isInFeedbackFlow: isInFeedbackFlowRef.current,
+        shouldStartFeedback: currentFeedbackState === FeedbackState.IDLE && conversationCountRef.current > 0
+      });
+      
+      if (currentFeedbackState === FeedbackState.IDLE && conversationCountRef.current > 0) {
         // Use setTimeout to ensure state change happens after current execution context
         setTimeout(() => {
+          const beforeState = feedbackStateMachine.getCurrentState();
           console.log('🔄 Audio complete - starting feedback flow', {
-            currentState: feedbackStateMachine.getCurrentState(),
+            beforeState,
             conversationCount: conversationCountRef.current,
             isInFeedbackFlow: isInFeedbackFlowRef.current,
             isProcessing: isProcessingRef.current
           });
           isInFeedbackFlowRef.current = true;
           const transitionResult = feedbackStateMachine.transition('user_response');
-          console.log('🔄 Transition result:', transitionResult, 'New state:', feedbackStateMachine.getCurrentState());
+          const afterState = feedbackStateMachine.getCurrentState();
+          console.log('🔄 Transition completed:', {
+            transitionResult,
+            beforeState,
+            afterState,
+            expectedState: 'ASKING_MORE_QUESTIONS'
+          });
         }, 10000); // 10 second delay before asking if they need more help
+      } else {
+        console.log('❌ Not starting feedback flow - conditions not met');
       }
     }
   }, [sessionId, speakText]);
@@ -525,7 +542,9 @@ export const useVoiceChat = ({
 
   // Handle feedback state changes
   const handleFeedbackStateChange = useCallback(async (newState: FeedbackState, oldState: FeedbackState) => {
+    console.log(`🎯 handleFeedbackStateChange called: ${oldState} -> ${newState}`);
     let message = feedbackStateMachine.getStateMessage();
+    console.log('📢 State message retrieved:', message);
     
     // Personalize goodbye/thank you message with user's name if available
     if (message && newState === FeedbackState.THANKING_USER && userNameRef.current) {

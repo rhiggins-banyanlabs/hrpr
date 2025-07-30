@@ -230,9 +230,11 @@ export class FeedbackStateMachine {
 
   // Reset state machine
   reset() {
+    const oldState = this.currentState;
     this.currentState = FeedbackState.IDLE;
     this.feedbackWasProvided = false; // Reset feedback tracking
-    console.log('Feedback state machine reset to IDLE');
+    console.log(`🔄 Feedback state machine reset: ${oldState} -> IDLE`);
+    console.trace('Reset called from:');
   }
 
   // Helper to determine user intent from text
