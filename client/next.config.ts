@@ -18,6 +18,7 @@ const nextConfig: NextConfig = {
         aggregateTimeout: 300, // reduce delay
       };
     }
+    
     // Fix chunk loading issues
     config.optimization = {
       ...config.optimization,
@@ -43,11 +44,12 @@ const nextConfig: NextConfig = {
     };
 
     // Ensure proper module resolution
-    config.resolve = {
-      ...config.resolve,
-      fallback: {
-        ...config.resolve?.fallback,
-        ...config.resolve?.fallback,
+    if (!config.resolve) {
+      config.resolve = {};
+    }
+    
+    config.resolve.fallback = {
+      ...(config.resolve.fallback || {}),
       fs: false,
       net: false,
       tls: false,
