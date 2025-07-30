@@ -60,7 +60,7 @@ export default function TimelineView() {
             <div key={time} className="border-l-4 border-indigo-500 pl-6">
               {/* Time Header */}
               <div className="flex items-center mb-4">
-                <div className="bg-indigo-600 text-white px-3 py-1 rounded-full text-sm font-medium -ml-8 bg-black">
+                <div className=" text-white px-3 py-1 rounded-full text-sm font-medium -ml-8 bg-black">
                   {time}
                 </div>
               </div>
