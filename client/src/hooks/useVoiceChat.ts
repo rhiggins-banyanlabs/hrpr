@@ -392,6 +392,9 @@ export const useVoiceChat = ({
             feedbackStateMachine.reset();
           }
           
+          // Stop any existing silence detector before transitioning
+          stopSilenceDetection();
+          
           isInFeedbackFlowRef.current = true;
           const transitionResult = feedbackStateMachine.transition('user_response');
           const afterState = feedbackStateMachine.getCurrentState();
@@ -401,6 +404,10 @@ export const useVoiceChat = ({
             afterState,
             expectedState: 'ASKING_MORE_QUESTIONS'
           });
+          
+          // Immediately check what message will be spoken
+          const messageToSpeak = feedbackStateMachine.getStateMessage();
+          console.log('🔊 Message that will be spoken:', messageToSpeak);
         }, 10000); // 10 second delay before asking if they need more help
       } else {
         console.log('❌ Not starting feedback flow - conditions not met');
@@ -551,8 +558,14 @@ export const useVoiceChat = ({
   // Handle feedback state changes
   const handleFeedbackStateChange = useCallback(async (newState: FeedbackState, oldState: FeedbackState) => {
     console.log(`🎯 handleFeedbackStateChange called: ${oldState} -> ${newState}`);
+    console.log('🎯 Current actual state from state machine:', feedbackStateMachine.getCurrentState());
     let message = feedbackStateMachine.getStateMessage();
     console.log('📢 State message retrieved:', message);
+    console.log('📢 Expected states:', {
+      ASKING_MORE_QUESTIONS: FeedbackState.ASKING_MORE_QUESTIONS,
+      ASKING_SATISFACTION: FeedbackState.ASKING_SATISFACTION,
+      currentIs: newState
+    });
     
     // Personalize goodbye/thank you message with user's name if available
     if (message && newState === FeedbackState.THANKING_USER && userNameRef.current) {
