@@ -34,7 +34,6 @@ export default function MessageViewer() {
       isOpen={messageViewOpen}
       onClose={closeMessageViewer}
       size="xl"
-      title="Chat Session Messages"
     >
       <div className="space-y-4">
         {/* Session Header */}
