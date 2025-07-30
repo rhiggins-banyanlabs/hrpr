@@ -99,7 +99,7 @@ export const useSpeechRecognition = (
     if (!state.isSupported) return;
 
     try {
-      const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition;
+      const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
       const recognition = new SpeechRecognition();
 
       recognition.continuous = continuous;
