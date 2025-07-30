@@ -40,7 +40,7 @@ export default function TimelineView() {
         <CardContent>
           <div className="text-center py-12">
             <div className="text-white/70 mb-4">No sessions scheduled yet</div>
-            <Button onClick={openSessionForm}>
+            <Button onClick={() => openSessionForm()}>
               Add First Session
             </Button>
           </div>
