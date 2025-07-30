@@ -337,7 +337,7 @@ export default function Home() {
               <h1
                 className="font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-500 to-blue-400 transition-all duration-700 text-5xl sm:text-6xl md:text-7xl"
               >
-                Harper
+                HRPR
               </h1>
               <p
                 className="mt-2 text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 via-purple-300 to-blue-300 transition-all duration-700 text-lg sm:text-xl"
