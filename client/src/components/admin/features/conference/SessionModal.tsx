@@ -1,11 +1,20 @@
 import { useState, useEffect } from 'react'
+import { EventSession, Speaker } from '@/lib/supabase/chatStorage'
+
+interface SessionFormData {
+  time: string;
+  title: string;
+  speaker: string;
+  description?: string;
+  location?: string;
+}
 
 interface SessionModalProps {
   isOpen: boolean
-  session?: any
-  speakers: any[]
+  session?: EventSession
+  speakers: Speaker[]
   onClose: () => void
-  onSubmit: (sessionData: any) => Promise<void>
+  onSubmit: (sessionData: SessionFormData) => Promise<void>
 }
 
 export default function SessionModal({ isOpen, session, speakers, onClose, onSubmit }: SessionModalProps) {
@@ -41,7 +50,7 @@ export default function SessionModal({ isOpen, session, speakers, onClose, onSub
     try {
       await onSubmit(form)
       onClose()
-    } catch (error) {
+    } catch {
       alert('Failed to save session')
     }
   }

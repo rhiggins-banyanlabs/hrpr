@@ -34,7 +34,7 @@ export default function MessageViewer() {
       isOpen={messageViewOpen}
       onClose={closeMessageViewer}
       size="xl"
-      title="Chat Session Messages"
+      
     >
       <div className="space-y-4">
         {/* Session Header */}
@@ -63,7 +63,7 @@ export default function MessageViewer() {
               )}
               {selectedSession.metadata.initial_query && (
                 <Badge variant="warning" className="text-xs">
-                  Query: "{selectedSession.metadata.initial_query}"
+                  Query: &quot;{selectedSession.metadata.initial_query}&quot;
                 </Badge>
               )}
             </div>

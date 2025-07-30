@@ -1,5 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// Type for place results
+type PlaceResult = {
+  business_status?: string;
+  geometry: {
+    location: {
+      lat: number;
+      lng: number;
+    };
+  };
+  icon: string;
+  name: string;
+  opening_hours?: {
+    open_now: boolean;
+  };
+  photos?: Array<{
+    height: number;
+    html_attributions: string[];
+    photo_reference: string;
+    width: number;
+  }>;
+  place_id: string;
+  price_level?: number;
+  rating?: number;
+  reference: string;
+  types: string[];
+  user_ratings_total?: number;
+  vicinity: string;
+}
+
+// Removed unused PlacesResponse type
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const type = searchParams.get('type');
@@ -74,7 +105,7 @@ export async function GET(request: NextRequest) {
         
         // Filter for fast food-like places
         const fastFoodKeywords = ['mcdonalds', 'burger king', 'wendys', 'subway', 'taco bell', 'kfc', 'pizza hut', 'dominos', 'chipotle', 'panera', 'starbucks'];
-        const fastFoodPlaces = broaderData.results?.filter((place: any) => {
+        const fastFoodPlaces = broaderData.results?.filter((place: PlaceResult) => {
           const name = place.name?.toLowerCase() || '';
           const isFastFood = fastFoodKeywords.some(keyword => name.includes(keyword));
           const isLowPrice = place.price_level !== undefined && place.price_level <= 2;

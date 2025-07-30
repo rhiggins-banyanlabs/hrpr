@@ -13,7 +13,7 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
   isListening,
   onListeningChange,
 }) => {
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const recognitionRef = useRef<any | null>(null);
   const [finalTranscript, setFinalTranscript] = useState('');
   const [interimTranscript, setInterimTranscript] = useState('');
   const finalTranscriptRef = useRef(''); // Store current final transcript

@@ -5,7 +5,7 @@ import useConferenceForms from '@/hooks/admin/useConferenceForms'
 
 export default function SpeakersView() {
   const { speakers, loading, getSessionsBySpeaker } = useConferenceData()
-  const { editSpeaker, deleteSpeaker } = useConferenceForms()
+  const { editSpeaker, deleteSpeaker, openSpeakerForm } = useConferenceForms()
 
   if (loading) {
     return (
@@ -47,7 +47,7 @@ export default function SpeakersView() {
         <CardContent>
           <div className="text-center py-12">
             <div className="text-white/70 mb-4">No speakers added yet</div>
-            <Button onClick={() => useConferenceForms().openSpeakerForm()}>
+            <Button onClick={() => openSpeakerForm()}>
               Add First Speaker
             </Button>
           </div>

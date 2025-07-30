@@ -1,4 +1,4 @@
-import Card, { CardContent, CardHeader } from '../../ui/Card'
+import Card from '../../ui/Card'
 import Button from '../../ui/Button'
 import ChatSessionsStats from './ChatSessionsStats'
 import SessionsList from './SessionsList'
@@ -129,8 +129,8 @@ export default function ChatSessionsTab() {
                   fontSize: '14px',
                   fontWeight: '500'
                 }}
-                onMouseOver={(e) => e.target.style.backgroundColor = '#dc2626'}
-                onMouseOut={(e) => e.target.style.backgroundColor = '#ef4444'}
+                onMouseOver={(e) => (e.target as HTMLElement).style.backgroundColor = '#dc2626'}
+                onMouseOut={(e) => (e.target as HTMLElement).style.backgroundColor = '#ef4444'}
               >
                 Close
               </button>
@@ -206,7 +206,7 @@ export default function ChatSessionsTab() {
                         borderRadius: '12px',
                         fontSize: '11px'
                       }}>
-                        Query: "{selectedSession.metadata.initial_query}"
+                        Query: &quot;{selectedSession.metadata.initial_query}&quot;
                       </span>
                     )}
                   </div>

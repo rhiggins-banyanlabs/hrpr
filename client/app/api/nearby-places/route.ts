@@ -3,8 +3,36 @@ import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
 
 // Type for the nearby places response
+type PlaceResult = {
+  business_status?: string;
+  geometry: {
+    location: {
+      lat: number;
+      lng: number;
+    };
+  };
+  icon: string;
+  name: string;
+  opening_hours?: {
+    open_now: boolean;
+  };
+  photos?: Array<{
+    height: number;
+    html_attributions: string[];
+    photo_reference: string;
+    width: number;
+  }>;
+  place_id: string;
+  price_level?: number;
+  rating?: number;
+  reference: string;
+  types: string[];
+  user_ratings_total?: number;
+  vicinity: string;
+}
+
 type NearbyPlacesResponse = {
-  results: any[];
+  results: PlaceResult[];
   status: string;
   error_message?: string;
   html_attributions: string[];

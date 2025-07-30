@@ -38,7 +38,6 @@ export default function ChatPage() {
     isBotThinking,
     typingBotMsg,
     sendMessage,
-    sendBotMessage,
     isProcessing,
     sendIntroMessage,
     stopTyping
@@ -69,7 +68,7 @@ export default function ChatPage() {
   };
 
   // Voice handlers
-  const handleVoiceTranscript = useCallback((transcript: string, isInterim: boolean) => {
+  const handleVoiceTranscript = useCallback((transcript: string) => {
     console.log('🎤 Voice transcript update:', transcript);
     setVoiceTranscript(transcript);
   }, []);
@@ -213,13 +212,13 @@ export default function ChatPage() {
     router.push("/");
   }, [router, stopTyping]);
 
-  // Handle explicit session end
-  const handleEndChat = useCallback(async () => {
-    if (currentSession?.id) {
-      await endSession();
-      router.push("/");
-    }
-  }, [currentSession, endSession, router]);
+  // Handle explicit session end - commented out as it's not currently used
+  // const handleEndChat = useCallback(async () => {
+  //   if (currentSession?.id) {
+  //     await endSession();
+  //     router.push("/");
+  //   }
+  // }, [currentSession, endSession, router]);
 
   // Handle message submission
   const handleMessageSubmit = useCallback(async (message: string) => {

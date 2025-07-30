@@ -197,7 +197,17 @@ export class FeedbackStateMachine {
     }
 
     const oldState = this.currentState;
-    this.currentState = transition.to;
+    const newState = transition.to;
+    
+    // Log detailed transition info
+    console.log(`🔀 TRANSITION DETAILS:`, {
+      from: oldState,
+      to: newState,
+      trigger: trigger,
+      key: key
+    });
+    
+    this.currentState = newState;
     console.log(`✅ Transition successful: ${oldState} -> ${this.currentState}`);
 
     // Track if feedback was actually provided
@@ -207,7 +217,11 @@ export class FeedbackStateMachine {
     }
 
     console.log(`🚨 FEEDBACK STATE TRANSITION: ${oldState} -> ${this.currentState} (trigger: ${trigger})`);
-    console.trace('State transition stack trace');
+    
+    // Add guard to verify we're in the expected state
+    if (oldState === FeedbackState.IDLE && trigger === 'user_response' && newState !== FeedbackState.ASKING_MORE_QUESTIONS) {
+      console.error(`❌ UNEXPECTED TRANSITION: Expected IDLE -> ASKING_MORE_QUESTIONS but got ${newState}`);
+    }
 
     // Notify callbacks
     this.stateChangeCallbacks.forEach(cb => cb(this.currentState, oldState));
@@ -230,9 +244,11 @@ export class FeedbackStateMachine {
 
   // Reset state machine
   reset() {
+    const oldState = this.currentState;
     this.currentState = FeedbackState.IDLE;
     this.feedbackWasProvided = false; // Reset feedback tracking
-    console.log('Feedback state machine reset to IDLE');
+    console.log(`🔄 Feedback state machine reset: ${oldState} -> IDLE`);
+    console.trace('Reset called from:');
   }
 
   // Helper to determine user intent from text

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import axios from 'axios';
-import { LatLngLiteral, PlaceType, GeocodeResponse, NearbySearchResponse } from '@/types/google-maps';
+import { PlaceType, GeocodeResponse, NearbySearchResponse } from '@/types/google-maps';
 
 export default function ApiTest() {
   // Geocoding test state
@@ -352,7 +352,7 @@ export default function ApiTest() {
             {/* Added keyword search field */}
             <div style={{ marginBottom: '15px' }}>
               <label htmlFor="keyword" style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-                Keyword Search: <span style={{ fontWeight: 'normal', fontSize: '14px', color: '#666' }}>(e.g., "sushi", "coffee", "italian")</span>
+                Keyword Search: <span style={{ fontWeight: 'normal', fontSize: '14px', color: '#666' }}>(e.g., &quot;sushi&quot;, &quot;coffee&quot;, &quot;italian&quot;)</span>
               </label>
               <input
                 id="keyword"
@@ -398,7 +398,7 @@ export default function ApiTest() {
               <div style={{ marginBottom: '12px' }}>
                 <p style={{ margin: '4px 0' }}><strong>Status:</strong> {nearbyResults.status}</p>
                 <p style={{ margin: '4px 0' }}><strong>Places found:</strong> {nearbyResults.results?.length || 0}</p>
-                {keyword && <p style={{ margin: '4px 0' }}><strong>Search keyword:</strong> "{keyword}"</p>}
+                {keyword && <p style={{ margin: '4px 0' }}><strong>Search keyword:</strong> &quot;{keyword}&quot;</p>}
               </div>
               
               {nearbyResults.results && nearbyResults.results.length > 0 ? (

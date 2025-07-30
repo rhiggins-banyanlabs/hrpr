@@ -1,21 +1,22 @@
 import Card, { CardContent, CardHeader } from '../../ui/Card'
 import Button from '../../ui/Button'
 import Badge from '../../ui/Badge'
+import { EventSession } from '@/lib/supabase/chatStorage'
 
 interface SessionsListProps {
-  sessions: any[]
+  sessions: EventSession[]
   loading: boolean
   onAdd: () => void
-  onEdit: (session: any) => void
+  onEdit: (session: EventSession) => void
   onDelete: (sessionId: string) => void
 }
 
 export default function SessionsList({ sessions, loading, onAdd, onEdit, onDelete }: SessionsListProps) {
-  const handleDelete = async (session: any) => {
-    if (confirm(`Delete session "${session.title}"?`)) {
+  const handleDelete = async (session: EventSession) => {
+    if (confirm(`Delete session &quot;${session.title}&quot;?`)) {
       try {
         await onDelete(session.id)
-      } catch (error) {
+      } catch {
         alert('Failed to delete session')
       }
     }

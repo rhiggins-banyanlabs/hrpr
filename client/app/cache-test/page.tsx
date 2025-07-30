@@ -2,9 +2,17 @@
 
 import { useState } from 'react';
 
+interface PlaceResult {
+  name: string;
+  vicinity?: string;
+  rating?: number;
+  place_id?: string;
+  [key: string]: unknown;
+}
+
 interface TestResult {
   route: string;
-  results: any[];
+  results: PlaceResult[];
   responseTime: number;
   cached?: boolean;
   error?: string;
@@ -43,7 +51,7 @@ export default function CacheTestPage() {
         responseTime: duration1,
         error: data1.error
       });
-    } catch (error) {
+    } catch {
       results.push({
         route: 'Original (/api/places)',
         results: [],
@@ -66,7 +74,7 @@ export default function CacheTestPage() {
         cached: data2.metadata?.cached,
         error: data2.error
       });
-    } catch (error) {
+    } catch {
       results.push({
         route: 'Cached (/api/places-cached) - First Call',
         results: [],
@@ -91,7 +99,7 @@ export default function CacheTestPage() {
         cached: data3.metadata?.cached,
         error: data3.error
       });
-    } catch (error) {
+    } catch {
       results.push({
         route: 'Cached (/api/places-cached) - Second Call',
         results: [],
@@ -209,7 +217,7 @@ export default function CacheTestPage() {
                         {place.rating && (
                           <p className="text-sm text-yellow-600">
                             ⭐ {place.rating}
-                            {place.price_level && ` • ${'$'.repeat(place.price_level)}`}
+                            {typeof place.price_level === 'number' && place.price_level > 0 && ` • ${'$'.repeat(place.price_level)}`}
                           </p>
                         )}
                       </div>

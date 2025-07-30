@@ -12,7 +12,7 @@ export interface AnalyticsData {
     type: string
     timestamp?: string
     message?: string
-    data?: Record<string, any>
+    data?: Record<string, unknown>
   }
   
   export interface LocalStorageEvent {
@@ -21,5 +21,5 @@ export interface AnalyticsData {
     message?: string
     email?: string
     sessionId?: string
-    [key: string]: any
+    [key: string]: string | undefined
   }

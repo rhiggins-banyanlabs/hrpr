@@ -18,8 +18,18 @@ interface LocationQuery {
   radius: number;
 }
 
+interface VenueData {
+  name: string;
+  address?: string;
+  latitude?: number;
+  longitude?: number;
+  rating?: number;
+  price_level?: number;
+  hours_summary?: string;
+}
+
 interface VenueToPlaceConverter {
-  convertVenuesToPlaces(venues: any[]): Place[];
+  convertVenuesToPlaces(venues: VenueData[]): Place[];
 }
 
 export class LocationCacheService {
@@ -145,7 +155,7 @@ export class LocationCacheService {
   /**
    * Convert scraped venue data to Place format
    */
-  private convertVenueToPlace(venue: any): Place {
+  private convertVenueToPlace(venue: VenueData): Place {
     return {
       name: venue.name,
       vicinity: venue.address || 'Denver, CO',

@@ -98,22 +98,22 @@ export const FeedbackAnalytics: React.FC = () => {
         <StatCard
           title="Total Feedback"
           value={analytics.totalFeedback}
-          color="blue"
+          iconColor="bg-blue-500"
         />
         <StatCard
           title="Satisfaction Rate"
           value={`${analytics.satisfactionRate}%`}
-          color={analytics.satisfactionRate >= 80 ? 'green' : analytics.satisfactionRate >= 60 ? 'yellow' : 'red'}
+          iconColor={analytics.satisfactionRate >= 80 ? 'green' : analytics.satisfactionRate >= 60 ? 'yellow' : 'red'}
         />
         <StatCard
           title="Satisfied Users"
           value={analytics.satisfiedCount}
-          color="green"
+          iconColor="bg-green-500"
         />
         <StatCard
           title="Avg. Questions"
           value={analytics.averageConversations}
-          color="purple"
+          iconColor="bg-purple-500"
         />
       </div>
 
@@ -156,7 +156,7 @@ export const FeedbackAnalytics: React.FC = () => {
           <div className="space-y-3">
             {analytics.recentTextFeedback.map((feedback, index) => (
               <div key={index} className="bg-gray-50 p-3 rounded-lg">
-                <p className="text-sm text-gray-700 mb-1">"{feedback.feedback_text}"</p>
+                <p className="text-sm text-gray-700 mb-1">&quot;{feedback.feedback_text}&quot;</p>
                 <p className="text-xs text-gray-500">
                   {formatDate(new Date(feedback.created_at))}
                 </p>

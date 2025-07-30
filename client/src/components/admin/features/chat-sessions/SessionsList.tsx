@@ -3,12 +3,13 @@ import Button from '../../ui/Button'
 import Badge from '../../ui/Badge'
 // REMOVED: import useChatData from '@/hooks/admin/useChatData'
 import { formatDate, formatDuration } from '@/lib/utils/dateFormatters'
+import { ChatSession } from '@/lib/supabase/chatStorage'
 
 // Instead of using the hook here, we'll receive props from the parent
 interface SessionsListProps {
-  sessions?: any[]
+  sessions?: ChatSession[]
   loading: boolean
-  viewSession: (session: any) => void
+  viewSession: (session: ChatSession) => void
   deleteSession: (sessionId: string) => void
 }
 
@@ -162,7 +163,7 @@ export default function SessionsList({
                         )}
                         {session.metadata.initial_query && (
                           <Badge variant="warning" className="text-xs">
-                            "{session.metadata.initial_query}"
+                            &quot;{session.metadata.initial_query}&quot;
                           </Badge>
                         )}
                         {session.user_id && (

@@ -5,8 +5,8 @@ import useConferenceData from '@/hooks/admin/useConferenceData'
 import useConferenceForms from '@/hooks/admin/useConferenceForms'
 
 export default function TimelineView() {
-  const { sessions, speakers, loading, groupSessionsByTime, getSpeakerById } = useConferenceData()
-  const { editSession, deleteSession } = useConferenceForms()
+  const { loading, groupSessionsByTime, getSpeakerById } = useConferenceData()
+  const { editSession, deleteSession, openSessionForm } = useConferenceForms()
 
   if (loading) {
     return (
@@ -40,7 +40,7 @@ export default function TimelineView() {
         <CardContent>
           <div className="text-center py-12">
             <div className="text-white/70 mb-4">No sessions scheduled yet</div>
-            <Button onClick={() => useConferenceForms().openSessionForm()}>
+            <Button onClick={() => openSessionForm()}>
               Add First Session
             </Button>
           </div>
@@ -60,7 +60,7 @@ export default function TimelineView() {
             <div key={time} className="border-l-4 border-indigo-500 pl-6">
               {/* Time Header */}
               <div className="flex items-center mb-4">
-                <div className="bg-indigo-600 text-white px-3 py-1 rounded-full text-sm font-medium -ml-8 bg-black">
+                <div className=" text-white px-3 py-1 rounded-full text-sm font-medium -ml-8 bg-black">
                   {time}
                 </div>
               </div>

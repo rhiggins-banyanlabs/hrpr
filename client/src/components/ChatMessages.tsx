@@ -33,13 +33,12 @@ const formatMarkdown = (text: string): string => {
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
     .replace(/_(.*?)_/g, '<em>$1</em>')
     // Code blocks ```code```
-    .replace(/```(.*?)```/gs, '<code class="block bg-gray-800 text-green-400 p-2 rounded mt-1 mb-1 font-mono text-xs">$1</code>')
+    .replace(/```([\s\S]*?)```/g, '<code class="block bg-gray-800 text-green-400 p-2 rounded mt-1 mb-1 font-mono text-xs">$1</code>')
     // Inline code `code`
     .replace(/`(.*?)`/g, '<code class="bg-gray-800 text-green-400 px-1 rounded font-mono text-xs">$1</code>')
     // Line breaks
     .replace(/\n/g, '<br>')
 }
-
 export const ChatMessages = ({
   messages = [],
   isThinking = false,

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import Card, { CardContent, CardHeader } from '../../ui/Card'
 import Button from '../../ui/Button'
-import Badge from '../../ui/Badge'
+// import Badge from '../../ui/Badge' // Not currently used
 import { FormSelect } from '../../ui/FormInput'
 import useDatabase from '@/hooks/admin/useDatabase'
 

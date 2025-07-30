@@ -13,28 +13,28 @@ import { MorphingText } from "@/components/MorphingText"
 import { VoiceButton } from "@/components/VoiceButton"
 import { AdminButton } from "@/components/admin/ui/AdminButton"
 import { VoiceInput } from "@/features/voice"
-import { useRouter } from "next/navigation"
+
 
 export default function Home() {
   const [isVoiceInputActive, setIsVoiceInputActive] = useState(false)
   const [isHarperSpeaking, setIsHarperSpeaking] = useState(false)
-  const [voiceTranscript, setVoiceTranscript] = useState("")
+  // const [voiceTranscript, setVoiceTranscript] = useState("") // Not currently used
   const [isHarperActivated, setIsHarperActivated] = useState(false) // Track if Harper has been activated
   const [isThinking, setIsThinking] = useState(false) // Track when AI is processing
-  const router = useRouter()
-  const { isPedestalMode, isSystemLocked } = useAdminAuth()
+
+  const { isSystemLocked } = useAdminAuth()
 
   // Refs for state management
   const hasPlayedIntroRef = useRef(false)
   const isProcessingVoiceQueryRef = useRef(false)
-  const initializationAttemptedRef = useRef(false)
+  // const initializationAttemptedRef = useRef(false) // Not currently used
   const hasSessionRef = useRef(false)
 
   // Chat storage hook
   const { currentSession, startNewSession, endSession } = useChatStorage()
   
   // Voice hooks
-  const { speakText, isSpeaking, selectedVoice, setSelectedVoice, unlockAudio, preCacheIntroMessage } = useOptimizedVoice()
+  const { speakText, isSpeaking, unlockAudio, preCacheIntroMessage } = useOptimizedVoice()
   
   // Sync the voice hook's speaking state with Harper speaking state
   useEffect(() => {
@@ -45,7 +45,7 @@ export default function Home() {
     if (isSpeaking && isVoiceInputActive) {
       console.log('🔊 Harper started speaking, stopping voice input')
       setIsVoiceInputActive(false)
-      setVoiceTranscript("")
+      // setVoiceTranscript("")
     }
   }, [isSpeaking, isVoiceInputActive])
   
@@ -57,7 +57,7 @@ export default function Home() {
   }, [])
 
   // Create a ref to store the callback
-  const handleHarperDetectedRef = useRef<(query: string) => Promise<void>>()
+  const handleHarperDetectedRef = useRef<(query: string) => Promise<void>>(() => Promise.resolve())
 
   // Speech recognition callback wrapper
   const speechRecognitionCallback = useCallback(async (query: string) => {
@@ -90,7 +90,7 @@ export default function Home() {
     // Reset to initial state
     setIsHarperActivated(false)
     setIsVoiceInputActive(false)
-    setVoiceTranscript("")
+    // setVoiceTranscript("")
     setIsThinking(false)
     
     // Reset refs
@@ -223,7 +223,7 @@ export default function Home() {
     
     if (!newState) {
       console.log("🎤 Stopping voice input from VoiceOrb")
-      setVoiceTranscript("")
+      // setVoiceTranscript("")
     } else {
       console.log("🎤 Starting voice input from VoiceOrb")
       
@@ -398,7 +398,7 @@ export default function Home() {
         <VoiceInput
           onSpeechEnd={async (text) => {
             console.log("🎤 Voice input received:", text);
-            setVoiceTranscript("");
+            // setVoiceTranscript("");
             setIsVoiceInputActive(false);
             
             if (text.trim()) {
@@ -414,13 +414,13 @@ export default function Home() {
           }}
           onTranscriptUpdate={(transcript, isInterim) => {
             console.log("🎤 Voice transcript update:", transcript, "isInterim:", isInterim);
-            setVoiceTranscript(transcript);
+            // setVoiceTranscript(transcript);
           }}
           isListening={isVoiceInputActive}
           onListeningChange={(listening) => {
             if (!listening && isVoiceInputActive) {
               setIsVoiceInputActive(false);
-              setVoiceTranscript("");
+              // setVoiceTranscript("");
             }
           }}
         />
