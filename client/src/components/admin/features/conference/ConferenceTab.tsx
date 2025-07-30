@@ -114,14 +114,14 @@ export default function ConferenceTab() {
       {/* Modals */}
       <SpeakerModal
         isOpen={speakerModalOpen}
-        speaker={editingSpeaker}
+        speaker={editingSpeaker as Speaker}
         onClose={handleCloseSpeakerModal}
         onSubmit={handleSpeakerSubmit}
       />
 
       <SessionModal
         isOpen={sessionModalOpen}
-        session={editingSession}
+        session={editingSession as EventSession}
         speakers={speakers}
         onClose={handleCloseSessionModal}
         onSubmit={handleSessionSubmit}

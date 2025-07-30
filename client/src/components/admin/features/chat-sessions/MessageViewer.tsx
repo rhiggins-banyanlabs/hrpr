@@ -34,6 +34,7 @@ export default function MessageViewer() {
       isOpen={messageViewOpen}
       onClose={closeMessageViewer}
       size="xl"
+      
     >
       <div className="space-y-4">
         {/* Session Header */}
