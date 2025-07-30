@@ -38,6 +38,7 @@ export const useVoiceChat = ({
   const userSatisfactionRef = useRef<boolean | null>(null); // Track user satisfaction
   const userNameRef = useRef<string | null>(null); // Track user name
   const currentAudioRef = useRef<HTMLAudioElement | null>(null); // Track current audio to prevent overlaps
+  const feedbackTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Track feedback flow timeout
   // const streamingTTSRef = useRef(new StreamingTTSService()); // Removed for performance
 
   console.log('🎤 useVoiceChat - sessionId:', sessionId);
@@ -71,6 +72,13 @@ export const useVoiceChat = ({
     console.log('🎤 ===== PROCESS VOICE QUERY STARTED =====');
     console.log('🎤 Query text:', text);
     console.log('🎤 Session ID:', activeSessionId);
+    
+    // Cancel any pending feedback flow timer when user speaks
+    if (feedbackTimeoutRef.current) {
+      console.log('🔄 Cancelling feedback flow timer - user is speaking');
+      clearTimeout(feedbackTimeoutRef.current);
+      feedbackTimeoutRef.current = null;
+    }
     
     // Debounce: prevent rapid successive calls
     const now = Date.now();
@@ -283,6 +291,10 @@ export const useVoiceChat = ({
                 
                 audio.removeEventListener('ended', handleEnded);
                 currentAudioRef.current = null;
+                
+                // Start feedback flow timer after speech completes
+                startFeedbackFlowTimer();
+                
                 resolve();
               };
               
@@ -364,54 +376,7 @@ export const useVoiceChat = ({
       setIsProcessing(false);
       abortControllerRef.current = null;
       
-      // Check if we should start feedback flow after audio completes
-      // Always ask "Do you have any more questions?" after answering
-      const currentFeedbackState = feedbackStateMachine.getCurrentState();
-      console.log('🔍 Checking feedback flow conditions:', {
-        currentState: currentFeedbackState,
-        conversationCount: conversationCountRef.current,
-        isInFeedbackFlow: isInFeedbackFlowRef.current,
-        shouldStartFeedback: currentFeedbackState === FeedbackState.IDLE && conversationCountRef.current > 0
-      });
-      
-      if (currentFeedbackState === FeedbackState.IDLE && conversationCountRef.current > 0) {
-        // Use setTimeout to ensure state change happens after current execution context
-        setTimeout(() => {
-          const beforeState = feedbackStateMachine.getCurrentState();
-          console.log('🔄 Audio complete - starting feedback flow', {
-            beforeState,
-            conversationCount: conversationCountRef.current,
-            isInFeedbackFlow: isInFeedbackFlowRef.current,
-            isProcessing: isProcessingRef.current
-          });
-          
-          // Double-check we're in IDLE state
-          if (beforeState !== FeedbackState.IDLE) {
-            console.error(`❌ UNEXPECTED STATE: Expected IDLE but found ${beforeState}`);
-            console.log('🔄 Forcing reset to IDLE');
-            feedbackStateMachine.reset();
-          }
-          
-          // Stop any existing silence detector before transitioning
-          stopSilenceDetection();
-          
-          isInFeedbackFlowRef.current = true;
-          const transitionResult = feedbackStateMachine.transition('user_response');
-          const afterState = feedbackStateMachine.getCurrentState();
-          console.log('🔄 Transition completed:', {
-            transitionResult,
-            beforeState,
-            afterState,
-            expectedState: 'ASKING_MORE_QUESTIONS'
-          });
-          
-          // Immediately check what message will be spoken
-          const messageToSpeak = feedbackStateMachine.getStateMessage();
-          console.log('🔊 Message that will be spoken:', messageToSpeak);
-        }, 10000); // 10 second delay before asking if they need more help
-      } else {
-        console.log('❌ Not starting feedback flow - conditions not met');
-      }
+      // Feedback flow timer will be started after audio completes (see startFeedbackFlowTimer)
     }
   }, [sessionId, speakText]);
 
@@ -467,6 +432,62 @@ export const useVoiceChat = ({
       silenceDetectorRef.current = null;
     }
   }, []);
+  
+  // Function to start feedback flow timer
+  const startFeedbackFlowTimer = useCallback(() => {
+    // Clear any existing timeout
+    if (feedbackTimeoutRef.current) {
+      clearTimeout(feedbackTimeoutRef.current);
+    }
+    
+    // Check if we should start feedback flow
+    const currentFeedbackState = feedbackStateMachine.getCurrentState();
+    console.log('🔍 Checking feedback flow conditions after speech:', {
+      currentState: currentFeedbackState,
+      conversationCount: conversationCountRef.current,
+      isInFeedbackFlow: isInFeedbackFlowRef.current,
+      shouldStartFeedback: currentFeedbackState === FeedbackState.IDLE && conversationCountRef.current > 0
+    });
+    
+    if (currentFeedbackState === FeedbackState.IDLE && conversationCountRef.current > 0) {
+      // Set timeout for 10 seconds after speech completes
+      feedbackTimeoutRef.current = setTimeout(() => {
+        const beforeState = feedbackStateMachine.getCurrentState();
+        console.log('🔄 10 seconds after speech - starting feedback flow', {
+          beforeState,
+          conversationCount: conversationCountRef.current,
+          isInFeedbackFlow: isInFeedbackFlowRef.current,
+          isProcessing: isProcessingRef.current
+        });
+        
+        // Double-check we're in IDLE state
+        if (beforeState !== FeedbackState.IDLE) {
+          console.error(`❌ UNEXPECTED STATE: Expected IDLE but found ${beforeState}`);
+          console.log('🔄 Forcing reset to IDLE');
+          feedbackStateMachine.reset();
+        }
+        
+        // Stop any existing silence detector before transitioning
+        stopSilenceDetection();
+        
+        isInFeedbackFlowRef.current = true;
+        const transitionResult = feedbackStateMachine.transition('user_response');
+        const afterState = feedbackStateMachine.getCurrentState();
+        console.log('🔄 Transition completed:', {
+          transitionResult,
+          beforeState,
+          afterState,
+          expectedState: 'ASKING_MORE_QUESTIONS'
+        });
+        
+        // Immediately check what message will be spoken
+        const messageToSpeak = feedbackStateMachine.getStateMessage();
+        console.log('🔊 Message that will be spoken:', messageToSpeak);
+      }, 10000); // 10 second delay before asking if they need more help
+    } else {
+      console.log('❌ Not starting feedback flow timer - conditions not met');
+    }
+  }, [stopSilenceDetection]);
 
   // Save feedback and reset session
   const saveFeedbackAndReset = useCallback(async () => {
