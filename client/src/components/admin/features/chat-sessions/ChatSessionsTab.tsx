@@ -1,4 +1,4 @@
-import Card, { CardContent, CardHeader } from '../../ui/Card'
+import Card from '../../ui/Card'
 import Button from '../../ui/Button'
 import ChatSessionsStats from './ChatSessionsStats'
 import SessionsList from './SessionsList'
@@ -206,7 +206,7 @@ export default function ChatSessionsTab() {
                         borderRadius: '12px',
                         fontSize: '11px'
                       }}>
-                        Query: "{selectedSession.metadata.initial_query}"
+                        Query: &quot;{selectedSession.metadata.initial_query}&quot;
                       </span>
                     )}
                   </div>

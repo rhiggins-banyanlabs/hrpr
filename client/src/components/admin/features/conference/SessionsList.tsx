@@ -13,10 +13,10 @@ interface SessionsListProps {
 
 export default function SessionsList({ sessions, loading, onAdd, onEdit, onDelete }: SessionsListProps) {
   const handleDelete = async (session: EventSession) => {
-    if (confirm(`Delete session "${session.title}"?`)) {
+    if (confirm(`Delete session &quot;${session.title}&quot;?`)) {
       try {
         await onDelete(session.id)
-      } catch (error) {
+      } catch {
         alert('Failed to delete session')
       }
     }

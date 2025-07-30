@@ -51,7 +51,7 @@ export default function CacheTestPage() {
         responseTime: duration1,
         error: data1.error
       });
-    } catch (error) {
+    } catch {
       results.push({
         route: 'Original (/api/places)',
         results: [],
@@ -74,7 +74,7 @@ export default function CacheTestPage() {
         cached: data2.metadata?.cached,
         error: data2.error
       });
-    } catch (error) {
+    } catch {
       results.push({
         route: 'Cached (/api/places-cached) - First Call',
         results: [],
@@ -99,7 +99,7 @@ export default function CacheTestPage() {
         cached: data3.metadata?.cached,
         error: data3.error
       });
-    } catch (error) {
+    } catch {
       results.push({
         route: 'Cached (/api/places-cached) - Second Call',
         results: [],

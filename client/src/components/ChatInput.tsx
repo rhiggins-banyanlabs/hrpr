@@ -66,18 +66,18 @@ export const ChatInput = ({
     onSubmit(formattedMessage);
   }, [input, isProcessing, isHarperSpeaking, onSubmit]);
 
-  // Handle suggested question click
-  const handleSuggestedClick = (question: string) => {
-    console.log('🔧 handleSuggestedClick called with:', question);
-    if (isHarperSpeaking) return;
-    
-    setInput("");
-    setIsConversationStarted(true);
-    const formattedQuestion = formatMessage(question);
-    console.log('🔧 Formatted suggested question:', formattedQuestion);
-    console.log('🔧 About to call onSubmit with:', formattedQuestion);
-    onSubmit(formattedQuestion);
-  };
+  // Handle suggested question click - commented out as it's not currently used
+  // const handleSuggestedClick = (question: string) => {
+  //   console.log('🔧 handleSuggestedClick called with:', question);
+  //   if (isHarperSpeaking) return;
+  //   
+  //   setInput("");
+  //   setIsConversationStarted(true);
+  //   const formattedQuestion = formatMessage(question);
+  //   console.log('🔧 Formatted suggested question:', formattedQuestion);
+  //   console.log('🔧 About to call onSubmit with:', formattedQuestion);
+  //   onSubmit(formattedQuestion);
+  // };
 
   return (
     <div className="relative z-10 p-4">

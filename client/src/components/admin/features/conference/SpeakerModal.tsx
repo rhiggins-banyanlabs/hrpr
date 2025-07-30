@@ -46,7 +46,7 @@ export default function SpeakerModal({ isOpen, speaker, onClose, onSubmit }: Spe
     try {
       await onSubmit(form)
       onClose()
-    } catch (error) {
+    } catch {
       alert('Failed to save speaker')
     }
   }

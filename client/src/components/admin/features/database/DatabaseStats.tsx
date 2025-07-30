@@ -2,7 +2,7 @@ import StatCard from '../../ui/StatCard'
 import useDatabase from '@/hooks/admin/useDatabase'
 
 export default function DatabaseStats() {
-  const { stats, loading, connectionStatus } = useDatabase()
+  const { stats, loading } = useDatabase()
 
   if (loading) {
     return (

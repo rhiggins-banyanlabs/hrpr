@@ -156,7 +156,7 @@ export const FeedbackAnalytics: React.FC = () => {
           <div className="space-y-3">
             {analytics.recentTextFeedback.map((feedback, index) => (
               <div key={index} className="bg-gray-50 p-3 rounded-lg">
-                <p className="text-sm text-gray-700 mb-1">"{feedback.feedback_text}"</p>
+                <p className="text-sm text-gray-700 mb-1">&quot;{feedback.feedback_text}&quot;</p>
                 <p className="text-xs text-gray-500">
                   {formatDate(new Date(feedback.created_at))}
                 </p>

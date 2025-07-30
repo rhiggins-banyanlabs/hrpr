@@ -63,7 +63,7 @@ export default function MessageViewer() {
               )}
               {selectedSession.metadata.initial_query && (
                 <Badge variant="warning" className="text-xs">
-                  Query: "{selectedSession.metadata.initial_query}"
+                  Query: &quot;{selectedSession.metadata.initial_query}&quot;
                 </Badge>
               )}
             </div>

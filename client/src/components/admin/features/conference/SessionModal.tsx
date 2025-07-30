@@ -50,7 +50,7 @@ export default function SessionModal({ isOpen, session, speakers, onClose, onSub
     try {
       await onSubmit(form)
       onClose()
-    } catch (error) {
+    } catch {
       alert('Failed to save session')
     }
   }

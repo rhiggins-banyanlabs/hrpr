@@ -163,7 +163,7 @@ export default function SessionsList({
                         )}
                         {session.metadata.initial_query && (
                           <Badge variant="warning" className="text-xs">
-                            "{session.metadata.initial_query}"
+                            &quot;{session.metadata.initial_query}&quot;
                           </Badge>
                         )}
                         {session.user_id && (

@@ -31,11 +31,7 @@ type PlaceResult = {
   vicinity: string;
 }
 
-type PlacesResponse = {
-  results: PlaceResult[];
-  status: string;
-  error_message?: string;
-}
+// Removed unused PlacesResponse type
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);

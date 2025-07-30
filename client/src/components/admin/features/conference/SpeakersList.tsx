@@ -12,10 +12,10 @@ interface SpeakersListProps {
 
 export default function SpeakersList({ speakers, loading, onAdd, onEdit, onDelete }: SpeakersListProps) {
   const handleDelete = async (speaker: Speaker) => {
-    if (confirm(`Delete speaker "${speaker.name}"?`)) {
+    if (confirm(`Delete speaker &quot;${speaker.name}&quot;?`)) {
       try {
         await onDelete(speaker.id)
-      } catch (error) {
+      } catch {
         alert('Failed to delete speaker')
       }
     }

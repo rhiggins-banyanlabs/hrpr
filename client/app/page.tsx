@@ -18,23 +18,23 @@ import { useRouter } from "next/navigation"
 export default function Home() {
   const [isVoiceInputActive, setIsVoiceInputActive] = useState(false)
   const [isHarperSpeaking, setIsHarperSpeaking] = useState(false)
-  const [voiceTranscript, setVoiceTranscript] = useState("")
+  // const [voiceTranscript, setVoiceTranscript] = useState("") // Not currently used
   const [isHarperActivated, setIsHarperActivated] = useState(false) // Track if Harper has been activated
   const [isThinking, setIsThinking] = useState(false) // Track when AI is processing
-  const router = useRouter()
-  const { isPedestalMode, isSystemLocked } = useAdminAuth()
+  // const router = useRouter() // Not currently used
+  const { isSystemLocked } = useAdminAuth()
 
   // Refs for state management
   const hasPlayedIntroRef = useRef(false)
   const isProcessingVoiceQueryRef = useRef(false)
-  const initializationAttemptedRef = useRef(false)
+  // const initializationAttemptedRef = useRef(false) // Not currently used
   const hasSessionRef = useRef(false)
 
   // Chat storage hook
   const { currentSession, startNewSession, endSession } = useChatStorage()
   
   // Voice hooks
-  const { speakText, isSpeaking, selectedVoice, setSelectedVoice, unlockAudio, preCacheIntroMessage } = useOptimizedVoice()
+  const { speakText, isSpeaking, unlockAudio, preCacheIntroMessage } = useOptimizedVoice()
   
   // Sync the voice hook's speaking state with Harper speaking state
   useEffect(() => {

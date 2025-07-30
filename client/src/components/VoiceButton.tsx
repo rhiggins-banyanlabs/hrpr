@@ -26,14 +26,14 @@ export const VoiceButton: React.FC<VoiceButtonProps> = ({
     if (listening) {
       return (
         <span>
-          Listening for <span className="text-xl font-extrabold">"Hey Harper"</span>...
+          Listening for <span className="text-xl font-extrabold">&quot;Hey Harper&quot;</span>...
         </span>
       );
     }
     
     return (
       <span>
-        Press and say <span className="text-xl font-extrabold">"Hey Harper"</span>
+        Press and say <span className="text-xl font-extrabold">&quot;Hey Harper&quot;</span>
       </span>
     );
   };
