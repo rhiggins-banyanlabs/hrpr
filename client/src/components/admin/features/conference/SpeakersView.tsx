@@ -47,7 +47,7 @@ export default function SpeakersView() {
         <CardContent>
           <div className="text-center py-12">
             <div className="text-white/70 mb-4">No speakers added yet</div>
-            <Button onClick={openSpeakerForm}>
+            <Button onClick={() => openSpeakerForm()}>
               Add First Speaker
             </Button>
           </div>
