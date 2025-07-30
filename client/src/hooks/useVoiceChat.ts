@@ -328,7 +328,7 @@ export const useVoiceChat = ({
         console.log('💾 Harper message saved:', savedMessage?.id);
       } catch (dbError) {
         console.error('❌ Failed to save Harper message to database:', dbError);
-        console.log('⚠️ Continuing despite database error');
+        console.log('⚠️ Continuing despite error');
       }
 
       // Increment conversation count after successful response
