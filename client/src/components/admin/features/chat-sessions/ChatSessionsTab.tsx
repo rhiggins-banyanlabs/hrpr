@@ -129,8 +129,8 @@ export default function ChatSessionsTab() {
                   fontSize: '14px',
                   fontWeight: '500'
                 }}
-                onMouseOver={(e) => e.target.style.backgroundColor = '#dc2626'}
-                onMouseOut={(e) => e.target.style.backgroundColor = '#ef4444'}
+                onMouseOver={(e) => (e.target as HTMLElement).style.backgroundColor = '#dc2626'}
+                onMouseOut={(e) => (e.target as HTMLElement).style.backgroundColor = '#ef4444'}
               >
                 Close
               </button>
