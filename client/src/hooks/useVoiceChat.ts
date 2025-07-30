@@ -66,7 +66,7 @@ export const useVoiceChat = ({
   };
 
   // Process voice input and get response
-  const processVoiceQuery = useCallback(async (text: string, overrideSessionId?: string, customFillerPromise?: Promise<any>): Promise<void> => {
+  const processVoiceQuery = useCallback(async (text: string, overrideSessionId?: string, customFillerPromise?: Promise<any>, greetingAlreadyHandled: boolean = false): Promise<void> => {
     const activeSessionId = overrideSessionId || sessionId;
     console.log('🎤 ===== PROCESS VOICE QUERY STARTED =====');
     console.log('🎤 Query text:', text);
@@ -181,7 +181,8 @@ export const useVoiceChat = ({
         },
         body: JSON.stringify({
           prompt: text,
-          userName: userNameRef.current
+          userName: userNameRef.current,
+          greetingAlreadyHandled: greetingAlreadyHandled
         }),
         signal: abortControllerRef.current.signal
       });
@@ -693,10 +694,11 @@ export const useVoiceChat = ({
     if (isNewNameIntroduction && extractedName) {
       console.log('👋 Processing query with name introduction for:', extractedName);
       
-      // Get the original filler response and personalize it
+      // Get the original filler response and add the greeting
       const originalFillerResponse = IntentDetectorService.getFillerResponse(text);
       if (originalFillerResponse && speakText) {
-        const personalizedFiller = `It's nice to meet you, ${extractedName}! ${originalFillerResponse}`;
+        // Add "Nice to meet you" to the filler response
+        const personalizedFiller = `Nice to meet you, ${extractedName}! ${originalFillerResponse}`;
         console.log('🎤 Playing personalized filler response:', personalizedFiller);
         
         // Play the personalized filler immediately
@@ -705,8 +707,9 @@ export const useVoiceChat = ({
           return null;
         });
         
-        // Process the query with our custom personalized filler
-        await processVoiceQuery(text, undefined, fillerAudioPromise);
+        // Process the query with filler - mark that greeting was already handled
+        // We'll modify processVoiceQuery to pass this flag
+        await processVoiceQuery(text, undefined, fillerAudioPromise, true); // true = greeting already handled
       } else {
         // Fallback to normal processing
         await processVoiceQuery(text);

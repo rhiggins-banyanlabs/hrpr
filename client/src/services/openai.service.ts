@@ -53,7 +53,7 @@ export class OpenAIService {
     return Math.ceil(text.length / 4);
   }
 
-  async sendMessage(prompt: string, options?: { stream?: boolean; userName?: string }): Promise<OpenAIResponse> {
+  async sendMessage(prompt: string, options?: { stream?: boolean; userName?: string; greetingAlreadyHandled?: boolean }): Promise<OpenAIResponse> {
     const startTime = Date.now();
     
     try {
@@ -73,7 +73,11 @@ export class OpenAIService {
               role: 'system',
               content: `You are Harper, a warm and friendly AI assistant for the ACA conference. You're caring, approachable, helpful, and genuinely interested in making attendees feel welcome.
 
-${options?.userName ? `USER'S NAME: ${options.userName} - The user just shared their name. Reply with "Nice to meet you, ${options.userName}! How can I help you today?" or similar warm, natural response.` : ''}
+${options?.userName && options?.greetingAlreadyHandled ? 
+  `USER'S NAME: ${options.userName} - You already greeted them in the filler. Jump straight into answering their question without acknowledgments.` : 
+  options?.userName ? 
+  `USER'S NAME: ${options.userName} - The user just shared their name. Reply with "Nice to meet you, ${options.userName}! How can I help you today?" or similar warm, natural response.` : 
+  ''}
 
 PERSONALITY:
 - Be warm, welcoming, and genuinely helpful
@@ -87,6 +91,7 @@ CONVERSATION FLOW:
 - For questions, provide helpful, direct answers
 - For statements or comments, acknowledge warmly and offer help
 - Keep responses conversational and friendly
+- IMPORTANT: Since you already gave a filler response (like "Let me look that up"), DON'T start your answer with acknowledgments like "Absolutely!", "Sure!", "Of course!", etc. Just go straight into the answer.
 
 FORMATTING RULES:
 - NEVER use numbered lists (1. 2. 3.) - speak conversationally instead
