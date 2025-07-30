@@ -384,6 +384,14 @@ export const useVoiceChat = ({
             isInFeedbackFlow: isInFeedbackFlowRef.current,
             isProcessing: isProcessingRef.current
           });
+          
+          // Double-check we're in IDLE state
+          if (beforeState !== FeedbackState.IDLE) {
+            console.error(`❌ UNEXPECTED STATE: Expected IDLE but found ${beforeState}`);
+            console.log('🔄 Forcing reset to IDLE');
+            feedbackStateMachine.reset();
+          }
+          
           isInFeedbackFlowRef.current = true;
           const transitionResult = feedbackStateMachine.transition('user_response');
           const afterState = feedbackStateMachine.getCurrentState();
@@ -685,7 +693,10 @@ export const useVoiceChat = ({
 
   // Initialize feedback state machine
   useEffect(() => {
+    console.log('🚀 Initializing feedback state machine for new session');
     feedbackStateMachine.reset();
+    const initialState = feedbackStateMachine.getCurrentState();
+    console.log('📍 Initial feedback state after reset:', initialState);
     
     const unsubscribe = feedbackStateMachine.onStateChange((newState, oldState) => {
       console.log(`📊 Feedback state changed: ${oldState} -> ${newState}`);
