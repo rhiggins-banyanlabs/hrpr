@@ -10,7 +10,7 @@ import { useOptimizedVoice } from "@/hooks/useOptimizedVoice"
 import Waves from "@/components/waves"
 import { useState, useRef, useCallback, useEffect } from "react"
 import { MorphingText } from "@/components/MorphingText"
-import { VoiceButton } from "@/components/VoiceButton"
+// import { VoiceButton } from "@/components/VoiceButton" // Not needed anymore
 import { AdminButton } from "@/components/admin/ui/AdminButton"
 import { VoiceInput } from "@/features/voice"
 
@@ -212,6 +212,13 @@ export default function Home() {
   const handleVoiceInputToggle = useCallback(async () => {
     console.log("🎤 🔄 Voice input toggle called from VoiceOrb, current state:", isVoiceInputActive)
 
+    // If Harper is not activated yet, start listening for "Hey Harper"
+    if (!isHarperActivated) {
+      console.log("🎤 Starting Hey Harper detection from orb click")
+      speechActions.toggleListening()
+      return
+    }
+
     // Don't allow voice input while Harper is speaking or processing
     if (isHarperSpeaking || isProcessing) {
       console.log("🎤 ❌ Harper is speaking/processing, not toggling voice input")
@@ -335,7 +342,13 @@ export default function Home() {
           <div className="flex flex-col items-center justify-center gap-4">
             <div className="text-center">
               <h1
-                className="font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-500 to-blue-400 transition-all duration-700 text-5xl sm:text-6xl md:text-7xl"
+                className="font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-500 to-blue-400 transition-all duration-700 text-6xl sm:text-7xl md:text-8xl animate-pulse"
+                style={{
+                  fontFamily: "var(--font-orbitron)",
+                  letterSpacing: "0.15em",
+                  textShadow: "0 0 30px rgba(99, 102, 241, 0.5), 0 0 60px rgba(139, 92, 246, 0.3)",
+                  filter: "drop-shadow(0 0 20px rgba(139, 92, 246, 0.4))"
+                }}
               >
                 HRPR
               </h1>
@@ -348,7 +361,7 @@ export default function Home() {
 
             <div className="transition-all duration-700 scale-100">
               <VoiceOrb
-                listening={isHarperActivated ? isVoiceInputActive : false}
+                listening={isHarperActivated ? isVoiceInputActive : speechState.listening}
                 HarperDetected={speechState.HarperDetected}
                 isNavigating={speechState.isNavigating}
                 isVoiceInputActive={isVoiceInputActive}
@@ -373,22 +386,18 @@ export default function Home() {
                   ]}
                   className="-my-3 w-screen"
                 />
+                
+                {/* Descriptive text immediately below morphing text */}
+                {!isHarperActivated && (
+                  <div className="text-center mt-2 animate-fade-in">
+                    <p className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 via-purple-300 to-blue-300 text-2xl sm:text-3xl md:text-4xl">
+                      Press the button and say{" "}
+                      <span className="font-semibold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-500 to-blue-400">&quot;Hey Harper&quot;</span>
+                    </p>
+                  </div>
+                )}
               </div>
             )}
-
-            <div className="flex flex-col items-center gap-4">
-              {/* Control Buttons - Only show before Harper is activated */}
-              {!isHarperActivated && (
-                <div className="flex flex-col items-center gap-4">
-                  <VoiceButton
-                    listening={speechState.listening}
-                    isNavigating={speechState.isNavigating}
-                    HarperDetected={speechState.HarperDetected}
-                    onToggle={speechActions.toggleListening}
-                  />
-                </div>
-              )}
-            </div>
           </div>
         </div>
       </div>
