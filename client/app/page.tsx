@@ -390,7 +390,7 @@ export default function Home() {
                 {/* Descriptive text immediately below morphing text */}
                 {!isHarperActivated && (
                   <div className="text-center mt-2 animate-fade-in">
-                    <p className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 via-purple-300 to-blue-300 text-3xl sm:text-4xl md:text-5xl">
+                    <p className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 via-purple-300 to-blue-300 text-2xl sm:text-3xl md:text-4xl">
                       Press the button and say{" "}
                       <span className="font-semibold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-500 to-blue-400">&quot;Hey Harper&quot;</span>
                     </p>
