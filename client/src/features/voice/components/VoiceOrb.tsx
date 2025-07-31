@@ -80,7 +80,7 @@ const VoiceOrb: React.FC<VoiceOrbProps> = ({
     isListeningForWakeWord, shouldShowRecordingState, showSpeaker, isProcessingQuery, isThinkingState
   });
 
-  // Handle click - only allow when Harper is activated and not speaking
+  // Handle click - allow clicks for initial activation OR when Harper is activated
   const handleClick = () => {
     console.log("🎤 VoiceOrb clicked!", { 
       isChatOpen, 
@@ -90,16 +90,19 @@ const VoiceOrb: React.FC<VoiceOrbProps> = ({
       isClickable 
     })
     
-    if ((isChatOpen || isHarperActivated) && !isHarperSpeaking && onVoiceInputToggle) {
+    // Allow clicks when:
+    // 1. Harper is not activated yet (to start "Hey Harper" detection)
+    // 2. Harper is activated but not speaking (for voice input)
+    if (!isHarperSpeaking && onVoiceInputToggle) {
       console.log('🎤 VoiceOrb executing voice input toggle')
       onVoiceInputToggle()
     } else {
-      console.log('🎤 VoiceOrb click ignored - conditions not met')
+      console.log('🎤 VoiceOrb click ignored - Harper is speaking or no toggle function')
     }
   };
 
-  // Determine if orb should be clickable
-  const isClickable = (isChatOpen || isHarperActivated) && !isHarperSpeaking && onVoiceInputToggle;
+  // Determine if orb should be clickable - always clickable unless Harper is speaking
+  const isClickable = !isHarperSpeaking && !!onVoiceInputToggle;
 
   return (
     <div className="relative w-64 h-64 sm:w-80 sm:h-80">
@@ -276,7 +279,7 @@ const VoiceOrb: React.FC<VoiceOrbProps> = ({
         ) : isHarperActivated ? (
           <div className="text-indigo-200">Click to speak</div>
         ) : (
-          <div className="text-gray-400">Say &quot;Hey Harper&quot; or click button below</div>
+          <div className="text-gray-400"></div>
         )}
       </div>
 
