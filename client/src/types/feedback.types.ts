@@ -66,7 +66,7 @@ export const FOLLOW_UP_QUESTIONS = [
 export const DEFAULT_FEEDBACK_CONFIG: FeedbackConfig = {
   initialSilenceTimeout: 5000, // 5 seconds to account for API latency
   feedbackSilenceTimeout: 15000, // 15 seconds for feedback collection
-  moreQuestionsTimeout: 20000, // 20 seconds to allow for more natural conversation and API latency
+  moreQuestionsTimeout: 10000, // 10 seconds wait time after asking for more questions
   // Latency adjustment settings
   latencyBufferMultiplier: 0, // No buffer needed with longer timeouts
   minTimeout: 5000, // Minimum 5 seconds
