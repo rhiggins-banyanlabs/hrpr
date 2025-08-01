@@ -27,47 +27,9 @@ type PlaceResult = {
   types: string[];
   user_ratings_total?: number;
   vicinity: string;
-  formatted_address?: string; // Added for detailed address
 }
 
-// Function to fetch place details for addresses
-async function fetchPlaceDetails(placeId: string, apiKey: string): Promise<{ formatted_address?: string }> {
-  try {
-    const response = await fetch(
-      `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=formatted_address&key=${apiKey}`,
-      {
-        method: 'GET',
-        headers: { 'Accept': 'application/json' },
-        signal: AbortSignal.timeout(3000)
-      }
-    );
-    
-    if (response.ok) {
-      const data = await response.json();
-      return { formatted_address: data.result?.formatted_address };
-    }
-  } catch (error) {
-    console.error(`Failed to fetch details for place ${placeId}:`, error);
-  }
-  
-  return {};
-}
-
-// Function to enhance places with detailed addresses
-async function enhancePlacesWithAddresses(places: PlaceResult[], apiKey: string): Promise<PlaceResult[]> {
-  // Only enhance first 3 places to avoid excessive API calls
-  const placesToEnhance = places.slice(0, 3);
-  const remainingPlaces = places.slice(3);
-  
-  const enhancedPlaces = await Promise.all(
-    placesToEnhance.map(async (place) => {
-      const details = await fetchPlaceDetails(place.place_id, apiKey);
-      return { ...place, ...details };
-    })
-  );
-  
-  return [...enhancedPlaces, ...remainingPlaces];
-}
+// Removed unused PlacesResponse type
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -117,10 +79,9 @@ export async function GET(request: NextRequest) {
     }
     
     const data = await response.json();
-    let results = data.results || [];
     
     // For fast food searches, if we don't get good results, try a broader search
-    if (keyword === 'fast food' && results.length < 3) {
+    if (keyword === 'fast food' && (data.results?.length || 0) < 3) {
       const broaderParams = new URLSearchParams({
         location: `${CONFERENCE_VENUE.lat},${CONFERENCE_VENUE.lng}`,
         radius: radius,
@@ -151,14 +112,11 @@ export async function GET(request: NextRequest) {
           return isFastFood || isLowPrice;
         }) || [];
         
-        results = fastFoodPlaces;
+        return NextResponse.json({ results: fastFoodPlaces });
       }
     }
     
-    // Enhance results with detailed addresses
-    const enhancedResults = await enhancePlacesWithAddresses(results, apiKey);
-    
-    return NextResponse.json({ results: enhancedResults });
+    return NextResponse.json(data);
     
   } catch (error) {
     console.error('Error searching nearby places:', error);
