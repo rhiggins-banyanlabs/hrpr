@@ -2,6 +2,7 @@
 export interface Place {
   name: string;
   vicinity: string;
+  formatted_address?: string; // Added for specific addresses
   geometry: {
     location: {
       lat: number;
@@ -89,7 +90,7 @@ export class LocationService {
     // Location patterns from your hook - ORDER MATTERS! More specific patterns first
     const fastFoodPattern = /fast.?food|mcdonald|burger.?king|wendy|subway|taco.?bell|kfc|pizza.?hut|domino/i;
     const restaurantPattern = /restaurant|food|eat|dinner|lunch|breakfast/i;
-    const cafePattern = /coffee|cafe|espresso|tea/i;
+    const cafePattern = /coffee|cafe|espresso|tea|starbucks/i;
     const hotelPattern = /hotel|stay|accommodation|room|sleep/i;
     const barPattern = /bar|drink|pub|alcohol|beer|wine/i;
     const attractionPattern = /attraction|visit|sightseeing|tour/i;
@@ -142,9 +143,16 @@ export class LocationService {
     }
     
     if (cafePattern.test(lowerText)) {
+      let keyword = undefined;
+      // Check for specific cafe chains
+      if (lowerText.includes('starbucks')) {
+        keyword = 'starbucks';
+      }
+      
       return { 
         hasLocationIntent: true,
-        type: 'cafe', 
+        type: 'cafe',
+        keyword: keyword, 
         radius: nearbyPattern.test(lowerText) ? 600 : 1500 
       };
     }

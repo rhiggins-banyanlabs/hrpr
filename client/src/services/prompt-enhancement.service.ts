@@ -41,6 +41,9 @@ export class PromptEnhancementService {
    */
   async createEnhancedPrompt(originalPrompt: string): Promise<string> {
     let enhancedPrompt = originalPrompt;
+    
+    // Check if user is specifically asking for addresses
+    const isAddressRequest = /\b(address|location|where is|how do i get to)\b/i.test(originalPrompt);
 
     // Step 1: Fast intent detection (no database)
     const intent = IntentDetectorService.detectIntent(originalPrompt);
@@ -121,7 +124,25 @@ export class PromptEnhancementService {
           if (venueCategory) {
             venueData = await this.venueLookup.formatVenuesForResponse(venueCategory, 150);
             if (venueData && !venueData.includes('No ')) { // Check if we got actual results
-              enhancedPrompt += '\n\nNEARBY VENUES:\n' + venueData;
+              // Check if user asked for a specific brand/chain that wasn't found in scraped data
+              const specificBrands = ['starbucks', 'mcdonalds', 'burger king', 'subway', 'kfc', 'taco bell', 'pizza hut', 'dominos'];
+              const lowerPrompt = originalPrompt.toLowerCase();
+              const askedForSpecificBrand = specificBrands.some(brand => lowerPrompt.includes(brand));
+              
+              if (askedForSpecificBrand) {
+                const brandFound = specificBrands.some(brand => 
+                  lowerPrompt.includes(brand) && venueData!.toLowerCase().includes(brand)
+                );
+                
+                if (!brandFound) {
+                  console.log('🔍 User asked for specific brand not found in scraped data, falling through to Google Maps...');
+                  venueData = null; // Force fallthrough to Google Maps
+                } else {
+                  enhancedPrompt += '\n\nNEARBY VENUES:\n' + venueData;
+                }
+              } else {
+                enhancedPrompt += '\n\nNEARBY VENUES:\n' + venueData;
+              }
             } else {
               venueData = null; // Reset if no results found
             }
@@ -144,6 +165,9 @@ export class PromptEnhancementService {
             
             if (places.length > 0) {
               enhancedPrompt += '\n\nNEARBY PLACES:\n';
+              if (isAddressRequest) {
+                enhancedPrompt += '(User specifically requested address information)\n';
+              }
               // Format top 3 places
               for (let i = 0; i < Math.min(3, places.length); i++) {
                 const place = places[i];
@@ -154,7 +178,16 @@ export class PromptEnhancementService {
                 );
                 const priceLevel = place.price_level ? '$'.repeat(place.price_level) : '';
                 const rating = place.rating ? `⭐${place.rating}` : '';
-                enhancedPrompt += `• ${place.name} (${distance.walkingTime}${priceLevel ? ', ' + priceLevel : ''}${rating ? ', ' + rating : ''})\n`;
+                // Include both address and vicinity for AI to choose from based on user's request
+                enhancedPrompt += `• ${place.name} (${distance.walkingTime}${priceLevel ? ', ' + priceLevel : ''}${rating ? ', ' + rating : ''})`;
+                if (place.formatted_address) {
+                  if (isAddressRequest) {
+                    enhancedPrompt += ` - ADDRESS: ${place.formatted_address}`;
+                  } else {
+                    enhancedPrompt += ` [Address available: ${place.formatted_address}]`;
+                  }
+                }
+                enhancedPrompt += '\n';
               }
             }
           }
