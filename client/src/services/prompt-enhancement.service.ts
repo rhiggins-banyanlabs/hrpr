@@ -5,6 +5,7 @@ import { VenueLookupService } from "./venue-lookup.service";
 import { IntentDetectorService } from "./intent-detector.service";
 import { LocationCacheService } from "./location-cache.service";
 import { ExhibitorSearchService } from "./exhibitor-search.service";
+import { scheduleService } from "./schedule.service";
 
 export class PromptEnhancementService {
   private venueLookup: VenueLookupService | null = null;
@@ -44,7 +45,51 @@ export class PromptEnhancementService {
     // Step 1: Fast intent detection (no database)
     const intent = IntentDetectorService.detectIntent(originalPrompt);
     
-    // Step 2: Add conference and exhibitor data from exhibitor search service (database only)
+    // Step 2: Add schedule data if it's a schedule/conference query
+    if (intent.isConferenceQuery) {
+      try {
+        const lowerPrompt = originalPrompt.toLowerCase();
+        let scheduleData = null;
+        
+        // Check for specific days
+        if (lowerPrompt.includes('thursday') || lowerPrompt.includes('friday') || 
+            lowerPrompt.includes('saturday') || lowerPrompt.includes('sunday')) {
+          const day = lowerPrompt.includes('thursday') ? 'Thursday' :
+                      lowerPrompt.includes('friday') ? 'Friday' :
+                      lowerPrompt.includes('saturday') ? 'Saturday' : 'Sunday';
+          const daySchedule = await scheduleService.getScheduleForDay(day);
+          if (daySchedule.length > 0) {
+            console.log(`📅 PromptEnhancement: Found ${daySchedule.length} events for ${day}`);
+            scheduleData = scheduleService.formatScheduleForDisplay(daySchedule);
+          }
+        }
+        // Check for event types
+        else if (lowerPrompt.includes('tour') || lowerPrompt.includes('reception') || 
+                 lowerPrompt.includes('workshop') || lowerPrompt.includes('session')) {
+          const scheduleResults = await scheduleService.searchBySemantic(originalPrompt);
+          if (scheduleResults.length > 0) {
+            console.log(`📅 PromptEnhancement: Found ${scheduleResults.length} matching events`);
+            scheduleData = scheduleService.formatScheduleForDisplay(scheduleResults);
+          }
+        }
+        // General schedule query
+        else {
+          const scheduleResults = await scheduleService.searchBySemantic(originalPrompt);
+          if (scheduleResults.length > 0) {
+            console.log(`📅 PromptEnhancement: Found ${scheduleResults.length} schedule matches`);
+            scheduleData = scheduleService.formatScheduleForDisplay(scheduleResults);
+          }
+        }
+        
+        if (scheduleData) {
+          enhancedPrompt += `\n\nCONFERENCE SCHEDULE:\n${scheduleData}`;
+        }
+      } catch (error) {
+        console.log('⚠️ Schedule lookup failed, continuing without schedule data:', error);
+      }
+    }
+    
+    // Step 3: Add exhibitor data from exhibitor search service (database only)
     try {
       const exhibitorQuery = await this.exhibitorService.processExhibitorQuery(originalPrompt);
       
