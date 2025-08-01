@@ -154,8 +154,12 @@ export class PromptEnhancementService {
                 );
                 const priceLevel = place.price_level ? '$'.repeat(place.price_level) : '';
                 const rating = place.rating ? `⭐${place.rating}` : '';
-                const address = place.formatted_address || place.vicinity;
-                enhancedPrompt += `• ${place.name} - ${address} (${distance.walkingTime}${priceLevel ? ', ' + priceLevel : ''}${rating ? ', ' + rating : ''})\n`;
+                // Include both address and vicinity for AI to choose from based on user's request
+                enhancedPrompt += `• ${place.name} (${distance.walkingTime}${priceLevel ? ', ' + priceLevel : ''}${rating ? ', ' + rating : ''})`;
+                if (place.formatted_address) {
+                  enhancedPrompt += ` [Address available: ${place.formatted_address}]`;
+                }
+                enhancedPrompt += '\n';
               }
             }
           }
