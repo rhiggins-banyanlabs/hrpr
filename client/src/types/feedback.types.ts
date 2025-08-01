@@ -51,20 +51,32 @@ export interface FeedbackConfig {
   };
 }
 
+// Array of varied follow-up questions to cycle through
+export const FOLLOW_UP_QUESTIONS = [
+  "Do you have any more questions for me?",
+  "Is there anything else I can help you with?",
+  "Need help with anything else before we wrap up?",
+  "Got anything else you need a hand with?",
+  "What else can I help you with today?",
+  "Anything else on your mind about the conference?",
+  "Is there something else I can assist you with?",
+  "Any other questions I can answer for you?"
+];
+
 export const DEFAULT_FEEDBACK_CONFIG: FeedbackConfig = {
-  initialSilenceTimeout: 10000, // 10 seconds after response before asking if they need help
-  feedbackSilenceTimeout: 30000, // 30 seconds of silence = timeout and reset
-  moreQuestionsTimeout: 30000, // 30 seconds to respond before timeout
+  initialSilenceTimeout: 5000, // 5 seconds to account for API latency
+  feedbackSilenceTimeout: 15000, // 15 seconds for feedback collection
+  moreQuestionsTimeout: 20000, // 20 seconds to allow for more natural conversation and API latency
   // Latency adjustment settings
   latencyBufferMultiplier: 0, // No buffer needed with longer timeouts
-  minTimeout: 10000, // Minimum 10 seconds
-  maxTimeout: 30000, // Maximum 30 seconds
+  minTimeout: 5000, // Minimum 5 seconds
+  maxTimeout: 20000, // Maximum 20 seconds
   messages: {
-    moreQuestions: "Is there anything else I can help you with today?",
-    readyToHelp: "What else can I help you with?",
-    satisfaction: "How was your experience with me today?",
-    goodbye: "Thanks for chatting! Feel free to come back anytime during the conference. Have a great day!",
-    requestFeedback: "I'd love to hear what you think - what went well or what could be better?",
-    thankYou: "Thank you for your feedback! Have a wonderful conference experience!"
+    moreQuestions: "Do you have any more questions for me?", // This will be overridden by cycling questions
+    readyToHelp: "I am ready to answer all your conference needs!",
+    satisfaction: "How was your experience with me today? I'd love to hear your feedback!",
+    goodbye: "Thank you for your feedback! Please feel free to come ask me any questions you may have throughout the ACA conference. Have a great day!",
+    requestFeedback: "Could you share what went well or what could be improved? All feedback - positive or negative - helps me serve you better!",
+    thankYou: "Thank you for your feedback. I hope you have a wonderful conference experience!"
   }
 };
