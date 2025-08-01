@@ -1,6 +1,6 @@
 // Feedback conversation state machine service
 
-import { FeedbackState, FeedbackTransition, FeedbackConfig, DEFAULT_FEEDBACK_CONFIG } from '@/types/feedback.types';
+import { FeedbackState, FeedbackTransition, FeedbackConfig, DEFAULT_FEEDBACK_CONFIG, FOLLOW_UP_QUESTIONS } from '@/types/feedback.types';
 import { latencyTracker } from './latency-tracker.service';
 
 export class FeedbackStateMachine {
@@ -9,6 +9,7 @@ export class FeedbackStateMachine {
   private transitions: Map<string, FeedbackTransition> = new Map();
   private stateChangeCallbacks: ((newState: FeedbackState, oldState: FeedbackState) => void)[] = [];
   private feedbackWasProvided: boolean = false; // Track if feedback was actually provided
+  private questionIndex: number = 0; // Track which follow-up question to use next
 
   constructor(config: FeedbackConfig = DEFAULT_FEEDBACK_CONFIG) {
     this.config = config;
@@ -39,10 +40,10 @@ export class FeedbackStateMachine {
         trigger: 'user_no'
       },
       
-      // Timeout on asking more questions - assume user is done, ask satisfaction
+      // Timeout on asking more questions - assume user is done, say farewell
       {
         from: FeedbackState.ASKING_MORE_QUESTIONS,
-        to: FeedbackState.ASKING_SATISFACTION,
+        to: FeedbackState.THANKING_USER,
         trigger: 'timeout'
       },
       
@@ -119,8 +120,12 @@ export class FeedbackStateMachine {
     console.log('🔍 getStateMessage called for state:', this.currentState);
     switch (this.currentState) {
       case FeedbackState.ASKING_MORE_QUESTIONS:
-        console.log('📢 Returning moreQuestions message:', this.config.messages.moreQuestions);
-        return this.config.messages.moreQuestions;
+        // Use cycling follow-up questions for variety
+        const question = FOLLOW_UP_QUESTIONS[this.questionIndex % FOLLOW_UP_QUESTIONS.length];
+        console.log('📢 Returning follow-up question:', question, `(index: ${this.questionIndex})`);
+        // Increment for next time
+        this.questionIndex++;
+        return question;
       case FeedbackState.ASKING_SATISFACTION:
         console.log('📢 Returning satisfaction message:', this.config.messages.satisfaction);
         return this.config.messages.satisfaction;
@@ -150,13 +155,6 @@ export class FeedbackStateMachine {
     const config = this.config;
     
     switch (this.currentState) {
-      case FeedbackState.WAITING_FOR_SILENCE:
-        return latencyTracker.calculateDynamicTimeout(
-          config.initialSilenceTimeout,
-          config.latencyBufferMultiplier,
-          config.minTimeout,
-          config.maxTimeout
-        );
       case FeedbackState.ASKING_MORE_QUESTIONS:
         return latencyTracker.calculateDynamicTimeout(
           config.moreQuestionsTimeout,
@@ -247,6 +245,7 @@ export class FeedbackStateMachine {
     const oldState = this.currentState;
     this.currentState = FeedbackState.IDLE;
     this.feedbackWasProvided = false; // Reset feedback tracking
+    this.questionIndex = 0; // Reset question cycling
     console.log(`🔄 Feedback state machine reset: ${oldState} -> IDLE`);
     console.trace('Reset called from:');
   }
