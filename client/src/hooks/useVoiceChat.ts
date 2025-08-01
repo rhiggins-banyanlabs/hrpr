@@ -531,14 +531,14 @@ export const useVoiceChat = ({
     
     // Personalize goodbye/thank you message with user's name if available
     if (message && newState === FeedbackState.THANKING_USER && userNameRef.current) {
-      if (message.includes("Thank you for your feedback!")) {
-        // Goodbye message - add name right after "Thank you for your feedback"
-        message = message.replace("Thank you for your feedback!", `Thank you for your feedback ${userNameRef.current}!`);
-        console.log('✨ Personalized goodbye message with user name:', userNameRef.current);
-      } else if (message.includes("Thank you for your feedback.")) {
-        // Thank you message - add name after "Thank you for your feedback"
+      if (message.includes("Thank you for your feedback")) {
+        // Thank you message (when feedback was provided) - add name after "Thank you for your feedback"
         message = message.replace("Thank you for your feedback.", `Thank you for your feedback ${userNameRef.current}!`);
         console.log('✨ Personalized thank you message with user name:', userNameRef.current);
+      } else if (message.includes("Have a great day,")) {
+        // Goodbye message (when no feedback was provided) - add name after "Have a great day"
+        message = message.replace("Have a great day,", `Have a great day ${userNameRef.current},`);
+        console.log('✨ Personalized goodbye message with user name:', userNameRef.current);
       }
     }
     

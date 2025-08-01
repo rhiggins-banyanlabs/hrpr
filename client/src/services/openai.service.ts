@@ -59,6 +59,9 @@ export class OpenAIService {
     try {
       const enhancedPrompt = await this.promptEnhancer.createEnhancedPrompt(prompt);
       
+      // Check if this is an address request
+      const isAddressRequest = /\b(address|location|where is|how do i get to)\b/i.test(prompt);
+      
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -71,7 +74,7 @@ export class OpenAIService {
           messages: [
             {
               role: 'system',
-              content: `You are Harper, a warm and friendly AI assistant for the ACA conference. You're caring, approachable, helpful, and genuinely interested in making attendees feel welcome.${options?.userName ? `\n\nThe user's name is ${options.userName}. Use it naturally where appropriate, but don't overuse it.` : ''}${options?.greetingAlreadyHandled ? `\n\nIMPORTANT: You have ALREADY greeted ${options.userName || 'this person'} with "Nice to meet you" in your filler response. DO NOT say "Nice to meet you" again - just answer their question directly using their name where natural.` : ''}
+              content: `You are Harper, a warm and friendly AI assistant for the ACA conference. You're caring, approachable, helpful, and genuinely interested in making attendees feel welcome.${options?.userName ? `\n\nThe user's name is ${options.userName}. Use it naturally where appropriate, but don't overuse it.` : ''}${options?.greetingAlreadyHandled ? `\n\nIMPORTANT: You have ALREADY greeted ${options.userName || 'this person'} with "Nice to meet you" in your filler response. DO NOT say "Nice to meet you" again - just answer their question directly using their name where natural.` : ''}${isAddressRequest ? `\n\nIMPORTANT: The user is specifically asking for address/location information. Make sure to include the specific address in your response if it's available in the location data.` : ''}
 
 
 
@@ -99,7 +102,9 @@ RULES:
 - Use provided conference information when available - never make up conference data
 - Use provided exhibitor information when available - never make up exhibitor details
 - For location queries, provide helpful information about nearby places, restaurants, and venues
+
 - ADDRESSES: Only include specific addresses if the user specifically asks for an address, location, or "where is" something. Otherwise, just mention the place name and details like distance, rating, etc.
+
 - Be conversational and natural - avoid robotic phrases or lists
 - Keep responses SHORT and focused (1-3 sentences maximum)
 - If specific conference data isn't available, suggest checking with organizers
