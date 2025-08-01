@@ -2,6 +2,7 @@
 export interface Place {
   name: string;
   vicinity: string;
+  formatted_address?: string; // Added for specific addresses
   geometry: {
     location: {
       lat: number;

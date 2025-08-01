@@ -154,7 +154,8 @@ export class PromptEnhancementService {
                 );
                 const priceLevel = place.price_level ? '$'.repeat(place.price_level) : '';
                 const rating = place.rating ? `⭐${place.rating}` : '';
-                enhancedPrompt += `• ${place.name} (${distance.walkingTime}${priceLevel ? ', ' + priceLevel : ''}${rating ? ', ' + rating : ''})\n`;
+                const address = place.formatted_address || place.vicinity;
+                enhancedPrompt += `• ${place.name} - ${address} (${distance.walkingTime}${priceLevel ? ', ' + priceLevel : ''}${rating ? ', ' + rating : ''})\n`;
               }
             }
           }
