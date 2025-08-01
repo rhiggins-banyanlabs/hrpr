@@ -10,9 +10,14 @@ export default function AdminPage() {
   const router = useRouter()
 
   useEffect(() => {
-    if (!isAuthenticated) {
-      router.push('/')
-    }
+    // Add a small delay to prevent race conditions
+    const checkAuth = setTimeout(() => {
+      if (!isAuthenticated) {
+        router.push('/')
+      }
+    }, 100)
+    
+    return () => clearTimeout(checkAuth)
   }, [isAuthenticated, router])
 
   if (!isAuthenticated) {

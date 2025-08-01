@@ -33,7 +33,7 @@ export function AdminLoginModal({ isOpen, onClose }: AdminLoginModalProps) {
         setTimeout(() => {
           onClose();
           router.push('/admin');
-        }, 100);
+        }, 200);
       } else {
         setError('Invalid password. Please try again.');
       }
