@@ -181,11 +181,7 @@ export class PromptEnhancementService {
                 // Include both address and vicinity for AI to choose from based on user's request
                 enhancedPrompt += `• ${place.name} (${distance.walkingTime}${priceLevel ? ', ' + priceLevel : ''}${rating ? ', ' + rating : ''})`;
                 if (place.formatted_address) {
-                  if (isAddressRequest) {
-                    enhancedPrompt += ` - ADDRESS: ${place.formatted_address}`;
-                  } else {
-                    enhancedPrompt += ` [Address available: ${place.formatted_address}]`;
-                  }
+                  enhancedPrompt += ` [Address available: ${place.formatted_address}]`;
                 }
                 enhancedPrompt += '\n';
               }
