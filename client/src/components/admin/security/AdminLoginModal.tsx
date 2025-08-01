@@ -14,7 +14,7 @@ export function AdminLoginModal({ isOpen, onClose }: AdminLoginModalProps) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { login } = useAdminAuth();
+  const { login, enablePedestalMode, isSystemLocked } = useAdminAuth();
   const router = useRouter();
 
   if (!isOpen) return null;
@@ -28,6 +28,11 @@ export function AdminLoginModal({ isOpen, onClose }: AdminLoginModalProps) {
       const success = login(password);
       
       if (success) {
+        // If system is locked, unlock it when admin authenticates
+        if (isSystemLocked) {
+          enablePedestalMode();
+        }
+        
         setPassword('');
         // Add small delay to ensure auth context updates
         setTimeout(() => {
