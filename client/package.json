@@ -10,7 +10,13 @@
     "import-exhibitors": "tsx scripts/import-exhibitors.ts",
     "import-new-exhibitors": "node scripts/import-new-exhibitors.js --",
     "import-schedule": "tsx scripts/import-schedule.js",
-    "import-tours": "node scripts/import-facility-tours.js --"
+    "import-tours": "node scripts/import-facility-tours.js --",
+    "parse-workshops": "node scripts/parse-workshops-improved.js",
+    "parse-workshops-format2": "node scripts/parse-workshops-format2.js",
+    "import-workshops": "node scripts/import-workshops.js --",
+    "import-workshops-csv": "node scripts/import-workshops-csv.js --",
+    "generate-workshop-embeddings": "node scripts/generate-workshop-embeddings.js",
+    "generate-exhibitor-embeddings": "node scripts/generate-exhibitor-embeddings.js"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.2.3",

@@ -39,6 +39,7 @@ export const useVoiceChat = ({
   const userNameRef = useRef<string | null>(null); // Track user name
   const currentAudioRef = useRef<HTMLAudioElement | null>(null); // Track current audio to prevent overlaps
   const feedbackTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Track feedback flow timeout
+  const feedbackTimerRef = useRef<NodeJS.Timeout | null>(null); // Track 5-second timer before asking more questions
   // const streamingTTSRef = useRef(new StreamingTTSService()); // Removed for performance
 
   console.log('🎤 useVoiceChat - sessionId:', sessionId);
@@ -78,6 +79,13 @@ export const useVoiceChat = ({
       console.log('🔄 Cancelling feedback flow timer - user is speaking');
       clearTimeout(feedbackTimeoutRef.current);
       feedbackTimeoutRef.current = null;
+    }
+    
+    // Cancel the 5-second "more questions" timer if user speaks
+    if (feedbackTimerRef.current) {
+      console.log('🔄 Cancelling 5-second timer - user is speaking');
+      clearTimeout(feedbackTimerRef.current);
+      feedbackTimerRef.current = null;
     }
     
     // Debounce: prevent rapid successive calls
@@ -816,12 +824,40 @@ export const useVoiceChat = ({
     // Normal query processing with personalization info
     await processVoiceQueryWithPersonalization(text, isNewNameIntroduction, extractedName);
     
-    // Immediately start feedback flow by asking if user has more questions
-    // This happens right after the response, no silence detection needed
+    // Start feedback flow after 5 seconds of silence following the voice response
+    // Wait for voice to finish speaking, then wait 5 seconds before asking more questions
     if (feedbackStateMachine.getCurrentState() === FeedbackState.IDLE && conversationCountRef.current > 0) {
-      console.log('🔄 Starting feedback flow - immediately asking if more questions');
-      isInFeedbackFlowRef.current = true;
-      feedbackStateMachine.transition('user_response');
+      console.log('🔄 Will start feedback flow after 5 seconds of silence');
+      
+      // Clear any existing feedback timer
+      if (feedbackTimerRef.current) {
+        clearTimeout(feedbackTimerRef.current);
+        feedbackTimerRef.current = null;
+      }
+      
+      // Wait for TTS to complete, then start 5 second timer
+      const waitForSpeechAndStartTimer = () => {
+        const checkSpeaking = setInterval(() => {
+          if (!isSpeaking) {
+            clearInterval(checkSpeaking);
+            console.log('🔊 Voice response finished, starting 5 second silence timer');
+            
+            // Start 5 second timer before asking more questions
+            feedbackTimerRef.current = setTimeout(() => {
+              // Only proceed if still idle and no new interaction
+              if (feedbackStateMachine.getCurrentState() === FeedbackState.IDLE && 
+                  !isProcessingRef.current) {
+                console.log('🔄 5 seconds passed, asking if user has more questions');
+                isInFeedbackFlowRef.current = true;
+                feedbackStateMachine.transition('user_response');
+                feedbackTimerRef.current = null;
+              }
+            }, 5000); // 5 seconds after voice finishes
+          }
+        }, 100); // Check every 100ms if still speaking
+      };
+      
+      waitForSpeechAndStartTimer();
     }
     
     console.log(`🔄 Question processed - state: ${feedbackStateMachine.getCurrentState()}, count: ${conversationCountRef.current}`);
