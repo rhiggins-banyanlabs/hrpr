@@ -47,6 +47,10 @@ export class IntentDetectorService {
     'today', 'tomorrow', 'morning', 'afternoon', 'evening', 'tonight',
     'now', 'current', 'currently', 'next', 'upcoming', 'later',
     
+    // Tours
+    'tour', 'tours', 'facility', 'facilities', 'correctional', 'prison', 'jail',
+    'visit', 'visits', 'visiting', 'pickup', 'dropoff', 'bus', 'transportation',
+    
     // Events & Sessions
     'session', 'sessions', 'keynote', 'keynotes', 'presentation', 'presentations',
     'talk', 'talks', 'speaking', 'workshop', 'workshops', 'panel', 'panels',

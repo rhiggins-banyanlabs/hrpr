@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "next lint",
     "import-exhibitors": "tsx scripts/import-exhibitors.ts",
-    "import-schedule": "tsx scripts/import-schedule.js"
+    "import-new-exhibitors": "node scripts/import-new-exhibitors.js --",
+    "import-schedule": "tsx scripts/import-schedule.js",
+    "import-tours": "node scripts/import-facility-tours.js --"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.2.3",

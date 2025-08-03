@@ -6,6 +6,7 @@ import { IntentDetectorService } from "./intent-detector.service";
 import { LocationCacheService } from "./location-cache.service";
 import { ExhibitorSearchService } from "./exhibitor-search.service";
 import { scheduleService } from "./schedule.service";
+import { facilityToursService } from "./facility-tours.service";
 
 export class PromptEnhancementService {
   private venueLookup: VenueLookupService | null = null;
@@ -107,7 +108,21 @@ export class PromptEnhancementService {
       // No fallback - only use actual database data
     }
     
-    // Step 3: Location data will be handled by venue lookup service below
+    // Step 3.5: Add facility tour data if query is about tours
+    if (facilityToursService.isTourQuery(originalPrompt)) {
+      try {
+        const tours = await facilityToursService.searchTours(originalPrompt);
+        if (tours && tours.length > 0) {
+          console.log(`🚐 PromptEnhancement: Found ${tours.length} facility tours`);
+          const tourData = facilityToursService.formatToursForDisplay(tours);
+          enhancedPrompt += `\n\nFACILITY TOURS:\n${tourData}`;
+        }
+      } catch (error) {
+        console.log('⚠️ Facility tour lookup failed:', error);
+      }
+    }
+    
+    // Step 4: Location data will be handled by venue lookup service below
 
     // Step 4: Tiered location lookup - scraped data → cache → Google Maps API
     if (intent.isVenueQuery || intent.isLocationQuery) {
