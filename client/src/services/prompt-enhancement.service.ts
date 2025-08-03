@@ -7,6 +7,7 @@ import { LocationCacheService } from "./location-cache.service";
 import { ExhibitorSearchService } from "./exhibitor-search.service";
 import { scheduleService } from "./schedule.service";
 import { facilityToursService } from "./facility-tours.service";
+import { workshopSearchService } from "./workshop-search.service";
 
 export class PromptEnhancementService {
   private venueLookup: VenueLookupService | null = null;
@@ -119,6 +120,21 @@ export class PromptEnhancementService {
         }
       } catch (error) {
         console.log('⚠️ Facility tour lookup failed:', error);
+      }
+    }
+    
+    // Step 3.6: Add workshop data if query is about workshops
+    if (intent.isWorkshopQuery) {
+      try {
+        const workshopQuery = await workshopSearchService.processWorkshopQuery(originalPrompt);
+        
+        if (workshopQuery.found && workshopQuery.data.length > 0) {
+          console.log(`📚 PromptEnhancement: Found ${workshopQuery.data.length} workshops`);
+          const workshopData = workshopSearchService.formatMultipleWorkshops(workshopQuery.data);
+          enhancedPrompt += `\n\n${workshopQuery.context.toUpperCase()}\n${workshopData}`;
+        }
+      } catch (error) {
+        console.log('⚠️ Workshop lookup failed:', error);
       }
     }
     

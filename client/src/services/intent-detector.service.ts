@@ -51,9 +51,9 @@ export class IntentDetectorService {
     'tour', 'tours', 'facility', 'facilities', 'correctional', 'prison', 'jail',
     'visit', 'visits', 'visiting', 'pickup', 'dropoff', 'bus', 'transportation',
     
-    // Events & Sessions
+    // Events & Sessions (removed workshop keywords - they'll have their own category)
     'session', 'sessions', 'keynote', 'keynotes', 'presentation', 'presentations',
-    'talk', 'talks', 'speaking', 'workshop', 'workshops', 'panel', 'panels',
+    'talk', 'talks', 'speaking', 'panel', 'panels',
     'seminar', 'seminars', 'lecture', 'lectures', 'demo', 'demonstration',
     'break', 'breaks', 'lunch break', 'coffee break', 'networking',
     'reception', 'opening', 'closing', 'ceremony',
@@ -65,6 +65,14 @@ export class IntentDetectorService {
     // Event Status
     'happening', 'going on', 'event', 'events', 'live', 'broadcast',
     'streaming', 'recorded', 'available', 'cancelled', 'postponed'
+  ];
+
+  // Workshop-specific keywords
+  private static readonly WORKSHOP_KEYWORDS = [
+    'workshop', 'workshops', 'training', 'trainings', 'seminar', 'seminars',
+    'ce credit', 'ce credits', 'ceu', 'cme', 'cerp', 'continuing education',
+    'learning objective', 'objectives', 'certificate', 'certification',
+    'mental health workshop', 'substance abuse training', 'correctional training'
   ];
 
   // Conference venue location/directions
@@ -117,7 +125,8 @@ export class IntentDetectorService {
     isConferenceQuery: boolean;
     isLocationQuery: boolean;
     isExhibitorQuery: boolean;
-    primaryIntent: 'venue' | 'conference' | 'location' | 'exhibitor' | 'general';
+    isWorkshopQuery: boolean;
+    primaryIntent: 'venue' | 'conference' | 'location' | 'exhibitor' | 'workshop' | 'general';
     confidence: number;
   } {
     const lowerQuery = query.toLowerCase();
@@ -139,17 +148,20 @@ export class IntentDetectorService {
     const conferenceMatches = findMatches(this.CONFERENCE_KEYWORDS);
     const locationMatches = findMatches(this.LOCATION_KEYWORDS);
     const exhibitorMatches = findMatches(this.EXHIBITOR_KEYWORDS);
+    const workshopMatches = findMatches(this.WORKSHOP_KEYWORDS);
 
     const isVenueQuery = venueMatches.length > 0;
     const isConferenceQuery = conferenceMatches.length > 0;
     const isLocationQuery = locationMatches.length > 0;
     const isExhibitorQuery = exhibitorMatches.length > 0;
+    const isWorkshopQuery = workshopMatches.length > 0;
     
     // Determine primary intent with weighted scoring
-    let primaryIntent: 'venue' | 'conference' | 'location' | 'exhibitor' | 'general' = 'general';
+    let primaryIntent: 'venue' | 'conference' | 'location' | 'exhibitor' | 'workshop' | 'general' = 'general';
     
-    // Weight exhibitor queries higher since they're most specific
+    // Weight more specific queries higher
     const weightedScores = [
+      { type: 'workshop' as const, score: workshopMatches.length * 1.8 }, // Workshops are very specific
       { type: 'exhibitor' as const, score: exhibitorMatches.length * 1.5 },
       { type: 'location' as const, score: locationMatches.length * 1.2 },
       { type: 'conference' as const, score: conferenceMatches.length },
@@ -163,17 +175,18 @@ export class IntentDetectorService {
     }
     
     // Calculate confidence based on match strength and query length
-    const totalMatches = venueMatches.length + conferenceMatches.length + locationMatches.length + exhibitorMatches.length;
+    const totalMatches = venueMatches.length + conferenceMatches.length + locationMatches.length + exhibitorMatches.length + workshopMatches.length;
     const queryWords = query.split(' ').length;
     const confidence = totalMatches > 0 ? Math.min((totalMatches * 0.3) + (queryWords * 0.1), 1) : 0;
     
-    console.log(`🎯 IntentDetector: "${query}" -> Primary: ${primaryIntent}, Venue: ${isVenueQuery}, Conference: ${isConferenceQuery}, Location: ${isLocationQuery}, Exhibitor: ${isExhibitorQuery} (confidence: ${confidence.toFixed(2)})`);
+    console.log(`🎯 IntentDetector: "${query}" -> Primary: ${primaryIntent}, Venue: ${isVenueQuery}, Conference: ${isConferenceQuery}, Location: ${isLocationQuery}, Exhibitor: ${isExhibitorQuery}, Workshop: ${isWorkshopQuery} (confidence: ${confidence.toFixed(2)})`);
     
     return {
       isVenueQuery,
       isConferenceQuery,
       isLocationQuery,
       isExhibitorQuery,
+      isWorkshopQuery,
       primaryIntent,
       confidence
     };
@@ -341,6 +354,132 @@ export class IntentDetectorService {
           "Let me look up those details"
         ];
         return locationResponses[Math.floor(Math.random() * locationResponses.length)];
+        
+      case 'workshop':
+        // Workshop-specific filler responses based on query type
+        
+        // CE/CME/Credit queries
+        if (lowerQuery.includes('credit') || lowerQuery.includes('ce ') || lowerQuery.includes('cme') || 
+            lowerQuery.includes('ceu') || lowerQuery.includes('cerp')) {
+          const responses = [
+            "Let me find workshops with continuing education credits",
+            "I'll search for sessions offering credits",
+            "Let me look up CE credit workshops",
+            "I'll check which workshops have credits available"
+          ];
+          return responses[Math.floor(Math.random() * responses.length)];
+        }
+        
+        // Mental health workshops
+        if (lowerQuery.includes('mental health') || lowerQuery.includes('psychiatric') || 
+            lowerQuery.includes('psychological') || lowerQuery.includes('trauma')) {
+          const responses = [
+            "Let me find mental health workshops for you",
+            "I'll search for behavioral health sessions",
+            "Let me look up mental health training opportunities",
+            "I'll find psychological wellness workshops"
+          ];
+          return responses[Math.floor(Math.random() * responses.length)];
+        }
+        
+        // Substance abuse/addiction workshops
+        if (lowerQuery.includes('substance') || lowerQuery.includes('addiction') || 
+            lowerQuery.includes('drug') || lowerQuery.includes('alcohol')) {
+          const responses = [
+            "Let me search for substance abuse workshops",
+            "I'll find addiction treatment sessions",
+            "Let me look up substance use disorder training",
+            "I'll check for addiction-related workshops"
+          ];
+          return responses[Math.floor(Math.random() * responses.length)];
+        }
+        
+        // Day-specific workshops
+        if (lowerQuery.includes('monday') || lowerQuery.includes('tuesday') || 
+            lowerQuery.includes('wednesday') || lowerQuery.includes('thursday') || 
+            lowerQuery.includes('friday') || lowerQuery.includes('saturday') || 
+            lowerQuery.includes('sunday')) {
+          const responses = [
+            "Let me check the workshop schedule for that day",
+            "I'll find workshops scheduled then",
+            "Let me look up sessions for that day",
+            "I'll see what workshops are available then"
+          ];
+          return responses[Math.floor(Math.random() * responses.length)];
+        }
+        
+        // Medical/healthcare workshops
+        if (lowerQuery.includes('medical') || lowerQuery.includes('healthcare') || 
+            lowerQuery.includes('nursing') || lowerQuery.includes('clinical')) {
+          const responses = [
+            "Let me find medical workshops for you",
+            "I'll search for healthcare training sessions",
+            "Let me look up clinical workshops",
+            "I'll find medical education sessions"
+          ];
+          return responses[Math.floor(Math.random() * responses.length)];
+        }
+        
+        // Correctional/justice workshops
+        if (lowerQuery.includes('correctional') || lowerQuery.includes('prison') || 
+            lowerQuery.includes('jail') || lowerQuery.includes('justice')) {
+          const responses = [
+            "Let me find correctional training workshops",
+            "I'll search for justice system sessions",
+            "Let me look up correctional healthcare workshops",
+            "I'll find corrections-focused training"
+          ];
+          return responses[Math.floor(Math.random() * responses.length)];
+        }
+        
+        // Morning/afternoon/time-based queries
+        if (lowerQuery.includes('morning') || lowerQuery.includes('afternoon') || 
+            lowerQuery.includes('evening')) {
+          const responses = [
+            "Let me check workshop times for you",
+            "I'll find sessions during that time",
+            "Let me look up the workshop schedule",
+            "I'll see what's available then"
+          ];
+          return responses[Math.floor(Math.random() * responses.length)];
+        }
+        
+        // Speaker/presenter queries
+        if (lowerQuery.includes('speaker') || lowerQuery.includes('presenter') || 
+            lowerQuery.includes('moderator') || lowerQuery.includes('instructor')) {
+          const responses = [
+            "Let me find workshops by that speaker",
+            "I'll search for sessions with that presenter",
+            "Let me look up who's presenting",
+            "I'll find workshops led by that person"
+          ];
+          return responses[Math.floor(Math.random() * responses.length)];
+        }
+        
+        // Training/education queries
+        if (lowerQuery.includes('training') || lowerQuery.includes('education') || 
+            lowerQuery.includes('learning')) {
+          const responses = [
+            "Let me find training workshops for you",
+            "I'll search for educational sessions",
+            "Let me look up professional development workshops",
+            "I'll find learning opportunities"
+          ];
+          return responses[Math.floor(Math.random() * responses.length)];
+        }
+        
+        // General workshop responses (fallback)
+        const workshopResponses = [
+          "Let me search our workshop offerings",
+          "I'll find relevant workshops for you",
+          "Let me look through the workshop schedule",
+          "I'll check what workshops are available",
+          "Let me find those sessions for you",
+          "I'll search for workshops that match",
+          "Let me look up workshop details",
+          "I'll find the best workshops for your interests"
+        ];
+        return workshopResponses[Math.floor(Math.random() * workshopResponses.length)];
         
       case 'general':
         // For longer queries without clear intent, provide generic helpful response
