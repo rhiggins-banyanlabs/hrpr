@@ -78,7 +78,8 @@ export class WorkshopSearchService {
       };
     }
 
-    // Check for topic queries (mental health, substance abuse, etc.)
+    // Check for topic  0
+    // 00000000000000001.q0ueries (mental health, substance abuse, etc.)
     const topicKeywords = ['mental health', 'substance', 'addiction', 'trauma', 'rehabilitation',
                            'medical', 'psychiatric', 'nursing', 'correctional', 'safety'];
     const hasTopic = topicKeywords.some(topic => lowerQuery.includes(topic));
