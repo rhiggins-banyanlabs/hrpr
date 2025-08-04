@@ -9,6 +9,7 @@ import { scheduleService } from "./schedule.service";
 import { facilityToursService } from "./facility-tours.service";
 import { workshopSearchService } from "./workshop-search.service";
 import { committeeMeetingsService } from "./committee-meetings.service";
+import { conferenceInfoDatabaseService } from "./conference-info-db.service";
 import { AI_TECH_EXPO, isAITechExpoQuery } from "@/data/ai-tech-expo";
 
 export class PromptEnhancementService {
@@ -117,7 +118,20 @@ export class PromptEnhancementService {
       }
     }
     
-    // Step 3: Add exhibitor data from exhibitor search service (database only)
+    // Step 3: Add conference info if it's an info query
+    if (intent.primaryIntent === 'info') {
+      try {
+        const infoResult = await conferenceInfoDatabaseService.searchInfo(originalPrompt);
+        if (infoResult) {
+          console.log('ℹ️ PromptEnhancement: Found conference information');
+          enhancedPrompt += `\n\nCONFERENCE INFORMATION:\n${infoResult}`;
+        }
+      } catch (error) {
+        console.error('Error getting conference info:', error);
+      }
+    }
+    
+    // Step 4: Add exhibitor data from exhibitor search service (database only)
     // Skip if this is an AI Tech Expo query
     if (!isAITechExpoQuery(originalPrompt)) {
       try {
@@ -179,9 +193,9 @@ export class PromptEnhancementService {
       }
     }
     
-    // Step 4: Location data will be handled by venue lookup service below
+    // Step 5: Location data will be handled by venue lookup service below
 
-    // Step 4: Tiered location lookup - scraped data → cache → Google Maps API
+    // Step 5: Tiered location lookup - scraped data → cache → Google Maps API
     if (intent.isVenueQuery || intent.isLocationQuery) {
       try {
         let venueData: string | null = null;

@@ -1,11 +1,18 @@
 import { TTSRequest, STTRequest, STTResponse, OpenAIVoice } from '../types/voice.types';
+import { pronunciationService } from '@/services/pronunciation.service';
 
 class VoiceService {
   async textToSpeech(request: TTSRequest): Promise<Blob> {
+    // Apply pronunciation corrections before sending to TTS
+    const correctedRequest = {
+      ...request,
+      text: pronunciationService.correctPronunciation(request.text)
+    };
+    
     const response = await fetch('/api/tts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(request),
+      body: JSON.stringify(correctedRequest),
     });
 
     if (!response.ok) {
