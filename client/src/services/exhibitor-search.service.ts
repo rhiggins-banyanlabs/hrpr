@@ -48,6 +48,16 @@ export class ExhibitorSearchService {
   } {
     const lowerQuery = query.toLowerCase();
     
+    // EXCLUDE AI Tech Expo - it's a featured event, not an exhibitor query
+    if (lowerQuery.includes('ai tech') || lowerQuery.includes('tech expo') || 
+        lowerQuery.includes('ai expo') || 
+        (lowerQuery.includes('ai') && lowerQuery.includes('expo'))) {
+      return {
+        isExhibitorQuery: false,
+        queryType: 'none'
+      };
+    }
+    
     // Check for booth number queries (e.g., "booth 123", "where is booth 456")
     const boothMatch = lowerQuery.match(/booth\s*#?\s*(\d+)/i);
     if (boothMatch) {

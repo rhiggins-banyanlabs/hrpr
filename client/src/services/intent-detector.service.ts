@@ -131,6 +131,11 @@ export class IntentDetectorService {
   } {
     const lowerQuery = query.toLowerCase();
     
+    // Special case: AI Tech Expo should be treated as conference event, not exhibitor query
+    const isAITechExpo = lowerQuery.includes('ai tech') || lowerQuery.includes('tech expo') || 
+                         lowerQuery.includes('ai expo') || 
+                         (lowerQuery.includes('ai') && lowerQuery.includes('expo'));
+    
     // More flexible keyword matching
     const findMatches = (keywords: string[]) => {
       return keywords.filter(keyword => {
@@ -151,27 +156,32 @@ export class IntentDetectorService {
     const workshopMatches = findMatches(this.WORKSHOP_KEYWORDS);
 
     const isVenueQuery = venueMatches.length > 0;
-    const isConferenceQuery = conferenceMatches.length > 0;
+    const isConferenceQuery = conferenceMatches.length > 0 || isAITechExpo;
     const isLocationQuery = locationMatches.length > 0;
-    const isExhibitorQuery = exhibitorMatches.length > 0;
+    const isExhibitorQuery = exhibitorMatches.length > 0 && !isAITechExpo; // Exclude AI Tech Expo from exhibitor queries
     const isWorkshopQuery = workshopMatches.length > 0;
     
     // Determine primary intent with weighted scoring
     let primaryIntent: 'venue' | 'conference' | 'location' | 'exhibitor' | 'workshop' | 'general' = 'general';
     
-    // Weight more specific queries higher
-    const weightedScores = [
-      { type: 'workshop' as const, score: workshopMatches.length * 1.8 }, // Workshops are very specific
-      { type: 'exhibitor' as const, score: exhibitorMatches.length * 1.5 },
-      { type: 'location' as const, score: locationMatches.length * 1.2 },
-      { type: 'conference' as const, score: conferenceMatches.length },
-      { type: 'venue' as const, score: venueMatches.length }
-    ];
+    // Special priority for AI Tech Expo
+    if (isAITechExpo) {
+      primaryIntent = 'conference';
+    } else {
+      // Weight more specific queries higher
+      const weightedScores = [
+        { type: 'workshop' as const, score: workshopMatches.length * 1.8 }, // Workshops are very specific
+        { type: 'exhibitor' as const, score: isExhibitorQuery ? exhibitorMatches.length * 1.5 : 0 },
+        { type: 'location' as const, score: locationMatches.length * 1.2 },
+        { type: 'conference' as const, score: conferenceMatches.length },
+        { type: 'venue' as const, score: venueMatches.length }
+      ];
     
-    // Sort by weighted score and get the highest
-    weightedScores.sort((a, b) => b.score - a.score);
-    if (weightedScores[0].score > 0) {
-      primaryIntent = weightedScores[0].type;
+      // Sort by weighted score and get the highest
+      weightedScores.sort((a, b) => b.score - a.score);
+      if (weightedScores[0].score > 0) {
+        primaryIntent = weightedScores[0].type;
+      }
     }
     
     // Calculate confidence based on match strength and query length
@@ -284,6 +294,17 @@ export class IntentDetectorService {
         return venueResponses[Math.floor(Math.random() * venueResponses.length)];
         
       case 'conference':
+        // AI Tech Expo (Featured Event)
+        if (lowerQuery.includes('ai tech') || lowerQuery.includes('tech expo') || 
+            lowerQuery.includes('ai expo') || (lowerQuery.includes('saturday') && lowerQuery.includes('ai'))) {
+          const responses = [
+            "Let me get you information about the AI Tech Expo",
+            "I'll find details about our featured AI Tech Expo",
+            "Let me look up the AI Tech Expo information",
+            "I'll get you the AI Tech Expo details"
+          ];
+          return responses[Math.floor(Math.random() * responses.length)];
+        }
         // Schedule & timing
         if (lowerQuery.includes('schedule') || lowerQuery.includes('agenda') || lowerQuery.includes('time')) {
           const responses = [

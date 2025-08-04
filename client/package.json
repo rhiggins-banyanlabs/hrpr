@@ -16,7 +16,9 @@
     "import-workshops": "node scripts/import-workshops.js --",
     "import-workshops-csv": "node scripts/import-workshops-csv.js --",
     "generate-workshop-embeddings": "node scripts/generate-workshop-embeddings.js",
-    "generate-exhibitor-embeddings": "node scripts/generate-exhibitor-embeddings.js"
+    "generate-exhibitor-embeddings": "node scripts/generate-exhibitor-embeddings.js",
+    "generate-ai-expo-embedding": "node scripts/generate-ai-expo-embedding.js",
+    "generate-all-embeddings": "npm run generate-exhibitor-embeddings && npm run generate-workshop-embeddings && npm run generate-ai-expo-embedding"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.2.3",
