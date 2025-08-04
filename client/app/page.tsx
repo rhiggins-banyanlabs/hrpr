@@ -73,9 +73,9 @@ export default function Home() {
   // Initialize speech recognition
   const [speechState, speechActions] = useSpeechRecognition(speechRecognitionCallback)
 
-  // Session reset callback for feedback timeout
-  const handleSessionReset = useCallback(() => {
-    console.log('🔄 Resetting session to initial state')
+  // Separate function to perform the actual session reset
+  const performSessionReset = useCallback(() => {
+    console.log('🔄 Performing actual session reset')
     
     // Stop all voice activities first
     speechActions.stopListening()
@@ -110,7 +110,40 @@ export default function Home() {
     console.log('🔄 Speech actions available:', !!speechActions.toggleListening)
     
     console.log('✅ Session reset complete - ready for new user')
-  }, [currentSession, endSession, speechActions, speechState])
+  }, [currentSession, endSession, speechActions, isVoiceInputActive])
+
+  // Session reset callback for feedback timeout
+  const handleSessionReset = useCallback(() => {
+    console.log('🔄 Resetting session to initial state')
+    console.log('🔄 Harper speaking state:', isHarperSpeaking)
+    
+    // If Harper is still speaking, delay the UI reset
+    if (isHarperSpeaking) {
+      console.log('🔄 Harper is still speaking - delaying UI reset')
+      
+      // Set up a listener to reset UI when Harper finishes speaking
+      const checkSpeakingInterval = setInterval(() => {
+        if (!isSpeaking) {
+          console.log('🔄 Harper finished speaking - now resetting UI')
+          clearInterval(checkSpeakingInterval)
+          
+          // Perform the actual reset
+          performSessionReset()
+        }
+      }, 100)
+      
+      // Timeout after 10 seconds to prevent infinite waiting
+      setTimeout(() => {
+        clearInterval(checkSpeakingInterval)
+        performSessionReset()
+      }, 10000)
+      
+      return
+    }
+    
+    // If Harper is not speaking, reset immediately
+    performSessionReset()
+  }, [isHarperSpeaking, isSpeaking, performSessionReset])
   
   // Voice chat hook
   const { processVoiceQuery, sendIntroMessage, isProcessing } = useVoiceChat({
