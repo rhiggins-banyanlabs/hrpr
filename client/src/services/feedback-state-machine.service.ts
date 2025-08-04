@@ -139,8 +139,9 @@ export class FeedbackStateMachine {
           return this.config.messages.goodbye;
         }
       case FeedbackState.IDLE:
-        // Special case - return ready message when transitioning back to IDLE from questions
-        return this.config.messages.readyToHelp;
+        // Don't return ready message when user is actively continuing conversation
+        // Only return it in specific contexts where we want to indicate readiness
+        return null;
       case FeedbackState.RESETTING_SESSION:
         // Don't return a message for RESETTING_SESSION - it's just a processing state
         // The actual farewell message is handled by THANKING_USER or timeout farewell

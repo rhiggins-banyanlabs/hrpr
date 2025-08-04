@@ -34,15 +34,42 @@ export const useOptimizedVoice = () => {
   /* ------------------------------------------------------------------ */
   /*  STOP CURRENT SPEECH                                               */
   /* ------------------------------------------------------------------ */
-  const stopSpeaking = useCallback(() => {
-    console.log('🔊 stopSpeaking called')
+  const stopSpeaking = useCallback((gentle: boolean = false) => {
+    console.log('🔊 stopSpeaking called', { gentle })
     speakGenRef.current += 1; // invalidate in-flight speakText calls
+    
     if (currentAudioRef.current) {
-      currentAudioRef.current.pause();
-      currentAudioRef.current.currentTime = 0;
-      currentAudioRef.current = null;
+      if (gentle) {
+        // Gentle stop: fade out audio over 200ms to prevent abrupt cutoff
+        const audio = currentAudioRef.current;
+        const originalVolume = audio.volume;
+        const fadeSteps = 10;
+        const fadeInterval = 20; // 20ms per step = 200ms total
+        let step = 0;
+        
+        const fadeOut = setInterval(() => {
+          step++;
+          const newVolume = originalVolume * (1 - step / fadeSteps);
+          audio.volume = Math.max(0, newVolume);
+          
+          if (step >= fadeSteps || audio.paused || audio.ended) {
+            clearInterval(fadeOut);
+            audio.pause();
+            audio.volume = originalVolume; // Reset volume for next use
+            currentAudioRef.current = null;
+            setIsSpeaking(false);
+          }
+        }, fadeInterval);
+      } else {
+        // Immediate stop (current behavior)
+        currentAudioRef.current.pause();
+        currentAudioRef.current.currentTime = 0;
+        currentAudioRef.current = null;
+        setIsSpeaking(false);
+      }
+    } else {
+      setIsSpeaking(false);
     }
-    setIsSpeaking(false);
   }, []);
 
   /* ------------------------------------------------------------------ */
@@ -115,7 +142,10 @@ export const useOptimizedVoice = () => {
       if (!text.trim()) throw new Error('No text provided for TTS');
 
       await unlockAudio();
-      stopSpeaking();                         // cancel anything playing
+      stopSpeaking(true);                     // gentle stop to prevent cutoff
+      
+      // Wait for gentle stop to complete (250ms)
+      await new Promise(resolve => setTimeout(resolve, 250));
 
       const myGen = speakGenRef.current;      // snapshot generation
 
