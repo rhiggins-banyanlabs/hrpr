@@ -8,6 +8,7 @@ import { ExhibitorSearchService } from "./exhibitor-search.service";
 import { scheduleService } from "./schedule.service";
 import { facilityToursService } from "./facility-tours.service";
 import { workshopSearchService } from "./workshop-search.service";
+import { AI_TECH_EXPO, isAITechExpoQuery } from "@/data/ai-tech-expo";
 
 export class PromptEnhancementService {
   private venueLookup: VenueLookupService | null = null;
@@ -47,6 +48,27 @@ export class PromptEnhancementService {
     // Check if user is specifically asking for addresses
     const isAddressRequest = /\b(address|location|where is|how do i get to)\b/i.test(originalPrompt);
 
+    // Step 0: Check for AI Tech Expo (featured event)
+    if (isAITechExpoQuery(originalPrompt)) {
+      console.log('🤖 AI Tech Expo query detected - adding featured event info');
+      
+      // Determine which aspect they're asking about
+      const lowerPrompt = originalPrompt.toLowerCase();
+      let expoInfo = AI_TECH_EXPO.responses.general;
+      
+      if (lowerPrompt.includes('when') || lowerPrompt.includes('time')) {
+        expoInfo = AI_TECH_EXPO.responses.timing;
+      } else if (lowerPrompt.includes('where') || lowerPrompt.includes('location')) {
+        expoInfo = AI_TECH_EXPO.responses.location;
+      } else if (lowerPrompt.includes('session') || lowerPrompt.includes('talk') || lowerPrompt.includes('presentation')) {
+        expoInfo = AI_TECH_EXPO.responses.sessions;
+      } else if (lowerPrompt.includes('sponsor') || lowerPrompt.includes('via') || lowerPrompt.includes('aws')) {
+        expoInfo = AI_TECH_EXPO.responses.sponsors;
+      }
+      
+      enhancedPrompt += `\n\nAI TECH EXPO (FEATURED EVENT):\n${expoInfo}\n${AI_TECH_EXPO.responses.importance}`;
+    }
+    
     // Step 1: Fast intent detection (no database)
     const intent = IntentDetectorService.detectIntent(originalPrompt);
     
@@ -95,18 +117,21 @@ export class PromptEnhancementService {
     }
     
     // Step 3: Add exhibitor data from exhibitor search service (database only)
-    try {
-      const exhibitorQuery = await this.exhibitorService.processExhibitorQuery(originalPrompt);
-      
-      if (exhibitorQuery.found && exhibitorQuery.data.length > 0) {
-        console.log(`🏢 PromptEnhancement: Found ${exhibitorQuery.data.length} exhibitors from database`);
-        const exhibitorData = this.exhibitorService.formatMultipleExhibitors(exhibitorQuery.data);
-        enhancedPrompt += `\n\n${exhibitorQuery.context.toUpperCase()}\n${exhibitorData}`;
+    // Skip if this is an AI Tech Expo query
+    if (!isAITechExpoQuery(originalPrompt)) {
+      try {
+        const exhibitorQuery = await this.exhibitorService.processExhibitorQuery(originalPrompt);
+        
+        if (exhibitorQuery.found && exhibitorQuery.data.length > 0) {
+          console.log(`🏢 PromptEnhancement: Found ${exhibitorQuery.data.length} exhibitors from database`);
+          const exhibitorData = this.exhibitorService.formatMultipleExhibitors(exhibitorQuery.data);
+          enhancedPrompt += `\n\n${exhibitorQuery.context.toUpperCase()}\n${exhibitorData}`;
+        }
+        // No fallback - only use actual database data
+      } catch (error) {
+        console.log('⚠️ Exhibitor lookup failed, no data added:', error);
+        // No fallback - only use actual database data
       }
-      // No fallback - only use actual database data
-    } catch (error) {
-      console.log('⚠️ Exhibitor lookup failed, no data added:', error);
-      // No fallback - only use actual database data
     }
     
     // Step 3.5: Add facility tour data if query is about tours
