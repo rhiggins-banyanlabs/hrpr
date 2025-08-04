@@ -3,16 +3,10 @@ services:
   client:
     build:
       context: ./client
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.prod
     ports:
       - "3000:3000"
-    volumes:
-      - ./client:/app
-      - /app/node_modules # Ensures host node_modules don't overwrite container's
-      - /app/.next # Ignore .next directory to prevent permission issues
     environment:
-      - NODE_ENV=development
-      - CHOKIDAR_USEPOLLING=true # Important for file change detection in Docker
-      - CHOKIDAR_INTERVAL=1000
-    stdin_open: true
-    tty: true
+      - NODE_ENV=production
+    restart: unless-stopped
+    # No volumes mounted in production to use the built files inside the container
