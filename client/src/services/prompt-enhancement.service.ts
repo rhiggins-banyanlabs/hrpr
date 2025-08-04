@@ -8,6 +8,7 @@ import { ExhibitorSearchService } from "./exhibitor-search.service";
 import { scheduleService } from "./schedule.service";
 import { facilityToursService } from "./facility-tours.service";
 import { workshopSearchService } from "./workshop-search.service";
+import { committeeMeetingsService } from "./committee-meetings.service";
 import { AI_TECH_EXPO, isAITechExpoQuery } from "@/data/ai-tech-expo";
 
 export class PromptEnhancementService {
@@ -160,6 +161,21 @@ export class PromptEnhancementService {
         }
       } catch (error) {
         console.log('⚠️ Workshop lookup failed:', error);
+      }
+    }
+    
+    // Step 3.7: Add committee meeting data if query is about meetings
+    if (intent.isMeetingQuery) {
+      try {
+        const meetingQuery = await committeeMeetingsService.processMeetingQuery(originalPrompt);
+        
+        if (meetingQuery.found && meetingQuery.data.length > 0) {
+          console.log(`📋 PromptEnhancement: Found ${meetingQuery.data.length} committee meetings`);
+          const meetingData = committeeMeetingsService.formatMultipleMeetings(meetingQuery.data);
+          enhancedPrompt += `\n\n${meetingQuery.context.toUpperCase()}\n${meetingData}`;
+        }
+      } catch (error) {
+        console.log('⚠️ Committee meeting lookup failed:', error);
       }
     }
     

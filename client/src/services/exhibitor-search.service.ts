@@ -58,6 +58,15 @@ export class ExhibitorSearchService {
       };
     }
     
+    // EXCLUDE committee/meeting queries - they should be handled by meetings service
+    if (lowerQuery.includes('committee') || lowerQuery.includes('council') || 
+        lowerQuery.includes('meeting') || lowerQuery.includes('meetings')) {
+      return {
+        isExhibitorQuery: false,
+        queryType: 'none'
+      };
+    }
+    
     // Check for booth number queries (e.g., "booth 123", "where is booth 456")
     const boothMatch = lowerQuery.match(/booth\s*#?\s*(\d+)/i);
     if (boothMatch) {

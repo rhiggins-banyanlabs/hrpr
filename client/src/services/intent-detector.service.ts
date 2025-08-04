@@ -38,6 +38,19 @@ export class IntentDetectorService {
     'downtown', 'uptown', 'district', 'neighborhood'
   ];
 
+  // Committee meetings keywords
+  private static readonly MEETING_KEYWORDS = [
+    'meeting', 'meetings', 'committee', 'committees', 'council', 'councils',
+    'board', 'panel', 'hearing', 'hearings', 'assembly', 'gather',
+    'health care committee', 'adult corrections', 'legal issues committee',
+    'community corrections', 'detention committee', 'faith based', 
+    'staff wellness', 'behavioral health committee', 'nurses committee',
+    'membership committee', 'restorative justice', 'ethics committee',
+    'education directors', 'correctional industries', 'juvenile detention',
+    'military corrections', 'sheriff council', 'awards committee',
+    'substance use', 'moud', 'standards', 'accreditation', 'auditor'
+  ];
+
   // Conference schedule/sessions/speakers
   private static readonly CONFERENCE_KEYWORDS = [
     // Schedule & Time
@@ -126,7 +139,8 @@ export class IntentDetectorService {
     isLocationQuery: boolean;
     isExhibitorQuery: boolean;
     isWorkshopQuery: boolean;
-    primaryIntent: 'venue' | 'conference' | 'location' | 'exhibitor' | 'workshop' | 'general';
+    isMeetingQuery: boolean;
+    primaryIntent: 'venue' | 'conference' | 'location' | 'exhibitor' | 'workshop' | 'meeting' | 'general';
     confidence: number;
   } {
     const lowerQuery = query.toLowerCase();
@@ -154,15 +168,17 @@ export class IntentDetectorService {
     const locationMatches = findMatches(this.LOCATION_KEYWORDS);
     const exhibitorMatches = findMatches(this.EXHIBITOR_KEYWORDS);
     const workshopMatches = findMatches(this.WORKSHOP_KEYWORDS);
+    const meetingMatches = findMatches(this.MEETING_KEYWORDS);
 
     const isVenueQuery = venueMatches.length > 0;
     const isConferenceQuery = conferenceMatches.length > 0 || isAITechExpo;
     const isLocationQuery = locationMatches.length > 0;
-    const isExhibitorQuery = exhibitorMatches.length > 0 && !isAITechExpo; // Exclude AI Tech Expo from exhibitor queries
+    const isMeetingQuery = meetingMatches.length > 0;
+    const isExhibitorQuery = exhibitorMatches.length > 0 && !isAITechExpo && !isMeetingQuery; // Exclude AI Tech Expo AND meeting queries from exhibitor queries
     const isWorkshopQuery = workshopMatches.length > 0;
     
     // Determine primary intent with weighted scoring
-    let primaryIntent: 'venue' | 'conference' | 'location' | 'exhibitor' | 'workshop' | 'general' = 'general';
+    let primaryIntent: 'venue' | 'conference' | 'location' | 'exhibitor' | 'workshop' | 'meeting' | 'general' = 'general';
     
     // Special priority for AI Tech Expo
     if (isAITechExpo) {
@@ -170,6 +186,7 @@ export class IntentDetectorService {
     } else {
       // Weight more specific queries higher
       const weightedScores = [
+        { type: 'meeting' as const, score: meetingMatches.length * 2.0 }, // Meetings are very specific
         { type: 'workshop' as const, score: workshopMatches.length * 1.8 }, // Workshops are very specific
         { type: 'exhibitor' as const, score: isExhibitorQuery ? exhibitorMatches.length * 1.5 : 0 },
         { type: 'location' as const, score: locationMatches.length * 1.2 },
@@ -185,11 +202,11 @@ export class IntentDetectorService {
     }
     
     // Calculate confidence based on match strength and query length
-    const totalMatches = venueMatches.length + conferenceMatches.length + locationMatches.length + exhibitorMatches.length + workshopMatches.length;
+    const totalMatches = venueMatches.length + conferenceMatches.length + locationMatches.length + exhibitorMatches.length + workshopMatches.length + meetingMatches.length;
     const queryWords = query.split(' ').length;
     const confidence = totalMatches > 0 ? Math.min((totalMatches * 0.3) + (queryWords * 0.1), 1) : 0;
     
-    console.log(`🎯 IntentDetector: "${query}" -> Primary: ${primaryIntent}, Venue: ${isVenueQuery}, Conference: ${isConferenceQuery}, Location: ${isLocationQuery}, Exhibitor: ${isExhibitorQuery}, Workshop: ${isWorkshopQuery} (confidence: ${confidence.toFixed(2)})`);
+    console.log(`🎯 IntentDetector: "${query}" -> Primary: ${primaryIntent}, Venue: ${isVenueQuery}, Conference: ${isConferenceQuery}, Location: ${isLocationQuery}, Exhibitor: ${isExhibitorQuery}, Workshop: ${isWorkshopQuery}, Meeting: ${isMeetingQuery} (confidence: ${confidence.toFixed(2)})`);
     
     return {
       isVenueQuery,
@@ -197,6 +214,7 @@ export class IntentDetectorService {
       isLocationQuery,
       isExhibitorQuery,
       isWorkshopQuery,
+      isMeetingQuery,
       primaryIntent,
       confidence
     };
@@ -375,6 +393,61 @@ export class IntentDetectorService {
           "Let me look up those details"
         ];
         return locationResponses[Math.floor(Math.random() * locationResponses.length)];
+        
+      case 'meeting':
+        // Meeting-specific filler responses based on query type
+        
+        // Committee-specific queries
+        if (lowerQuery.includes('health') || lowerQuery.includes('healthcare')) {
+          const responses = [
+            "Let me find the Health Care Committee meeting details",
+            "I'll check the healthcare committee schedule",
+            "Let me look up health committee meetings"
+          ];
+          return responses[Math.floor(Math.random() * responses.length)];
+        }
+        
+        // Council meetings
+        if (lowerQuery.includes('council')) {
+          const responses = [
+            "Let me find council meeting information",
+            "I'll check the council meeting schedule",
+            "Let me look up council sessions"
+          ];
+          return responses[Math.floor(Math.random() * responses.length)];
+        }
+        
+        // Day-specific meetings
+        if (lowerQuery.includes('friday') || lowerQuery.includes('saturday') || 
+            lowerQuery.includes('sunday') || lowerQuery.includes('monday')) {
+          const responses = [
+            "Let me check the committee meeting schedule for that day",
+            "I'll find meetings scheduled then",
+            "Let me look up committee sessions for that day"
+          ];
+          return responses[Math.floor(Math.random() * responses.length)];
+        }
+        
+        // Specific committees
+        if (lowerQuery.includes('adult corrections') || lowerQuery.includes('detention') || 
+            lowerQuery.includes('legal') || lowerQuery.includes('ethics')) {
+          const responses = [
+            "Let me find that committee meeting",
+            "I'll check that committee's schedule",
+            "Let me look up that committee session"
+          ];
+          return responses[Math.floor(Math.random() * responses.length)];
+        }
+        
+        // General meeting responses
+        const meetingResponses = [
+          "Let me check the committee meeting schedule",
+          "I'll find those meeting details",
+          "Let me look up committee sessions",
+          "I'll search for committee meetings",
+          "Let me find meeting information for you"
+        ];
+        return meetingResponses[Math.floor(Math.random() * meetingResponses.length)];
         
       case 'workshop':
         // Workshop-specific filler responses based on query type

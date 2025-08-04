@@ -824,10 +824,10 @@ export const useVoiceChat = ({
     // Normal query processing with personalization info
     await processVoiceQueryWithPersonalization(text, isNewNameIntroduction, extractedName);
     
-    // Start feedback flow after 5 seconds of silence following the voice response
-    // Wait for voice to finish speaking, then wait 5 seconds before asking more questions
+    // Start feedback flow after 3 seconds of silence following the voice response
+    // Wait for voice to finish speaking, then wait 3 seconds before asking more questions
     if (feedbackStateMachine.getCurrentState() === FeedbackState.IDLE && conversationCountRef.current > 0) {
-      console.log('🔄 Will start feedback flow after 5 seconds of silence');
+      console.log('🔄 Will start feedback flow after 3 seconds of silence');
       
       // Clear any existing feedback timer
       if (feedbackTimerRef.current) {
@@ -840,7 +840,7 @@ export const useVoiceChat = ({
         const checkSpeaking = setInterval(() => {
           if (!isSpeaking) {
             clearInterval(checkSpeaking);
-            console.log('🔊 Voice response finished, starting 5 second silence timer');
+            console.log('🔊 Voice response finished, starting 3 second silence timer');
             
             // Start 3 second timer before asking more questions
             feedbackTimerRef.current = setTimeout(() => {
