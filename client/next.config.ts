@@ -19,29 +19,32 @@ const nextConfig: NextConfig = {
       };
     }
     
-    // Fix chunk loading issues
-    config.optimization = {
-      ...config.optimization,
-      splitChunks: {
-        chunks: 'all',
-        cacheGroups: {
-          vendor: {
-            test: /[\\/]node_modules[\\/]/,
-            name: 'vendors',
-            chunks: 'all',
-            priority: 10,
-            reuseExistingChunk: true,
-          },
-          common: {
-            name: 'common',
-            minChunks: 2,
-            chunks: 'all',
-            priority: 5,
-            reuseExistingChunk: true,
+    // Fix chunk loading issues - MODIFIED VERSION
+    if (!isServer) {
+      config.optimization = {
+        ...config.optimization,
+        splitChunks: {
+          chunks: 'all',
+          cacheGroups: {
+            vendor: {
+              test: /[\\/]node_modules[\\/]/,
+              name: 'vendors',
+              chunks: 'all',
+              priority: 10,
+              reuseExistingChunk: true,
+              enforce: true,
+            },
+            common: {
+              name: 'common',
+              minChunks: 2,
+              chunks: 'all',
+              priority: 5,
+              reuseExistingChunk: true,
+            },
           },
         },
-      },
-    };
+      };
+    }
 
     // Ensure proper module resolution
     if (!config.resolve) {
@@ -55,10 +58,30 @@ const nextConfig: NextConfig = {
       tls: false,
     };
 
+    // Add global polyfills for browser-specific code
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        // Add any additional browser-specific fallbacks here
+      };
+    }
+
     config.module = {
       ...config.module,
       exprContextCritical: false,
     };
+
+    // Fix for "self is not defined" error
+    config.plugins = config.plugins || [];
+    
+    if (!isServer) {
+      const webpack = require('webpack');
+      config.plugins.push(
+        new webpack.DefinePlugin({
+          'typeof self': JSON.stringify('object'),
+        })
+      );
+    }
 
     return config;
   },
@@ -66,6 +89,10 @@ const nextConfig: NextConfig = {
     // Warning: This allows production builds to successfully complete even if
     // your project has ESLint errors.
     ignoreDuringBuilds: true,
+  },
+  // Add experimental features to help with SSR issues
+  experimental: {
+    esmExternals: 'loose',
   },
 };
 
