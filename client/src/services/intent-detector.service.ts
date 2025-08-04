@@ -2,18 +2,16 @@
 export class IntentDetectorService {
   // Places/venues outside the conference (restaurants, hotels, etc)
   private static readonly VENUE_KEYWORDS = [
-    // Food & Dining
-    'restaurant', 'restaurants', 'food', 'eat', 'eating', 'dining', 'dine',
-    'lunch', 'dinner', 'breakfast', 'brunch', 'meal', 'meals', 'hungry',
-    'coffee', 'cafe', 'cafes', 'espresso', 'latte', 'cappuccino', 'starbucks',
+    // Food & Dining (removed generic 'food', 'parking' since they're in conference info)
+    'restaurant', 'restaurants', 'eating', 'dining', 'dine',
+    'breakfast', 'brunch', 'meal', 'meals',
+    'coffee shop', 'cafe', 'cafes', 'espresso', 'latte', 'cappuccino', 'starbucks',
     'bar', 'bars', 'drink', 'drinks', 'pub', 'pubs', 'brewery', 'breweries',
     'alcohol', 'beer', 'wine', 'cocktail', 'cocktails', 'happy hour',
     'pizza', 'burger', 'burgers', 'sandwich', 'sushi', 'chinese', 'italian',
     'mexican', 'thai', 'indian', 'fast food', 'takeout', 'delivery',
     
-    // Parking & Transportation
-    'parking', 'park', 'garage', 'garages', 'lot', 'lots', 'spot', 'spots',
-    'valet', 'meter', 'meters', 'free parking', 'paid parking',
+    // Transportation (removed 'parking', 'park', 'garage' since they're in conference info)
     'uber', 'lyft', 'taxi', 'cab', 'ride', 'transport', 'bus', 'metro',
     
     // Accommodation
@@ -49,6 +47,25 @@ export class IntentDetectorService {
     'education directors', 'correctional industries', 'juvenile detention',
     'military corrections', 'sheriff council', 'awards committee',
     'substance use', 'moud', 'standards', 'accreditation', 'auditor'
+  ];
+
+  // General conference information keywords
+  private static readonly CONFERENCE_INFO_KEYWORDS = [
+    'badge', 'lost badge', 'replacement badge', 'credential', 'name tag',
+    'parking', 'park', 'garage', 'car', 'vehicle',
+    'ada', 'disability', 'wheelchair', 'accessible', 'assistance', 'special needs',
+    'lost and found', 'lost', 'found', 'missing', 'left behind',
+    'smoking', 'smoke', 'cigarette', 'vaping',
+    'photo', 'photography', 'pictures', 'video', 'recording', 'camera',
+    'social media', 'facebook', 'twitter', 'instagram', 'linkedin',
+    'worship', 'prayer', 'church', 'religious service', 'faith service',
+    'prize', 'raffle', 'drawing', 'gift card', 'win', 'contest',
+    'business center', 'fedex', 'printing', 'copies', 'shipping', 'mail', 'print',
+    'cell phone', 'phone policy', 'silence phone', 'mobile', 'ringer',
+    'continuing education', 'ce', 'ceu', 'credits', 'certification',
+    'solicitation', 'flyers', 'brochures', 'materials', 'handouts',
+    'exhibitor service', 'service counter', 'exhibitor counter', 'exhibitor desk',
+    'show management', 'management office', 'aca office'
   ];
 
   // Conference schedule/sessions/speakers
@@ -169,6 +186,7 @@ export class IntentDetectorService {
     const exhibitorMatches = findMatches(this.EXHIBITOR_KEYWORDS);
     const workshopMatches = findMatches(this.WORKSHOP_KEYWORDS);
     const meetingMatches = findMatches(this.MEETING_KEYWORDS);
+    const conferenceInfoMatches = findMatches(this.CONFERENCE_INFO_KEYWORDS);
 
     const isVenueQuery = venueMatches.length > 0;
     const isConferenceQuery = conferenceMatches.length > 0 || isAITechExpo;
@@ -176,9 +194,10 @@ export class IntentDetectorService {
     const isMeetingQuery = meetingMatches.length > 0;
     const isExhibitorQuery = exhibitorMatches.length > 0 && !isAITechExpo && !isMeetingQuery; // Exclude AI Tech Expo AND meeting queries from exhibitor queries
     const isWorkshopQuery = workshopMatches.length > 0;
+    const isConferenceInfoQuery = conferenceInfoMatches.length > 0;
     
     // Determine primary intent with weighted scoring
-    let primaryIntent: 'venue' | 'conference' | 'location' | 'exhibitor' | 'workshop' | 'meeting' | 'general' = 'general';
+    let primaryIntent: 'venue' | 'conference' | 'location' | 'exhibitor' | 'workshop' | 'meeting' | 'info' | 'general' = 'general';
     
     // Special priority for AI Tech Expo
     if (isAITechExpo) {
@@ -186,6 +205,7 @@ export class IntentDetectorService {
     } else {
       // Weight more specific queries higher
       const weightedScores = [
+        { type: 'info' as const, score: conferenceInfoMatches.length * 2.5 }, // Conference info is highest priority
         { type: 'meeting' as const, score: meetingMatches.length * 2.0 }, // Meetings are very specific
         { type: 'workshop' as const, score: workshopMatches.length * 1.8 }, // Workshops are very specific
         { type: 'exhibitor' as const, score: isExhibitorQuery ? exhibitorMatches.length * 1.5 : 0 },
@@ -393,6 +413,197 @@ export class IntentDetectorService {
           "Let me look up those details"
         ];
         return locationResponses[Math.floor(Math.random() * locationResponses.length)];
+        
+      case 'info':
+        // Conference information filler responses with variety
+        
+        // Badge-related queries
+        if (lowerQuery.includes('badge') || lowerQuery.includes('credential') || lowerQuery.includes('name tag')) {
+          const badgeResponses = [
+            "Let me get badge information for you",
+            "I'll find the badge policy details",
+            "Let me look up badge requirements",
+            "I'll check the badge information"
+          ];
+          return badgeResponses[Math.floor(Math.random() * badgeResponses.length)];
+        }
+        
+        // Parking queries
+        if (lowerQuery.includes('parking') || lowerQuery.includes('park') || lowerQuery.includes('garage')) {
+          const parkingResponses = [
+            "I'll find parking information",
+            "Let me check parking options for you",
+            "I'll look up parking details",
+            "Let me get the parking information"
+          ];
+          return parkingResponses[Math.floor(Math.random() * parkingResponses.length)];
+        }
+        
+        // Food/dining queries
+        if (lowerQuery.includes('food') || lowerQuery.includes('eat') || lowerQuery.includes('dining') || 
+            lowerQuery.includes('lunch') || lowerQuery.includes('breakfast')) {
+          const foodResponses = [
+            "Let me check dining options",
+            "I'll find food service information",
+            "Let me look up dining locations",
+            "I'll get the food service details"
+          ];
+          return foodResponses[Math.floor(Math.random() * foodResponses.length)];
+        }
+        
+        // Lost and found queries
+        if (lowerQuery.includes('lost') || lowerQuery.includes('found') || lowerQuery.includes('missing')) {
+          const lostFoundResponses = [
+            "I'll help you with lost and found information",
+            "Let me find the lost and found procedure",
+            "I'll get lost and found details for you",
+            "Let me check the lost and found policy"
+          ];
+          return lostFoundResponses[Math.floor(Math.random() * lostFoundResponses.length)];
+        }
+        
+        // ADA/Accessibility queries
+        if (lowerQuery.includes('ada') || lowerQuery.includes('wheelchair') || lowerQuery.includes('accessible') || 
+            lowerQuery.includes('disability') || lowerQuery.includes('assistance')) {
+          const adaResponses = [
+            "Let me find accessibility information",
+            "I'll get ADA assistance details",
+            "Let me look up accessibility services",
+            "I'll find assistance information for you"
+          ];
+          return adaResponses[Math.floor(Math.random() * adaResponses.length)];
+        }
+        
+        // Business center/FedEx queries
+        if (lowerQuery.includes('fedex') || lowerQuery.includes('business center') || lowerQuery.includes('print') || 
+            lowerQuery.includes('ship') || lowerQuery.includes('copy')) {
+          const businessResponses = [
+            "Let me find business center information",
+            "I'll locate FedEx services for you",
+            "Let me check printing and shipping options",
+            "I'll find the business services details"
+          ];
+          return businessResponses[Math.floor(Math.random() * businessResponses.length)];
+        }
+        
+        // Photography/recording queries
+        if (lowerQuery.includes('photo') || lowerQuery.includes('picture') || lowerQuery.includes('video') || 
+            lowerQuery.includes('recording') || lowerQuery.includes('camera')) {
+          const photoResponses = [
+            "Let me check the photography policy",
+            "I'll find photo and video guidelines",
+            "Let me look up recording policies",
+            "I'll get the photography rules for you"
+          ];
+          return photoResponses[Math.floor(Math.random() * photoResponses.length)];
+        }
+        
+        // Smoking/vaping queries
+        if (lowerQuery.includes('smok') || lowerQuery.includes('cigarette') || lowerQuery.includes('vap')) {
+          const smokingResponses = [
+            "Let me find the smoking policy",
+            "I'll check smoking area information",
+            "Let me look up smoking guidelines",
+            "I'll get the smoking rules for you"
+          ];
+          return smokingResponses[Math.floor(Math.random() * smokingResponses.length)];
+        }
+        
+        // Social media queries
+        if (lowerQuery.includes('social media') || lowerQuery.includes('facebook') || lowerQuery.includes('twitter') || 
+            lowerQuery.includes('instagram') || lowerQuery.includes('linkedin')) {
+          const socialResponses = [
+            "Let me find our social media information",
+            "I'll get the social media handles",
+            "Let me look up our social channels",
+            "I'll find the social media details"
+          ];
+          return socialResponses[Math.floor(Math.random() * socialResponses.length)];
+        }
+        
+        // Prize/raffle queries
+        if (lowerQuery.includes('prize') || lowerQuery.includes('raffle') || lowerQuery.includes('drawing') || 
+            lowerQuery.includes('win') || lowerQuery.includes('contest')) {
+          const prizeResponses = [
+            "Let me find prize drawing information",
+            "I'll get the raffle details for you",
+            "Let me check the contest information",
+            "I'll look up prize drawing rules"
+          ];
+          return prizeResponses[Math.floor(Math.random() * prizeResponses.length)];
+        }
+        
+        // Worship/religious service queries
+        if (lowerQuery.includes('worship') || lowerQuery.includes('prayer') || lowerQuery.includes('church') || 
+            lowerQuery.includes('religious') || lowerQuery.includes('faith')) {
+          const worshipResponses = [
+            "Let me find worship service information",
+            "I'll check the religious service schedule",
+            "Let me look up worship times",
+            "I'll get faith service details"
+          ];
+          return worshipResponses[Math.floor(Math.random() * worshipResponses.length)];
+        }
+        
+        // Continuing education queries
+        if (lowerQuery.includes('ce ') || lowerQuery.includes('ceu') || lowerQuery.includes('continuing education') || 
+            lowerQuery.includes('credit')) {
+          const ceResponses = [
+            "Let me find continuing education information",
+            "I'll check CE credit details",
+            "Let me look up professional development options",
+            "I'll get continuing education requirements"
+          ];
+          return ceResponses[Math.floor(Math.random() * ceResponses.length)];
+        }
+        
+        // Cell phone policy queries
+        if (lowerQuery.includes('cell phone') || lowerQuery.includes('phone policy') || lowerQuery.includes('silence')) {
+          const phoneResponses = [
+            "Let me check the cell phone policy",
+            "I'll find phone usage guidelines",
+            "Let me look up mobile device rules",
+            "I'll get the phone policy for you"
+          ];
+          return phoneResponses[Math.floor(Math.random() * phoneResponses.length)];
+        }
+        
+        // Exhibitor service counter queries
+        if (lowerQuery.includes('exhibitor service') || lowerQuery.includes('service counter') || 
+            lowerQuery.includes('exhibitor counter') || lowerQuery.includes('exhibitor desk')) {
+          const exhibitorServiceResponses = [
+            "Let me find the exhibitor service counter location",
+            "I'll locate exhibitor support services",
+            "Let me check the service counter information",
+            "I'll find exhibitor assistance details"
+          ];
+          return exhibitorServiceResponses[Math.floor(Math.random() * exhibitorServiceResponses.length)];
+        }
+        
+        // Show management queries
+        if (lowerQuery.includes('show management') || lowerQuery.includes('management office') || 
+            lowerQuery.includes('aca office')) {
+          const managementResponses = [
+            "Let me find the show management office",
+            "I'll locate the ACA office for you",
+            "Let me check management office details",
+            "I'll find show administration information"
+          ];
+          return managementResponses[Math.floor(Math.random() * managementResponses.length)];
+        }
+        
+        // General fallback responses for info queries
+        const infoResponses = [
+          "Let me find that conference information",
+          "I'll get those details for you",
+          "Let me look up that information",
+          "I'll search for that conference detail",
+          "Let me check our conference resources",
+          "I'll find that information for you",
+          "Let me look into that",
+          "I'll retrieve those details"
+        ];
+        return infoResponses[Math.floor(Math.random() * infoResponses.length)];
         
       case 'meeting':
         // Meeting-specific filler responses based on query type
