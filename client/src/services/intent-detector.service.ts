@@ -157,7 +157,7 @@ export class IntentDetectorService {
     isExhibitorQuery: boolean;
     isWorkshopQuery: boolean;
     isMeetingQuery: boolean;
-    primaryIntent: 'venue' | 'conference' | 'location' | 'exhibitor' | 'workshop' | 'meeting' | 'general';
+    primaryIntent: 'venue' | 'conference' | 'location' | 'exhibitor' | 'workshop' | 'meeting' | 'info' | 'general';
     confidence: number;
   } {
     const lowerQuery = query.toLowerCase();
