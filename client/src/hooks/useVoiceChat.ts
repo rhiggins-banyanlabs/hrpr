@@ -39,7 +39,8 @@ export const useVoiceChat = ({
   const userNameRef = useRef<string | null>(null); // Track user name
   const currentAudioRef = useRef<HTMLAudioElement | null>(null); // Track current audio to prevent overlaps
   const feedbackTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Track feedback flow timeout
-  const feedbackTimerRef = useRef<NodeJS.Timeout | null>(null); // Track 5-second timer before asking more questions
+  const feedbackTimerRef = useRef<NodeJS.Timeout | null>(null); // Track 1-second timer before asking more questions
+  const pendingSilenceDetectionRef = useRef<NodeJS.Timeout | null>(null); // Track pending silence detection setup
   // const streamingTTSRef = useRef(new StreamingTTSService()); // Removed for performance
 
   console.log('🎤 useVoiceChat - sessionId:', sessionId);
@@ -81,9 +82,9 @@ export const useVoiceChat = ({
       feedbackTimeoutRef.current = null;
     }
     
-    // Cancel the 5-second "more questions" timer if user speaks
+    // Cancel the 1-second "more questions" timer if user speaks
     if (feedbackTimerRef.current) {
-      console.log('🔄 Cancelling 5-second timer - user is speaking');
+      console.log('🔄 Cancelling 1-second timer - user is speaking');
       clearTimeout(feedbackTimerRef.current);
       feedbackTimerRef.current = null;
     }
@@ -223,14 +224,8 @@ export const useVoiceChat = ({
       if (speakText) {
         console.log('🔊 Starting TTS generation...');
         
-        // Stop any currently playing audio to prevent overlap
-        if (currentAudioRef.current) {
-          console.log('🔊 Stopping previous audio to prevent overlap');
-          currentAudioRef.current.pause();
-          currentAudioRef.current = null;
-        }
-        
-        setIsSpeaking(true);
+        // Audio overlap prevention is now handled by useOptimizedVoice.speakText()
+        // Speaking state is managed by useOptimizedVoice when audio actually plays
         
         try {
           // Wait for filler response to complete if it's still playing
@@ -322,8 +317,6 @@ export const useVoiceChat = ({
           
         } catch (voiceError) {
           console.error('🔊 Voice error:', voiceError);
-        } finally {
-          setIsSpeaking(false);
         }
       }
 
@@ -357,13 +350,10 @@ export const useVoiceChat = ({
       // Speak error message if possible
       if (speakText && error instanceof Error && error.name !== 'AbortError') {
         const errorMessage = "I'm sorry, I encountered an error processing your request. Please try again.";
-        setIsSpeaking(true);
         try {
           await speakText(errorMessage);
         } catch (voiceError) {
           console.error('🔊 Voice error while speaking error message:', voiceError);
-        } finally {
-          setIsSpeaking(false);
         }
 
         // Save error message to database
@@ -418,9 +408,7 @@ export const useVoiceChat = ({
       
       // Speak the intro
       console.log('🔊 Starting speech synthesis...');
-      setIsSpeaking(true);
       await speakText(introMessage);
-      setIsSpeaking(false);
       
       console.log('🎯 Intro message sent and spoken - ready for user input');
     } catch (error) {
@@ -434,6 +422,12 @@ export const useVoiceChat = ({
     if (silenceDetectorRef.current) {
       silenceDetectorRef.current.stop();
       silenceDetectorRef.current = null;
+    }
+    // Also clear any pending silence detection setup
+    if (pendingSilenceDetectionRef.current) {
+      clearTimeout(pendingSilenceDetectionRef.current);
+      pendingSilenceDetectionRef.current = null;
+      console.log('🔇 Cleared pending silence detection setup');
     }
   }, []);
   
@@ -561,20 +555,27 @@ export const useVoiceChat = ({
     
     // Helper function to start silence detection after TTS completes
     const startSilenceDetectionAfterSpeech = (timeout: number) => {
+      // Clear any existing pending detection
+      if (pendingSilenceDetectionRef.current) {
+        clearTimeout(pendingSilenceDetectionRef.current);
+        pendingSilenceDetectionRef.current = null;
+      }
+      
       // Wait for TTS to actually complete before starting silence detection
       const startDetection = () => {
         // Only start if we're not currently speaking
         if (!isSpeaking) {
           console.log(`🔇 Starting silence detection (${timeout}ms) after TTS completed`);
           startSilenceDetection(timeout);
+          pendingSilenceDetectionRef.current = null; // Clear ref once started
         } else {
           // If still speaking, wait a bit longer
-          setTimeout(startDetection, 500);
+          pendingSilenceDetectionRef.current = setTimeout(startDetection, 500);
         }
       };
       
       // Add a 2-second buffer after TTS to ensure natural conversation flow
-      setTimeout(startDetection, 2000);
+      pendingSilenceDetectionRef.current = setTimeout(startDetection, 2000);
     };
     
     console.log('🎯 Checking if should speak message:', {
@@ -594,7 +595,6 @@ export const useVoiceChat = ({
       
       // Play the appropriate message for the state
       console.log(`🔊 Speaking feedback message for state ${newState}: "${message}"`);
-      setIsSpeaking(true);
       try {
         const audioResult = await speakText(message);
         
@@ -625,8 +625,6 @@ export const useVoiceChat = ({
         }
       } catch (error) {
         console.error('❌ Error speaking feedback message:', error);
-      } finally {
-        setIsSpeaking(false);
       }
     }
 
@@ -694,6 +692,11 @@ export const useVoiceChat = ({
       if (silenceDetectorRef.current) {
         silenceDetectorRef.current.destroy();
       }
+      // Clear any pending silence detection setup
+      if (pendingSilenceDetectionRef.current) {
+        clearTimeout(pendingSilenceDetectionRef.current);
+        pendingSilenceDetectionRef.current = null;
+      }
     };
   }, [handleFeedbackStateChange]);
 
@@ -747,6 +750,17 @@ export const useVoiceChat = ({
     if (currentState === FeedbackState.ASKING_MORE_QUESTIONS) {
       const intent = FeedbackStateMachine.detectUserIntent(text);
       console.log(`🔄 ASKING_MORE_QUESTIONS - intent detected: ${intent}`);
+      
+      // Immediately stop any pending silence detection since user is active
+      console.log('🔇 User activity detected during ASKING_MORE_QUESTIONS - stopping silence detection');
+      stopSilenceDetection();
+      
+      // CRITICAL: Clear the feedback timer to prevent race condition with timeout
+      if (feedbackTimerRef.current) {
+        console.log('🔄 Clearing feedback timer to prevent timeout race condition');
+        clearTimeout(feedbackTimerRef.current);
+        feedbackTimerRef.current = null;
+      }
       
       if (intent === 'yes') {
         feedbackStateMachine.transition('user_yes');
@@ -824,10 +838,10 @@ export const useVoiceChat = ({
     // Normal query processing with personalization info
     await processVoiceQueryWithPersonalization(text, isNewNameIntroduction, extractedName);
     
-    // Start feedback flow after 3 seconds of silence following the voice response
-    // Wait for voice to finish speaking, then wait 3 seconds before asking more questions
+    // Start feedback flow after 1 second of silence following the voice response
+    // Wait for voice to finish speaking, then wait 1 second before asking more questions
     if (feedbackStateMachine.getCurrentState() === FeedbackState.IDLE && conversationCountRef.current > 0) {
-      console.log('🔄 Will start feedback flow after 3 seconds of silence');
+      console.log('🔄 Will start feedback flow after 1 second of silence');
       
       // Clear any existing feedback timer
       if (feedbackTimerRef.current) {
@@ -835,24 +849,24 @@ export const useVoiceChat = ({
         feedbackTimerRef.current = null;
       }
       
-      // Wait for TTS to complete, then start 5 second timer
+      // Wait for TTS to complete, then start 1 second timer
       const waitForSpeechAndStartTimer = () => {
         const checkSpeaking = setInterval(() => {
           if (!isSpeaking) {
             clearInterval(checkSpeaking);
-            console.log('🔊 Voice response finished, starting 3 second silence timer');
+            console.log('🔊 Voice response finished, starting 1 second silence timer');
             
-            // Start 3 second timer before asking more questions
+            // Start 1 second timer before asking more questions
             feedbackTimerRef.current = setTimeout(() => {
               // Only proceed if still idle and no new interaction
               if (feedbackStateMachine.getCurrentState() === FeedbackState.IDLE && 
                   !isProcessingRef.current) {
-                console.log('🔄 3 seconds passed, asking if user has more questions');
+                console.log('🔄 1 second passed, asking if user has more questions');
                 isInFeedbackFlowRef.current = true;
                 feedbackStateMachine.transition('user_response');
                 feedbackTimerRef.current = null;
               }
-            }, 3000); // 3 seconds after voice finishes
+            }, 1000); // 1 second after voice finishes
           }
         }, 100); // Check every 100ms if still speaking
       };

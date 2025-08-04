@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
-      signal: AbortSignal.timeout(10000), // 10 second timeout for TTS
+      signal: AbortSignal.timeout(20000), // 20 second timeout for TTS (longer responses need more time)
       body: JSON.stringify({
         model,
         input: text,
@@ -132,6 +132,20 @@ export async function POST(req: NextRequest) {
 
   } catch (error) {
     console.error('🔊 TTS API error:', error);
+    
+    // Handle timeout errors specifically
+    if (error instanceof DOMException && error.name === 'TimeoutError') {
+      console.error('🔊 TTS timeout - response may be too long or API is slow');
+      return NextResponse.json(
+        { 
+          error: 'TTS request timed out', 
+          details: 'The text may be too long or the OpenAI TTS API is experiencing delays. Try a shorter message.',
+          textLength: req.json().then(body => body.text?.length).catch(() => 'unknown')
+        }, 
+        { status: 408 }
+      );
+    }
+    
     return NextResponse.json(
       { error: 'Failed to generate speech', details: error instanceof Error ? error.message : 'Unknown error' }, 
       { status: 500 }
