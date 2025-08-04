@@ -1,3 +1,6 @@
+
+
+
 // utils/response.utils.ts - ENHANCED WITH CACHING SUPPORT
 import { NextResponse } from "next/server";
 import { AIRouterResponse, Strategy } from "@/types/ai-router.types";
@@ -138,7 +141,9 @@ export class ResponseUtils {
     
     // Cache-specific headers
     nextResponse.headers.set('X-Response-Time', `${responseTime}ms`);
-    nextResponse.headers.set('X-Provider', result.provider);
+    if (result.provider) {
+      nextResponse.headers.set('X-Provider', result.provider);
+    }
     nextResponse.headers.set('X-Cache-Status', 'HIT');
     nextResponse.headers.set('X-Cache-Type', 'response');
     nextResponse.headers.set('X-Cache-Age', `${cachedData.cacheAge}s`);
@@ -243,6 +248,7 @@ export class ResponseUtils {
       tokensUsed: result.tokensUsed?.total,
       error: !!result.error,
       timestamp: new Date().toISOString()
+      
     };
 
     // In production, you might want to send this to your analytics service
