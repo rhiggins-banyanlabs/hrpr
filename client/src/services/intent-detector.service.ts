@@ -188,12 +188,24 @@ export class IntentDetectorService {
     const meetingMatches = findMatches(this.MEETING_KEYWORDS);
     const conferenceInfoMatches = findMatches(this.CONFERENCE_INFO_KEYWORDS);
 
-    const isVenueQuery = venueMatches.length > 0;
+    // Special case: Don't treat "room [number]" as venue query when it's about conference rooms
+    const isConferenceRoomContext = /\broom\s+\d+\b/i.test(query) || // "room 106"
+                                   (lowerQuery.includes('room') && (workshopMatches.length > 0 || 
+                                    lowerQuery.includes('session') || lowerQuery.includes('workshop') ||
+                                    lowerQuery.includes('conference') || lowerQuery.includes('meeting')));
+
+    // Special case: Speaker queries should be treated as workshop queries since speaker info is in workshop data
+    const isSpeakerQuery = lowerQuery.includes('speaker') || lowerQuery.includes('speakers') || 
+                           lowerQuery.includes('presenter') || lowerQuery.includes('presenters') ||
+                           lowerQuery.includes('moderator') || lowerQuery.includes('moderators') ||
+                           lowerQuery.includes('instructor') || lowerQuery.includes('instructors');
+
+    const isVenueQuery = venueMatches.length > 0 && !isConferenceRoomContext; // Don't treat conference rooms as venue queries
     const isConferenceQuery = conferenceMatches.length > 0 || isAITechExpo;
     const isLocationQuery = locationMatches.length > 0;
     const isMeetingQuery = meetingMatches.length > 0;
     const isExhibitorQuery = exhibitorMatches.length > 0 && !isAITechExpo && !isMeetingQuery; // Exclude AI Tech Expo AND meeting queries from exhibitor queries
-    const isWorkshopQuery = workshopMatches.length > 0;
+    const isWorkshopQuery = workshopMatches.length > 0 || isSpeakerQuery; // Include speaker queries as workshop queries
     const isConferenceInfoQuery = conferenceInfoMatches.length > 0;
     
     // Determine primary intent with weighted scoring
@@ -202,12 +214,18 @@ export class IntentDetectorService {
     // Special priority for AI Tech Expo
     if (isAITechExpo) {
       primaryIntent = 'conference';
+    } else if (isSpeakerQuery) {
+      // Speaker queries should always be treated as workshop queries since speaker info is in workshop data
+      primaryIntent = 'workshop';
+    } else if (workshopMatches.length > 0) {
+      // If workshop is explicitly mentioned, prioritize it over info queries
+      primaryIntent = 'workshop';
     } else {
       // Weight more specific queries higher
       const weightedScores = [
         { type: 'info' as const, score: conferenceInfoMatches.length * 2.5 }, // Conference info is highest priority
         { type: 'meeting' as const, score: meetingMatches.length * 2.0 }, // Meetings are very specific
-        { type: 'workshop' as const, score: workshopMatches.length * 1.8 }, // Workshops are very specific
+        { type: 'workshop' as const, score: (workshopMatches.length + (isSpeakerQuery ? 1 : 0)) * 1.8 }, // Workshops are very specific, boost for speaker queries
         { type: 'exhibitor' as const, score: isExhibitorQuery ? exhibitorMatches.length * 1.5 : 0 },
         { type: 'location' as const, score: locationMatches.length * 1.2 },
         { type: 'conference' as const, score: conferenceMatches.length },
@@ -222,11 +240,11 @@ export class IntentDetectorService {
     }
     
     // Calculate confidence based on match strength and query length
-    const totalMatches = venueMatches.length + conferenceMatches.length + locationMatches.length + exhibitorMatches.length + workshopMatches.length + meetingMatches.length;
+    const totalMatches = venueMatches.length + conferenceMatches.length + locationMatches.length + exhibitorMatches.length + workshopMatches.length + meetingMatches.length + conferenceInfoMatches.length + (isSpeakerQuery ? 1 : 0);
     const queryWords = query.split(' ').length;
     const confidence = totalMatches > 0 ? Math.min((totalMatches * 0.3) + (queryWords * 0.1), 1) : 0;
     
-    console.log(`🎯 IntentDetector: "${query}" -> Primary: ${primaryIntent}, Venue: ${isVenueQuery}, Conference: ${isConferenceQuery}, Location: ${isLocationQuery}, Exhibitor: ${isExhibitorQuery}, Workshop: ${isWorkshopQuery}, Meeting: ${isMeetingQuery} (confidence: ${confidence.toFixed(2)})`);
+    console.log(`🎯 IntentDetector: "${query}" -> Primary: ${primaryIntent}, Venue: ${isVenueQuery}, Conference: ${isConferenceQuery}, Location: ${isLocationQuery}, Exhibitor: ${isExhibitorQuery}, Workshop: ${isWorkshopQuery}, Meeting: ${isMeetingQuery}, Speaker: ${isSpeakerQuery} (confidence: ${confidence.toFixed(2)})`);
     
     return {
       isVenueQuery,
@@ -248,6 +266,12 @@ export class IntentDetectorService {
     const lowerQuery = query.toLowerCase();
     const intent = this.detectIntent(query);
     
+    // Helper function to add pause prefix to prevent audio cutoff
+    const addPausePrefix = (responses: string[]): string => {
+      const selected = responses[Math.floor(Math.random() * responses.length)];
+      return "... " + selected;
+    };
+    
     // Natural, conversational filler responses
     switch (intent.primaryIntent) {
       case 'exhibitor':
@@ -258,7 +282,7 @@ export class IntentDetectorService {
             "I'll look up that booth information",
             "Let me check where that booth is located"
           ];
-          return responses[Math.floor(Math.random() * responses.length)];
+          return addPausePrefix(responses);
         }
         if (lowerQuery.includes('companies') || lowerQuery.includes('vendor') || lowerQuery.includes('business')) {
           const responses = [
@@ -266,7 +290,7 @@ export class IntentDetectorService {
             "I'll look up those companies for you",
             "Let me see what vendors we have"
           ];
-          return responses[Math.floor(Math.random() * responses.length)];
+          return addPausePrefix(responses);
         }
         if (lowerQuery.includes('sponsor')) {
           const responses = [
@@ -274,7 +298,7 @@ export class IntentDetectorService {
             "I'll look up our conference sponsors",
             "Let me find that sponsor information"
           ];
-          return responses[Math.floor(Math.random() * responses.length)];
+          return addPausePrefix(responses);
         }
         // General exhibitor responses
         const exhibitorResponses = [
@@ -283,7 +307,7 @@ export class IntentDetectorService {
           "Let me find that information for you",
           "I'll search our exhibitor database"
         ];
-        return exhibitorResponses[Math.floor(Math.random() * exhibitorResponses.length)];
+        return addPausePrefix(exhibitorResponses);
         
       case 'venue':
         // Food & dining
@@ -293,7 +317,7 @@ export class IntentDetectorService {
             "I'll find some good dining options for you",
             "Let me see what food places are close by"
           ];
-          return responses[Math.floor(Math.random() * responses.length)];
+          return addPausePrefix(responses);
         }
         // Coffee
         if (lowerQuery.includes('coffee') || lowerQuery.includes('cafe')) {
@@ -302,7 +326,7 @@ export class IntentDetectorService {
             "I'll check what cafes are around here",
             "Let me look up coffee options nearby"
           ];
-          return responses[Math.floor(Math.random() * responses.length)];
+          return addPausePrefix(responses);
         }
         // Parking
         if (lowerQuery.includes('parking') || lowerQuery.includes('park')) {
@@ -311,7 +335,7 @@ export class IntentDetectorService {
             "I'll check available parking nearby",
             "Let me look up parking information"
           ];
-          return responses[Math.floor(Math.random() * responses.length)];
+          return addPausePrefix(responses);
         }
         // Hotels
         if (lowerQuery.includes('hotel') || lowerQuery.includes('accommodation')) {
@@ -320,7 +344,7 @@ export class IntentDetectorService {
             "I'll find hotel information for you",
             "Let me look up nearby hotels"
           ];
-          return responses[Math.floor(Math.random() * responses.length)];
+          return addPausePrefix(responses);
         }
         // General venue responses
         const venueResponses = [
@@ -329,7 +353,7 @@ export class IntentDetectorService {
           "Let me look up local options",
           "I'll find that information"
         ];
-        return venueResponses[Math.floor(Math.random() * venueResponses.length)];
+        return addPausePrefix(venueResponses);
         
       case 'conference':
         // AI Tech Expo (Featured Event)
@@ -341,7 +365,7 @@ export class IntentDetectorService {
             "Let me look up the AI Tech Expo information",
             "I'll get you the AI Tech Expo details"
           ];
-          return responses[Math.floor(Math.random() * responses.length)];
+          return addPausePrefix(responses);
         }
         // Schedule & timing
         if (lowerQuery.includes('schedule') || lowerQuery.includes('agenda') || lowerQuery.includes('time')) {
@@ -350,7 +374,7 @@ export class IntentDetectorService {
             "I'll look up the agenda for you",
             "Let me find those session times"
           ];
-          return responses[Math.floor(Math.random() * responses.length)];
+          return addPausePrefix(responses);
         }
         // Speakers
         if (lowerQuery.includes('speaker') || lowerQuery.includes('keynote')) {
@@ -359,7 +383,7 @@ export class IntentDetectorService {
             "I'll check the speaker lineup",
             "Let me find that speaker information"
           ];
-          return responses[Math.floor(Math.random() * responses.length)];
+          return addPausePrefix(responses);
         }
         // Sessions & events
         if (lowerQuery.includes('session') || lowerQuery.includes('workshop') || lowerQuery.includes('event')) {
@@ -368,7 +392,7 @@ export class IntentDetectorService {
             "I'll look up that event information",
             "Let me find those workshop details"
           ];
-          return responses[Math.floor(Math.random() * responses.length)];
+          return addPausePrefix(responses);
         }
         // What's happening now/next
         if (lowerQuery.includes('next') || lowerQuery.includes('now') || lowerQuery.includes('happening')) {
@@ -377,7 +401,7 @@ export class IntentDetectorService {
             "I'll check what's happening now",
             "Let me find the current schedule"
           ];
-          return responses[Math.floor(Math.random() * responses.length)];
+          return addPausePrefix(responses);
         }
         // General conference responses
         const conferenceResponses = [
@@ -385,7 +409,7 @@ export class IntentDetectorService {
           "I'll look that up for you",
           "Let me find that session information"
         ];
-        return conferenceResponses[Math.floor(Math.random() * conferenceResponses.length)];
+        return addPausePrefix(conferenceResponses);
         
       case 'location':
         // Directions
@@ -395,7 +419,7 @@ export class IntentDetectorService {
             "I'll help you find your way there",
             "Let me look up the best route"
           ];
-          return responses[Math.floor(Math.random() * responses.length)];
+          return addPausePrefix(responses);
         }
         // Room/venue finding
         if (lowerQuery.includes('room') || lowerQuery.includes('hall') || lowerQuery.includes('where is')) {
@@ -404,7 +428,7 @@ export class IntentDetectorService {
             "I'll help you locate that room",
             "Let me check where that is"
           ];
-          return responses[Math.floor(Math.random() * responses.length)];
+          return addPausePrefix(responses);
         }
         // General location responses
         const locationResponses = [
@@ -412,7 +436,7 @@ export class IntentDetectorService {
           "I'll help you find that",
           "Let me look up those details"
         ];
-        return locationResponses[Math.floor(Math.random() * locationResponses.length)];
+        return addPausePrefix(locationResponses);
         
       case 'info':
         // Conference information filler responses with variety
@@ -425,7 +449,7 @@ export class IntentDetectorService {
             "Let me look up badge requirements",
             "I'll check the badge information"
           ];
-          return badgeResponses[Math.floor(Math.random() * badgeResponses.length)];
+          return addPausePrefix(badgeResponses);
         }
         
         // Parking queries
@@ -436,7 +460,7 @@ export class IntentDetectorService {
             "I'll look up parking details",
             "Let me get the parking information"
           ];
-          return parkingResponses[Math.floor(Math.random() * parkingResponses.length)];
+          return addPausePrefix(parkingResponses);
         }
         
         // Food/dining queries
@@ -448,7 +472,7 @@ export class IntentDetectorService {
             "Let me look up dining locations",
             "I'll get the food service details"
           ];
-          return foodResponses[Math.floor(Math.random() * foodResponses.length)];
+          return addPausePrefix(foodResponses);
         }
         
         // Lost and found queries
@@ -459,7 +483,7 @@ export class IntentDetectorService {
             "I'll get lost and found details for you",
             "Let me check the lost and found policy"
           ];
-          return lostFoundResponses[Math.floor(Math.random() * lostFoundResponses.length)];
+          return addPausePrefix(lostFoundResponses);
         }
         
         // ADA/Accessibility queries
@@ -471,7 +495,7 @@ export class IntentDetectorService {
             "Let me look up accessibility services",
             "I'll find assistance information for you"
           ];
-          return adaResponses[Math.floor(Math.random() * adaResponses.length)];
+          return addPausePrefix(adaResponses);
         }
         
         // Business center/FedEx queries
@@ -483,7 +507,7 @@ export class IntentDetectorService {
             "Let me check printing and shipping options",
             "I'll find the business services details"
           ];
-          return businessResponses[Math.floor(Math.random() * businessResponses.length)];
+          return addPausePrefix(businessResponses);
         }
         
         // Photography/recording queries
@@ -495,7 +519,7 @@ export class IntentDetectorService {
             "Let me look up recording policies",
             "I'll get the photography rules for you"
           ];
-          return photoResponses[Math.floor(Math.random() * photoResponses.length)];
+          return addPausePrefix(photoResponses);
         }
         
         // Smoking/vaping queries
@@ -506,7 +530,7 @@ export class IntentDetectorService {
             "Let me look up smoking guidelines",
             "I'll get the smoking rules for you"
           ];
-          return smokingResponses[Math.floor(Math.random() * smokingResponses.length)];
+          return addPausePrefix(smokingResponses);
         }
         
         // Social media queries
@@ -518,7 +542,7 @@ export class IntentDetectorService {
             "Let me look up our social channels",
             "I'll find the social media details"
           ];
-          return socialResponses[Math.floor(Math.random() * socialResponses.length)];
+          return addPausePrefix(socialResponses);
         }
         
         // Prize/raffle queries
@@ -530,7 +554,7 @@ export class IntentDetectorService {
             "Let me check the contest information",
             "I'll look up prize drawing rules"
           ];
-          return prizeResponses[Math.floor(Math.random() * prizeResponses.length)];
+          return addPausePrefix(prizeResponses);
         }
         
         // Worship/religious service queries
@@ -542,7 +566,7 @@ export class IntentDetectorService {
             "Let me look up worship times",
             "I'll get faith service details"
           ];
-          return worshipResponses[Math.floor(Math.random() * worshipResponses.length)];
+          return addPausePrefix(worshipResponses);
         }
         
         // Continuing education queries
@@ -554,7 +578,7 @@ export class IntentDetectorService {
             "Let me look up professional development options",
             "I'll get continuing education requirements"
           ];
-          return ceResponses[Math.floor(Math.random() * ceResponses.length)];
+          return addPausePrefix(ceResponses);
         }
         
         // Cell phone policy queries
@@ -565,7 +589,7 @@ export class IntentDetectorService {
             "Let me look up mobile device rules",
             "I'll get the phone policy for you"
           ];
-          return phoneResponses[Math.floor(Math.random() * phoneResponses.length)];
+          return addPausePrefix(phoneResponses);
         }
         
         // Exhibitor service counter queries
@@ -577,7 +601,7 @@ export class IntentDetectorService {
             "Let me check the service counter information",
             "I'll find exhibitor assistance details"
           ];
-          return exhibitorServiceResponses[Math.floor(Math.random() * exhibitorServiceResponses.length)];
+          return addPausePrefix(exhibitorServiceResponses);
         }
         
         // Show management queries
@@ -589,7 +613,7 @@ export class IntentDetectorService {
             "Let me check management office details",
             "I'll find show administration information"
           ];
-          return managementResponses[Math.floor(Math.random() * managementResponses.length)];
+          return addPausePrefix(managementResponses);
         }
         
         // General fallback responses for info queries
@@ -603,7 +627,7 @@ export class IntentDetectorService {
           "Let me look into that",
           "I'll retrieve those details"
         ];
-        return infoResponses[Math.floor(Math.random() * infoResponses.length)];
+        return addPausePrefix(infoResponses);
         
       case 'meeting':
         // Meeting-specific filler responses based on query type
@@ -615,7 +639,7 @@ export class IntentDetectorService {
             "I'll check the healthcare committee schedule",
             "Let me look up health committee meetings"
           ];
-          return responses[Math.floor(Math.random() * responses.length)];
+          return addPausePrefix(responses);
         }
         
         // Council meetings
@@ -625,7 +649,7 @@ export class IntentDetectorService {
             "I'll check the council meeting schedule",
             "Let me look up council sessions"
           ];
-          return responses[Math.floor(Math.random() * responses.length)];
+          return addPausePrefix(responses);
         }
         
         // Day-specific meetings
@@ -636,7 +660,7 @@ export class IntentDetectorService {
             "I'll find meetings scheduled then",
             "Let me look up committee sessions for that day"
           ];
-          return responses[Math.floor(Math.random() * responses.length)];
+          return addPausePrefix(responses);
         }
         
         // Specific committees
@@ -647,7 +671,7 @@ export class IntentDetectorService {
             "I'll check that committee's schedule",
             "Let me look up that committee session"
           ];
-          return responses[Math.floor(Math.random() * responses.length)];
+          return addPausePrefix(responses);
         }
         
         // General meeting responses
@@ -658,7 +682,7 @@ export class IntentDetectorService {
           "I'll search for committee meetings",
           "Let me find meeting information for you"
         ];
-        return meetingResponses[Math.floor(Math.random() * meetingResponses.length)];
+        return addPausePrefix(meetingResponses);
         
       case 'workshop':
         // Workshop-specific filler responses based on query type
@@ -672,7 +696,7 @@ export class IntentDetectorService {
             "Let me look up CE credit workshops",
             "I'll check which workshops have credits available"
           ];
-          return responses[Math.floor(Math.random() * responses.length)];
+          return addPausePrefix(responses);
         }
         
         // Mental health workshops
@@ -684,7 +708,7 @@ export class IntentDetectorService {
             "Let me look up mental health training opportunities",
             "I'll find psychological wellness workshops"
           ];
-          return responses[Math.floor(Math.random() * responses.length)];
+          return addPausePrefix(responses);
         }
         
         // Substance abuse/addiction workshops
@@ -696,7 +720,7 @@ export class IntentDetectorService {
             "Let me look up substance use disorder training",
             "I'll check for addiction-related workshops"
           ];
-          return responses[Math.floor(Math.random() * responses.length)];
+          return addPausePrefix(responses);
         }
         
         // Day-specific workshops
@@ -710,7 +734,7 @@ export class IntentDetectorService {
             "Let me look up sessions for that day",
             "I'll see what workshops are available then"
           ];
-          return responses[Math.floor(Math.random() * responses.length)];
+          return addPausePrefix(responses);
         }
         
         // Medical/healthcare workshops
@@ -722,7 +746,7 @@ export class IntentDetectorService {
             "Let me look up clinical workshops",
             "I'll find medical education sessions"
           ];
-          return responses[Math.floor(Math.random() * responses.length)];
+          return addPausePrefix(responses);
         }
         
         // Correctional/justice workshops
@@ -734,7 +758,7 @@ export class IntentDetectorService {
             "Let me look up correctional healthcare workshops",
             "I'll find corrections-focused training"
           ];
-          return responses[Math.floor(Math.random() * responses.length)];
+          return addPausePrefix(responses);
         }
         
         // Morning/afternoon/time-based queries
@@ -746,19 +770,28 @@ export class IntentDetectorService {
             "Let me look up the workshop schedule",
             "I'll see what's available then"
           ];
-          return responses[Math.floor(Math.random() * responses.length)];
+          return addPausePrefix(responses);
         }
         
         // Speaker/presenter queries
         if (lowerQuery.includes('speaker') || lowerQuery.includes('presenter') || 
             lowerQuery.includes('moderator') || lowerQuery.includes('instructor')) {
-          const responses = [
+          // Check if they're asking about a specific person or general speakers
+          const hasSpecificPerson = /\b[A-Z][a-z]+ [A-Z][a-z]+\b/.test(query) || // Name pattern like "John Smith"
+                                   lowerQuery.includes(' by ') || lowerQuery.includes(' with ') ||
+                                   lowerQuery.includes(' from ');
+          
+          const responses = hasSpecificPerson ? [
             "Let me find workshops by that speaker",
             "I'll search for sessions with that presenter",
-            "Let me look up who's presenting",
             "I'll find workshops led by that person"
+          ] : [
+            "Let me look up our workshop speakers",
+            "I'll find the speaker lineup for you",
+            "Let me check who's presenting",
+            "I'll search for workshop presenters"
           ];
-          return responses[Math.floor(Math.random() * responses.length)];
+          return addPausePrefix(responses);
         }
         
         // Training/education queries
@@ -770,7 +803,7 @@ export class IntentDetectorService {
             "Let me look up professional development workshops",
             "I'll find learning opportunities"
           ];
-          return responses[Math.floor(Math.random() * responses.length)];
+          return addPausePrefix(responses);
         }
         
         // General workshop responses (fallback)
@@ -784,7 +817,7 @@ export class IntentDetectorService {
           "Let me look up workshop details",
           "I'll find the best workshops for your interests"
         ];
-        return workshopResponses[Math.floor(Math.random() * workshopResponses.length)];
+        return addPausePrefix(workshopResponses);
         
       case 'general':
         // For longer queries without clear intent, provide generic helpful response
@@ -795,7 +828,7 @@ export class IntentDetectorService {
             "Let me check on that",
             "I'll help you with that"
           ];
-          return generalResponses[Math.floor(Math.random() * generalResponses.length)];
+          return addPausePrefix(generalResponses);
         }
         return null;
         
