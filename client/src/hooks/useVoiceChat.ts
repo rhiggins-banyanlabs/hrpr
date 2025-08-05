@@ -856,17 +856,17 @@ export const useVoiceChat = ({
             clearInterval(checkSpeaking);
             console.log('🔊 Voice response finished, starting 1 second silence timer');
             
-            // Start 1 second timer before asking more questions
+            // Immediately ask more questions with no delay
             feedbackTimerRef.current = setTimeout(() => {
               // Only proceed if still idle and no new interaction
               if (feedbackStateMachine.getCurrentState() === FeedbackState.IDLE && 
                   !isProcessingRef.current) {
-                console.log('🔄 1 second passed, asking if user has more questions');
+                console.log('🔄 Immediately asking if user has more questions');
                 isInFeedbackFlowRef.current = true;
                 feedbackStateMachine.transition('user_response');
                 feedbackTimerRef.current = null;
               }
-            }, 1000); // 1 second after voice finishes
+            }, 0); // 0ms delay - immediate
           }
         }, 100); // Check every 100ms if still speaking
       };

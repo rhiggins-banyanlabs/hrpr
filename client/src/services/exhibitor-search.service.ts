@@ -125,7 +125,7 @@ export class ExhibitorSearchService {
         .rpc('search_exhibitors', {
           query_embedding: queryEmbedding,
           match_count: limit,
-          similarity_threshold: 0.7
+          similarity_threshold: 0.5  // Lowered from 0.7 for better recall
         });
 
       if (error) {
@@ -161,18 +161,36 @@ export class ExhibitorSearchService {
 
   async searchByCompanyName(companyName: string): Promise<ExhibitorResult[]> {
     try {
-      const { data, error } = await supabase
-        .from('exhibitors')
-        .select('*')
-        .ilike('company_name', `%${companyName}%`)
-        .limit(5);
+      // Common letter-to-number substitutions in company names
+      const variations = [companyName];
+      
+      // Add common substitutions
+      variations.push(companyName.replace(/a/gi, '4')); // a -> 4
+      variations.push(companyName.replace(/e/gi, '3')); // e -> 3
+      variations.push(companyName.replace(/i/gi, '1')); // i -> 1
+      variations.push(companyName.replace(/o/gi, '0')); // o -> 0
+      variations.push(companyName.replace(/s/gi, '5')); // s -> 5
+      
+      // Try each variation
+      let allResults: ExhibitorResult[] = [];
+      for (const variation of variations) {
+        const { data, error } = await supabase
+          .from('exhibitors')
+          .select('*')
+          .ilike('company_name', `%${variation}%`)
+          .limit(5);
 
-      if (error) {
-        console.error('Company search error:', error);
-        return [];
+        if (!error && data) {
+          allResults = allResults.concat(data);
+        }
       }
 
-      return data || [];
+      // Remove duplicates based on company ID
+      const uniqueResults = allResults.filter((item, index, self) =>
+        index === self.findIndex((r) => r.id === item.id)
+      );
+
+      return uniqueResults.slice(0, 5); // Limit to 5 results
     } catch (error) {
       console.error('Failed to search by company name:', error);
       return [];
@@ -235,8 +253,38 @@ export class ExhibitorSearchService {
         break;
 
       case 'general':
-        exhibitors = await this.searchByQuery(query);
-        context = 'Relevant exhibitors:';
+        // First try to find by company name for better accuracy
+        const companyWords = query.split(' ').filter(word => 
+          word.length > 2 && !this.exhibitorKeywords.includes(word.toLowerCase())
+        );
+        
+        // Try each significant word as a potential company name
+        for (const word of companyWords) {
+          const nameResults = await this.searchByCompanyName(word);
+          if (nameResults.length > 0) {
+            // Check if we have an exact match (case-insensitive)
+            const exactMatch = nameResults.find(r => 
+              r.company_name.toLowerCase() === word.toLowerCase()
+            );
+            
+            if (exactMatch) {
+              // If exact match found, return only that
+              exhibitors = [exactMatch];
+              context = `Exact match for "${word}":`;
+            } else {
+              // Otherwise return all partial matches
+              exhibitors = nameResults;
+              context = `Companies containing "${word}":`;
+            }
+            break;
+          }
+        }
+        
+        // If no exact match found, fall back to semantic search
+        if (exhibitors.length === 0) {
+          exhibitors = await this.searchByQuery(query);
+          context = 'Relevant exhibitors:';
+        }
         break;
     }
 
@@ -268,18 +316,14 @@ export class ExhibitorSearchService {
       return '';
     }
 
-    // Format conversationally, limit to 3 exhibitors
-    const topExhibitors = exhibitors.slice(0, 3);
+    // Always list company names clearly so AI can see what was actually found
+    const topExhibitors = exhibitors.slice(0, 5); // Show up to 5 for clarity
     
-    if (topExhibitors.length === 1) {
-      return this.formatExhibitorInfo(topExhibitors[0]);
-    }
+    // Build a clear list of what was found
+    const exhibitorList = topExhibitors
+      .map(e => `• ${e.company_name}${e.booth_number ? ` (Booth ${e.booth_number})` : ''}`)
+      .join('\n');
     
-    if (topExhibitors.length === 2) {
-      return `${this.formatExhibitorInfo(topExhibitors[0])}. Also check out ${this.formatExhibitorInfo(topExhibitors[1])}.`;
-    }
-    
-    // 3 or more
-    return `${this.formatExhibitorInfo(topExhibitors[0])}. You might also be interested in ${this.formatExhibitorInfo(topExhibitors[1])} and ${this.formatExhibitorInfo(topExhibitors[2])}.`;
+    return `Found ${exhibitors.length} exhibitor${exhibitors.length > 1 ? 's' : ''}:\n${exhibitorList}`;
   }
 }
