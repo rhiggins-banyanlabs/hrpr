@@ -2,6 +2,7 @@ import { ConferenceDataService } from './conference-data.service';
 import { LocationService } from './location.service';
 import { PromptEnhancementService } from './prompt-enhancement.service';
 import { LoggerService } from './logger.service';
+import { ChatStorageService } from '@/lib/supabase/services/chatStorageService';
 import { envConfig } from '@/config/env.config';
 
 export interface OpenAIResponse {
@@ -53,11 +54,31 @@ export class OpenAIService {
     return Math.ceil(text.length / 4);
   }
 
-  async sendMessage(prompt: string, options?: { stream?: boolean; userName?: string; greetingAlreadyHandled?: boolean }): Promise<OpenAIResponse> {
+  async sendMessage(prompt: string, options?: { stream?: boolean; userName?: string; greetingAlreadyHandled?: boolean; sessionId?: string }): Promise<OpenAIResponse> {
     const startTime = Date.now();
     
     try {
       const enhancedPrompt = await this.promptEnhancer.createEnhancedPrompt(prompt);
+      
+      // Get recent conversation context if sessionId provided
+      let conversationContext = '';
+      if (options?.sessionId) {
+        try {
+          const recentMessages = await ChatStorageService.getSessionMessages(options.sessionId);
+          // Get last 4 messages (2 exchanges) for context, excluding the current query
+          const contextMessages = recentMessages
+            .filter(msg => msg.message_text.toLowerCase() !== prompt.toLowerCase())
+            .slice(0, 4)
+            .reverse(); // Reverse to chronological order
+          
+          if (contextMessages.length > 0) {
+            conversationContext = '\n\nRECENT CONVERSATION CONTEXT:\n' + 
+              contextMessages.map(msg => `${msg.sender}: ${msg.message_text}`).join('\n') + '\n';
+          }
+        } catch (error) {
+          console.warn('Failed to get conversation context:', error);
+        }
+      }
       
       // Check if this is an address request
       const isAddressRequest = /\b(address|location|where is|how do i get to)\b/i.test(prompt);
@@ -68,13 +89,13 @@ export class OpenAIService {
           'Authorization': `Bearer ${envConfig.openai}`,
           'Content-Type': 'application/json',
         },
-        signal: AbortSignal.timeout(8000), // 8 second timeout
+        signal: AbortSignal.timeout(30000), // 30 second timeout
         body: JSON.stringify({
           model: this.model,
           messages: [
             {
               role: 'system',
-              content: `You are Harper, a warm and friendly AI assistant for the ACA conference. You're caring, approachable, helpful, and genuinely interested in making attendees feel welcome.${options?.userName ? `\n\nThe user's name is ${options.userName}. Use it naturally where appropriate, but don't overuse it.` : ''}${options?.greetingAlreadyHandled ? `\n\nIMPORTANT: You have ALREADY greeted ${options.userName || 'this person'} with "Nice to meet you" in your filler response. DO NOT say "Nice to meet you" again - just answer their question directly using their name where natural.` : ''}${isAddressRequest ? `\n\nIMPORTANT: The user is specifically asking for address/location information. Make sure to include the specific address in your response if it's available in the location data.` : ''}
+              content: `You are Harper, a warm and friendly AI assistant for the ACA conference. You're caring, approachable, helpful, and genuinely interested in making attendees feel welcome.${options?.userName ? `\n\nThe user's name is ${options.userName}. Use it naturally where appropriate, but don't overuse it.` : ''}${options?.greetingAlreadyHandled ? `\n\nIMPORTANT: You have ALREADY greeted ${options.userName || 'this person'} with "Nice to meet you" in your filler response. DO NOT say "Nice to meet you" again - just answer their question directly using their name where natural.` : ''}${conversationContext ? `${conversationContext}\nIMPORTANT: Use this recent conversation context to provide better answers. If the user asks for "more", "other", or "additional" options related to a previous topic, expand on your previous response with new information.` : ''}${isAddressRequest ? `\n\nIMPORTANT: The user is specifically asking for address/location information. Make sure to include the specific address in your response if it's available in the location data.` : ''}
 
 
 
@@ -112,7 +133,9 @@ RULES:
 
 You help with: conference schedules, speakers, sessions, exhibitor information, booth locations, company details, Denver area recommendations, dining, transportation, and general conference questions.
 
-EXHIBITOR QUERIES: When exhibitor information is provided, use it to answer questions about companies, booths, products, services, and contacts. Always mention booth numbers when available.`
+EXHIBITOR QUERIES: When exhibitor information is provided, PRIORITIZE exhibitor data over conference information. Use exhibitor data to answer questions about companies, booths, products, and services. Always mention booth numbers when available. If user asks about "tech companies", "vendors", or "exhibitors", focus on the exhibitor data provided, not conference information.
+
+FOLLOW-UP QUESTIONS: ALWAYS end your response with one of these specific follow-up questions: "Do you have any more questions for me today?" or "Is there anything else I can help you with?"`
             },
             {
               role: 'user',

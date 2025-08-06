@@ -199,7 +199,8 @@ export const useVoiceChat = ({
         body: JSON.stringify({
           prompt: text,
           userName: userNameRef.current,
-          greetingAlreadyHandled: greetingAlreadyHandled
+          greetingAlreadyHandled: greetingAlreadyHandled,
+          sessionId: sessionId
         }),
         signal: abortControllerRef.current.signal
       });
@@ -231,33 +232,37 @@ export const useVoiceChat = ({
           // Wait for filler response to complete if it's still playing
           if (fillerAudioPromise) {
             console.log('🔊 Waiting for filler response to complete...');
-            const fillerResult = await fillerAudioPromise;
+            try {
+              const fillerResult = await fillerAudioPromise;
             
-            // If filler has audio playing, wait for it to complete
-            if (fillerResult && fillerResult.audio) {
-              await new Promise<void>((resolve) => {
-                const checkAudioComplete = () => {
-                  if (fillerResult.audio.ended || fillerResult.audio.paused) {
-                    console.log('🔊 Filler response completed');
+              // If filler has audio playing, wait for it to complete
+              if (fillerResult && fillerResult.audio) {
+                await new Promise<void>((resolve) => {
+                  const checkAudioComplete = () => {
+                    if (fillerResult.audio.ended || fillerResult.audio.paused) {
+                      console.log('🔊 Filler response completed');
+                      resolve();
+                    } else {
+                      // Check again in 100ms
+                      setTimeout(checkAudioComplete, 100);
+                    }
+                  };
+                  
+                  // Start checking immediately
+                  checkAudioComplete();
+                  
+                  // Fallback timeout after 5 seconds
+                  setTimeout(() => {
+                    console.log('🔊 Filler response timeout - continuing');
                     resolve();
-                  } else {
-                    // Check again in 100ms
-                    setTimeout(checkAudioComplete, 100);
-                  }
-                };
+                  }, 5000);
+                });
                 
-                // Start checking immediately
-                checkAudioComplete();
-                
-                // Fallback timeout after 5 seconds
-                setTimeout(() => {
-                  console.log('🔊 Filler response timeout - continuing');
-                  resolve();
-                }, 5000);
-              });
-              
-              // Add small pause between filler and main response
-              await new Promise(resolve => setTimeout(resolve, 300));
+                // Add small pause between filler and main response
+                await new Promise(resolve => setTimeout(resolve, 300));
+              }
+            } catch (fillerError) {
+              console.log('🔊 Filler response failed, continuing with main response:', fillerError);
             }
           }
           
@@ -741,13 +746,26 @@ export const useVoiceChat = ({
     const currentState = feedbackStateMachine.getCurrentState();
     console.log(`🔄 processVoiceQueryWithFeedback: state=${currentState}, text="${text}"`);
     
+    // IMMEDIATELY stop silence detection when user speaks - prevents premature feedback
+    console.log('🔇 User is speaking - stopping all silence detection');
+    stopSilenceDetection();
+    
     // Record activity for silence detection
     if (silenceDetectorRef.current) {
       silenceDetectorRef.current.recordActivity();
     }
 
     // Handle feedback flow states
-    if (currentState === FeedbackState.ASKING_MORE_QUESTIONS) {
+    // First check if user said "no" in IDLE state (responding to Harper's natural follow-up question)
+    if (currentState === FeedbackState.IDLE && conversationCountRef.current > 0) {
+      const intent = FeedbackStateMachine.detectUserIntent(text);
+      if (intent === 'no') {
+        console.log('🔄 User said NO to follow-up question - starting satisfaction feedback');
+        feedbackStateMachine.transition('timeout'); // This triggers satisfaction question
+        return;
+      }
+      // Otherwise continue normal processing
+    } else if (currentState === FeedbackState.ASKING_MORE_QUESTIONS) {
       const intent = FeedbackStateMachine.detectUserIntent(text);
       console.log(`🔄 ASKING_MORE_QUESTIONS - intent detected: ${intent}`);
       
@@ -838,10 +856,10 @@ export const useVoiceChat = ({
     // Normal query processing with personalization info
     await processVoiceQueryWithPersonalization(text, isNewNameIntroduction, extractedName);
     
-    // Start feedback flow after 1 second of silence following the voice response
-    // Wait for voice to finish speaking, then wait 1 second before asking more questions
+    // Start silence detection after response - since Harper now asks follow-up questions naturally,
+    // we just wait for silence and go directly to satisfaction feedback if no response
     if (feedbackStateMachine.getCurrentState() === FeedbackState.IDLE && conversationCountRef.current > 0) {
-      console.log('🔄 Will start feedback flow after 1 second of silence');
+      console.log('🔄 Starting silence detection after response - Harper asked follow-up question naturally');
       
       // Clear any existing feedback timer
       if (feedbackTimerRef.current) {
@@ -849,29 +867,46 @@ export const useVoiceChat = ({
         feedbackTimerRef.current = null;
       }
       
-      // Wait for TTS to complete, then start 1 second timer
-      const waitForSpeechAndStartTimer = () => {
-        const checkSpeaking = setInterval(() => {
-          if (!isSpeaking) {
-            clearInterval(checkSpeaking);
-            console.log('🔊 Voice response finished, starting 1 second silence timer');
+      // Wait for TTS to complete, then start silence detection
+      const waitForSpeechAndStartSilenceDetection = () => {
+        // First, wait for processing to complete
+        const waitForProcessing = setInterval(() => {
+          if (!isProcessingRef.current) {
+            clearInterval(waitForProcessing);
             
-            // Immediately ask more questions with no delay
-            feedbackTimerRef.current = setTimeout(() => {
-              // Only proceed if still idle and no new interaction
-              if (feedbackStateMachine.getCurrentState() === FeedbackState.IDLE && 
-                  !isProcessingRef.current) {
-                console.log('🔄 Immediately asking if user has more questions');
-                isInFeedbackFlowRef.current = true;
-                feedbackStateMachine.transition('user_response');
-                feedbackTimerRef.current = null;
+            // Now wait for TTS to complete
+            const checkSpeaking = setInterval(() => {
+              if (!isSpeaking) {
+                clearInterval(checkSpeaking);
+                console.log('🔊 Voice response finished, starting silence detection for follow-up response');
+                
+                // Add a 2-second delay to let user start speaking if they want to
+                setTimeout(() => {
+                  // Only start silence detection if still idle and not processing
+                  if (feedbackStateMachine.getCurrentState() === FeedbackState.IDLE && 
+                      !isProcessingRef.current && !isSpeaking) {
+                    console.log('🔇 Starting 15-second silence detection for user response');
+                    
+                    startSilenceDetection(15000, () => {
+                      // After silence timeout, user didn't respond to Harper's natural follow-up question
+                      // Go directly to satisfaction question
+                      if (feedbackStateMachine.getCurrentState() === FeedbackState.IDLE && 
+                          !isProcessingRef.current && !isSpeaking) {
+                        console.log('🔇 No response to natural follow-up question - starting satisfaction feedback');
+                        feedbackStateMachine.transition('timeout'); // This should trigger satisfaction question
+                      }
+                    });
+                  } else {
+                    console.log('🔇 Not starting silence detection - user or system is active');
+                  }
+                }, 2000); // 2 second delay to let user start speaking
               }
-            }, 0); // 0ms delay - immediate
+            }, 100); // Check every 100ms if still speaking
           }
-        }, 100); // Check every 100ms if still speaking
+        }, 100); // Check every 100ms if still processing
       };
       
-      waitForSpeechAndStartTimer();
+      waitForSpeechAndStartSilenceDetection();
     }
     
     console.log(`🔄 Question processed - state: ${feedbackStateMachine.getCurrentState()}, count: ${conversationCountRef.current}`);

@@ -19,11 +19,11 @@ export class FeedbackStateMachine {
   private initializeTransitions() {
     // Define all valid state transitions
     const transitions: FeedbackTransition[] = [
-      // After answering, immediately ask if more questions
+      // After answering, user can ask more questions (stay in IDLE) or timeout to satisfaction
       {
         from: FeedbackState.IDLE,
-        to: FeedbackState.ASKING_MORE_QUESTIONS,
-        trigger: 'user_response'
+        to: FeedbackState.ASKING_SATISFACTION,
+        trigger: 'timeout'
       },
       
       // User says YES to more questions
