@@ -3,7 +3,7 @@ services:
   client:
     build:
       context: ./client
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     ports:
       - "3000:3000"
     volumes:
@@ -15,4 +15,4 @@ services:
       - CHOKIDAR_USEPOLLING=true # Important for file change detection in Docker
       - CHOKIDAR_INTERVAL=1000
     stdin_open: true
-    tty: true
+    tty: true  

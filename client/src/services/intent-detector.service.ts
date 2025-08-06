@@ -266,10 +266,10 @@ export class IntentDetectorService {
     const lowerQuery = query.toLowerCase();
     const intent = this.detectIntent(query);
     
-    // Helper function to add pause prefix to prevent audio cutoff
+    // Helper function to add tiny buffer to prevent audio cutoff
     const addPausePrefix = (responses: string[]): string => {
       const selected = responses[Math.floor(Math.random() * responses.length)];
-      return "... " + selected;
+      return "..." + selected; // Silence padding to prevent TTS cutoff
     };
     
     // Natural, conversational filler responses
