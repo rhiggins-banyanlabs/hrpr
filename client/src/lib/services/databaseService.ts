@@ -25,26 +25,28 @@ export async function getDatabaseStats(): Promise<DatabaseStats> {
       .from('messages')
       .select('*', { count: 'exact', head: true })
     
-    // Get conference sessions count
-    const { count: conferenceSessionsCount } = await supabase
-      .from('event_sessions')
+    // Get conference schedule events count (instead of event_sessions)
+    const { count: conferenceEventsCount } = await supabase
+      .from('conference_schedule')
       .select('*', { count: 'exact', head: true })
     
-    // Get speakers count
-    const { count: speakersCount } = await supabase
-      .from('speakers')
+    // Get committee meetings count (as proxy for speakers/presenters)
+    const { count: committeeMeetingsCount } = await supabase
+      .from('committee_meetings')
       .select('*', { count: 'exact', head: true })
     
-    // Get analytics count
-    const { count: analyticsCount } = await supabase
-      .from('chat_analytics')
+    // Get session feedback count (as analytics)
+    const { count: feedbackCount } = await supabase
+      .from('session_feedback')
       .select('*', { count: 'exact', head: true })
 
     stats.chatSessions = chatSessionsCount || 0
     stats.messages = messagesCount || 0
-    stats.conferenceSessions = conferenceSessionsCount || 0
-    stats.speakers = speakersCount || 0
-    stats.analytics = analyticsCount || 0
+    stats.conferenceSessions = conferenceEventsCount || 0
+    stats.speakers = committeeMeetingsCount || 0 // Using meetings as proxy
+    stats.analytics = feedbackCount || 0
+
+    console.log('📊 Database Stats:', stats)
 
   } catch (error) {
     console.error('Error fetching database stats:', error)
@@ -87,66 +89,114 @@ export async function exportDatabaseData(type: string, format: string): Promise<
   let filename = `beacon-export-${new Date().toISOString().split('T')[0]}`
 
   try {
+    console.log(`📤 Starting export: ${type} as ${format}`)
+
     switch (type) {
       case 'all':
-        const [sessions, messages, conferenceSessions, speakers, analytics] = await Promise.all([
-          ChatStorageService.getAllSessions(),
-          supabase.from('messages').select('*'),
-          ConferenceStorageService.getAllSessions(),
-          ConferenceStorageService.getAllSpeakers(),
-          ChatStorageService.getAllAnalytics()
+        // Export all main data tables
+        const [
+          chatSessionsResult,
+          messagesResult,
+          conferenceScheduleResult,
+          committeeMeetingsResult,
+          facilityToursResult,
+          sessionFeedbackResult
+        ] = await Promise.all([
+          supabase.from('chat_sessions').select('*').order('created_at', { ascending: false }),
+          supabase.from('messages').select('*').order('created_at', { ascending: false }),
+          supabase.from('conference_schedule').select('*').order('start_time', { ascending: true }),
+          supabase.from('committee_meetings').select('*').order('start_time', { ascending: true }),
+          supabase.from('facility_tours').select('*').order('tour_time', { ascending: true }),
+          supabase.from('session_feedback').select('*').order('created_at', { ascending: false })
         ])
         
         data = {
-          chat_sessions: sessions,
-          messages: messages.data || [],
-          conference_sessions: conferenceSessions,
-          speakers,
-          analytics,
+          chat_sessions: chatSessionsResult.data || [],
+          messages: messagesResult.data || [],
+          conference_schedule: conferenceScheduleResult.data || [],
+          committee_meetings: committeeMeetingsResult.data || [],
+          facility_tours: facilityToursResult.data || [],
+          session_feedback: sessionFeedbackResult.data || [],
           exported_at: new Date().toISOString(),
           summary: {
-            total_chat_sessions: sessions.length,
-            total_messages: messages.data?.length || 0,
-            total_conference_sessions: conferenceSessions.length,
-            total_speakers: speakers.length,
-            total_analytics: analytics.length
+            total_chat_sessions: chatSessionsResult.data?.length || 0,
+            total_messages: messagesResult.data?.length || 0,
+            total_conference_events: conferenceScheduleResult.data?.length || 0,
+            total_committee_meetings: committeeMeetingsResult.data?.length || 0,
+            total_facility_tours: facilityToursResult.data?.length || 0,
+            total_feedback: sessionFeedbackResult.data?.length || 0
           }
         }
         filename = `beacon-complete-export-${new Date().toISOString().split('T')[0]}`
         break
 
       case 'chat_sessions':
-        data = await ChatStorageService.getAllSessions()
+        const sessionsResult = await supabase
+          .from('chat_sessions')
+          .select('*')
+          .order('created_at', { ascending: false })
+        data = sessionsResult.data || []
         filename = `beacon-chat-sessions-${new Date().toISOString().split('T')[0]}`
         break
 
       case 'messages':
-        const messagesResult = await supabase.from('messages').select('*')
-        data = messagesResult.data || []
+        const messagesOnlyResult = await supabase
+          .from('messages')
+          .select('*')
+          .order('created_at', { ascending: false })
+        data = messagesOnlyResult.data || []
         filename = `beacon-messages-${new Date().toISOString().split('T')[0]}`
         break
 
       case 'conference':
-        const [confSessions, confSpeakers] = await Promise.all([
-          ConferenceStorageService.getAllSessions(),
-          ConferenceStorageService.getAllSpeakers()
+        // Export all conference-related data
+        const [scheduleResult, meetingsResult, toursResult] = await Promise.all([
+          supabase.from('conference_schedule').select('*').order('start_time', { ascending: true }),
+          supabase.from('committee_meetings').select('*').order('start_time', { ascending: true }),
+          supabase.from('facility_tours').select('*').order('tour_time', { ascending: true })
         ])
+        
         data = {
-          sessions: confSessions,
-          speakers: confSpeakers,
-          exported_at: new Date().toISOString()
+          conference_schedule: scheduleResult.data || [],
+          committee_meetings: meetingsResult.data || [],
+          facility_tours: toursResult.data || [],
+          exported_at: new Date().toISOString(),
+          summary: {
+            total_schedule_events: scheduleResult.data?.length || 0,
+            total_committee_meetings: meetingsResult.data?.length || 0,
+            total_facility_tours: toursResult.data?.length || 0
+          }
         }
         filename = `beacon-conference-${new Date().toISOString().split('T')[0]}`
         break
 
       case 'analytics':
-        data = await ChatStorageService.getAllAnalytics()
+        // Export feedback and usage analytics
+        const [feedbackResult, recentMessagesResult] = await Promise.all([
+          supabase.from('session_feedback').select('*').order('created_at', { ascending: false }),
+          supabase.from('messages').select('sender, message_text, created_at, session_id').order('created_at', { ascending: false }).limit(1000)
+        ])
+        
+        data = {
+          feedback_data: feedbackResult.data || [],
+          recent_messages_sample: recentMessagesResult.data || [],
+          exported_at: new Date().toISOString(),
+          summary: {
+            total_feedback_entries: feedbackResult.data?.length || 0,
+            sample_messages_count: recentMessagesResult.data?.length || 0
+          }
+        }
         filename = `beacon-analytics-${new Date().toISOString().split('T')[0]}`
         break
 
       default:
         throw new Error('Invalid export type')
     }
+
+    console.log(`✅ Export data prepared for ${type}:`, {
+      dataKeys: typeof data === 'object' ? Object.keys(data) : 'array',
+      dataSize: Array.isArray(data) ? data.length : 'object'
+    })
 
     // Export based on format
     if (format === 'json') {

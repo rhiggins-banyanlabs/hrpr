@@ -6,8 +6,8 @@ import { useRouter } from 'next/navigation'
 import Waves from '@/components/waves'
 import AdminHeader from './AdminHeader'
 import AdminTabs, { TabItem } from './AdminTabs'
-import AnalyticsTab from '../features/analytics/AnalyticsTab'
-import ConferenceTab from '../features/conference/ConferenceTab'
+import EnhancedAnalyticsTab from '../features/analytics/EnhancedAnalyticsTab'
+import { ConferenceAgenda } from '../features/conference/ConferenceAgenda'
 import ChatSessionsTab from '../features/chat-sessions/ChatSessionsTab'
 import DatabaseTab from '../features/database/DatabaseTab'
 import PedestalModeTab from '../features/pedestal/PedestalModeTab'
@@ -42,9 +42,9 @@ export default function AdminLayout() {
       case 'pedestal':
         return <PedestalModeTab />
       case 'analytics':
-        return <AnalyticsTab />
+        return <EnhancedAnalyticsTab />
       case 'agenda':
-        return <ConferenceTab />
+        return <ConferenceAgenda />
       case 'chats':
         return <ChatSessionsTab />
       case 'feedback':
