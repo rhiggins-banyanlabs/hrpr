@@ -410,12 +410,18 @@ export default function Home() {
               <div className="transition-all duration-700">
                 <MorphingText
                   texts={[
-                    "Can you tell me about the correctional facility tours?",
-                    "What is the ACA conference?",
-                    "Are there any coffee shops in the area?",
-                    "What organizations are attending the conference?",
-                    "What is the weather like in Denver?",
-                    "Are there any good restaurants in the area?",
+                    "What workshops offer CE credits on Friday?",
+                    "When is the Health Care Committee meeting?",
+                    "Are there facility tours this weekend?",
+                    "What's happening at the AI Tech Expo Saturday?",
+                    "Show me substance abuse workshops with CME credits",
+                    "Where can I get lunch near the convention center?",
+                    "Which exhibitors are in the 200-300 booth range?",
+                    "What time does registration open Thursday?",
+                    "Are there any juvenile corrections workshops?",
+                    "When is the Adult Corrections Committee meeting?",
+                    "What continuing education sessions offer CEU credits?",
+                    "Tell me about the correctional facility tours",
                   ]}
                   className="-my-3 w-screen"
                 />
