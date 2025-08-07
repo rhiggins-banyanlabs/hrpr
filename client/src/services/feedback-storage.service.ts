@@ -82,6 +82,52 @@ export class FeedbackStorageService {
     }
   }
 
+  // Delete feedback by session ID
+  async deleteFeedback(sessionId: string): Promise<boolean> {
+    try {
+      console.log('🗑️ Deleting feedback for session:', sessionId);
+
+      const { error } = await this.supabase
+        .from('session_feedback')
+        .delete()
+        .eq('session_id', sessionId);
+
+      if (error) {
+        console.error('❌ Error deleting feedback:', error);
+        return false;
+      }
+
+      console.log('✅ Feedback deleted successfully');
+      return true;
+    } catch (error) {
+      console.error('❌ Exception deleting feedback:', error);
+      return false;
+    }
+  }
+
+  // Delete multiple feedback sessions
+  async deleteMultipleFeedback(sessionIds: string[]): Promise<boolean> {
+    try {
+      console.log('🗑️ Deleting multiple feedback sessions:', sessionIds.length);
+
+      const { error } = await this.supabase
+        .from('session_feedback')
+        .delete()
+        .in('session_id', sessionIds);
+
+      if (error) {
+        console.error('❌ Error deleting multiple feedback:', error);
+        return false;
+      }
+
+      console.log('✅ Multiple feedback sessions deleted successfully');
+      return true;
+    } catch (error) {
+      console.error('❌ Exception deleting multiple feedback:', error);
+      return false;
+    }
+  }
+
   // Get feedback analytics
   async getFeedbackAnalytics() {
     try {

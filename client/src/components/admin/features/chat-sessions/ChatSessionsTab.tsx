@@ -431,22 +431,6 @@ export default function ChatSessionsTab() {
           </div>
         </>
       )}
-      
-      {/* Debug: Let's also add a test div that's always visible */}
-      <div style={{
-        position: 'fixed',
-        bottom: '20px',
-        right: '20px',
-        backgroundColor: 'green',
-        color: 'white',
-        padding: '10px',
-        zIndex: 999999,
-        fontSize: '12px'
-      }}>
-        ChatSessionsTab is rendered ✅<br/>
-        Modal state: {messageViewOpen ? 'OPEN' : 'CLOSED'}<br/>
-        Sessions: {sessions?.length || 0}
-      </div>
     </div>
   )
 }
