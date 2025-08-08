@@ -1,24 +1,45 @@
 import OpenAI from 'openai';
 
-
 export class EmbeddingService {
-  private openai: OpenAI;
+  private openai: OpenAI | null = null;
   private model = 'text-embedding-ada-002'; // OpenAI's embedding model
 
   constructor() {
-    this.openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    });
+    // Only initialize OpenAI client on server side
+    if (typeof window === 'undefined' && process.env.OPENAI_API_KEY) {
+      this.openai = new OpenAI({
+        apiKey: process.env.OPENAI_API_KEY
+      });
+    }
   }
 
   async generateEmbedding(text: string): Promise<number[]> {
     try {
-      const response = await this.openai.embeddings.create({
-        model: this.model,
-        input: text,
+      // Server-side: use OpenAI directly
+      if (typeof window === 'undefined' && this.openai) {
+        const response = await this.openai.embeddings.create({
+          model: this.model,
+          input: text,
+        });
+        return response.data[0].embedding;
+      }
+      
+      // Client-side: use API endpoint
+      const response = await fetch('/api/embeddings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text }),
       });
 
-      return response.data[0].embedding;
+      if (!response.ok) {
+        throw new Error('Failed to generate embedding via API');
+      }
+
+      const data = await response.json();
+      return data.embedding;
+      
     } catch (error) {
       console.error('Error generating embedding:', error);
       throw new Error('Failed to generate embedding');
@@ -27,10 +48,19 @@ export class EmbeddingService {
 
   async generateEmbeddings(texts: string[]): Promise<number[][]> {
     try {
-      // OpenAI can handle multiple texts in one request (up to 2048 inputs)
-      const batchSize = 100; // Conservative batch size
       const embeddings: number[][] = [];
-
+      
+      // For client-side, generate one at a time
+      if (typeof window !== 'undefined' || !this.openai) {
+        for (const text of texts) {
+          const embedding = await this.generateEmbedding(text);
+          embeddings.push(embedding);
+        }
+        return embeddings;
+      }
+      
+      // Server-side: batch processing
+      const batchSize = 100; // Conservative batch size
       for (let i = 0; i < texts.length; i += batchSize) {
         const batch = texts.slice(i, i + batchSize);
         

@@ -12,7 +12,8 @@ import ChatSessionsTab from '../features/chat-sessions/ChatSessionsTab'
 import DatabaseTab from '../features/database/DatabaseTab'
 import PedestalModeTab from '../features/pedestal/PedestalModeTab'
 import { FeedbackAnalytics } from '../features/feedback/FeedbackAnalytics'
-import { BarChart3, Calendar, MessageSquare, Database, Monitor, LogOut, ThumbsUp } from 'lucide-react'
+import { IntentViewer } from '../IntentViewer'
+import { BarChart3, Calendar, MessageSquare, Database, Monitor, LogOut, ThumbsUp, Brain } from 'lucide-react'
 
 const tabs: TabItem[] = [
   { id: 'pedestal', label: 'Pedestal Mode', icon: <Monitor className="h-4 w-4" /> },
@@ -20,6 +21,7 @@ const tabs: TabItem[] = [
   { id: 'agenda', label: 'Conference Agenda', icon: <Calendar className="h-4 w-4" /> },
   { id: 'chats', label: 'Chat Sessions', icon: <MessageSquare className="h-4 w-4" /> },
   { id: 'feedback', label: 'Session Feedback', icon: <ThumbsUp className="h-4 w-4" /> },
+  { id: 'intents', label: 'Intent Training', icon: <Brain className="h-4 w-4" /> },
   { id: 'database', label: 'Database', icon: <Database className="h-4 w-4" /> }
 ]
 
@@ -49,6 +51,8 @@ export default function AdminLayout() {
         return <ChatSessionsTab />
       case 'feedback':
         return <FeedbackAnalytics />
+      case 'intents':
+        return <IntentViewer />
       case 'database':
         return <DatabaseTab />
       default:

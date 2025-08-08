@@ -2,13 +2,14 @@
 import { Strategy } from "@/types/ai-router.types";
 import { LocationService } from "./location.service";
 import { VenueLookupService } from "./venue-lookup.service";
-import { IntentDetectorService } from "./intent-detector.service";
+import { semanticIntentDetector } from "./semantic-intent-detector.service";
+import { conversationContext } from "./conversation-context.service";
 import { LocationCacheService } from "./location-cache.service";
 import { ExhibitorSearchService } from "./exhibitor-search.service";
 import { scheduleService } from "./schedule.service";
 import { facilityToursService } from "./facility-tours.service";
 import { workshopSearchService } from "./workshop-search.service";
-import { committeeMeetingsService } from "./committee-meetings.service";
+import { committeeMeetingsService } from "./committee-meetings.service"; // with embedding reuse
 import { conferenceInfoDatabaseService } from "./conference-info-db.service";
 import { AI_TECH_EXPO, isAITechExpoQuery } from "@/data/ai-tech-expo";
 
@@ -45,10 +46,32 @@ export class PromptEnhancementService {
    * Enhanced prompt creation with intent-first optimization
    */
   async createEnhancedPrompt(originalPrompt: string): Promise<string> {
-    let enhancedPrompt = originalPrompt;
+    const startTime = performance.now();
+    
+    // STEP 1: Check if this is a follow-up question and enhance with context
+    const isFollowUp = conversationContext.isFollowUp(originalPrompt);
+    let queryToProcess = conversationContext.enhanceQueryWithContext(originalPrompt);
+    
+    if (isFollowUp) {
+      console.log('🔄 Follow-up detected:', {
+        original: originalPrompt,
+        enhanced: queryToProcess,
+        context: conversationContext.getContext()
+      });
+    }
+    
+    let enhancedPrompt = queryToProcess;
+    
+    // Add a note if this is a follow-up question
+    if (isFollowUp) {
+      const context = conversationContext.getContext();
+      if (context?.lastTopic) {
+        enhancedPrompt = `${queryToProcess}\n\n[CONTEXT: This is a follow-up question about ${context.lastTopic}]`;
+      }
+    }
     
     // Check if user is specifically asking for addresses
-    const isAddressRequest = /\b(address|location|where is|how do i get to)\b/i.test(originalPrompt);
+    const isAddressRequest = /\b(address|location|where is|how do i get to)\b/i.test(queryToProcess);
 
     // Step 0: Check for AI Tech Expo (featured event)
     if (isAITechExpoQuery(originalPrompt)) {
@@ -71,11 +94,29 @@ export class PromptEnhancementService {
       enhancedPrompt += `\n\nAI TECH EXPO (FEATURED EVENT):\n${expoInfo}\n${AI_TECH_EXPO.responses.importance}`;
     }
     
-    // Step 1: Fast intent detection (no database)
-    const intent = IntentDetectorService.detectIntent(originalPrompt);
+    // STEP 2: Use semantic intent detection for accurate data routing
+    // Try semantic first, fall back to keyword if needed
+    let intent;
+    try {
+      intent = await semanticIntentDetector.detectIntent(queryToProcess);
+      console.log(`🎯 Semantic intent: ${intent.primaryIntent} (${intent.confidence.toFixed(2)} confidence)`);
+    } catch (error) {
+      console.log('⚠️ Semantic detection failed, using keyword fallback');
+      // Fall back to fast keyword detection
+      const keywordIntent = semanticIntentDetector.detectIntentByKeywords(queryToProcess);
+      intent = keywordIntent;
+    }
     
-    // Step 2: Add schedule data if it's a schedule/conference query
-    if (intent.isConferenceQuery) {
+    // STEP 3: Update context for next query
+    const entities = conversationContext.extractEntities(queryToProcess);
+    conversationContext.updateContext(originalPrompt, intent.primaryIntent, entities[0], entities);
+    
+    const enhancementTime = performance.now() - startTime;
+    console.log(`⏱️ Intent detection took ${enhancementTime.toFixed(1)}ms`);
+    
+    // STEP 4: Add data based on intent (only fetch what's needed)
+    // Schedule data for conference queries
+    if (intent.isConferenceQuery && intent.primaryIntent !== 'exhibitor') {
       try {
         const lowerPrompt = originalPrompt.toLowerCase();
         let scheduleData = null;
@@ -118,8 +159,8 @@ export class PromptEnhancementService {
       }
     }
     
-    // Step 3: Add conference info if it's an info query
-    if (intent.primaryIntent === 'info') {
+    // Conference info for info queries
+    if (intent.primaryIntent === 'info' && !intent.isExhibitorQuery) {
       try {
         const infoResult = await conferenceInfoDatabaseService.searchInfo(originalPrompt);
         if (infoResult) {
@@ -131,9 +172,8 @@ export class PromptEnhancementService {
       }
     }
     
-    // Step 4: Add exhibitor data from exhibitor search service (database only)
-    // Skip if this is an AI Tech Expo query
-    if (!isAITechExpoQuery(originalPrompt)) {
+    // Exhibitor data for exhibitor queries
+    if (intent.primaryIntent === 'exhibitor' && !isAITechExpoQuery(originalPrompt)) {
       try {
         const exhibitorQuery = await this.exhibitorService.processExhibitorQuery(originalPrompt);
         
@@ -141,16 +181,22 @@ export class PromptEnhancementService {
           console.log(`🏢 PromptEnhancement: Found ${exhibitorQuery.data.length} exhibitors from database`);
           const exhibitorData = this.exhibitorService.formatMultipleExhibitors(exhibitorQuery.data);
           enhancedPrompt += `\n\n${exhibitorQuery.context.toUpperCase()}\n${exhibitorData}`;
+        } else {
+          // Special handling for AIDA queries that return no results
+          const lowerPrompt = originalPrompt.toLowerCase();
+          if (lowerPrompt.includes('ada demo') || lowerPrompt.includes('aida')) {
+            console.log('🏢 PromptEnhancement: AIDA exhibitor not found in database');
+            enhancedPrompt += `\n\nNOTE: No exhibitor found matching "AIDA" or similar names in the exhibitor database. The user may be asking about a company that is not exhibiting at this conference.`;
+          }
         }
-        // No fallback - only use actual database data
       } catch (error) {
         console.log('⚠️ Exhibitor lookup failed, no data added:', error);
         // No fallback - only use actual database data
       }
     }
     
-    // Step 3.5: Add facility tour data if query is about tours
-    if (facilityToursService.isTourQuery(originalPrompt)) {
+    // Facility tours (only if explicitly about tours)
+    if (intent.isConferenceQuery && facilityToursService.isTourQuery(originalPrompt)) {
       try {
         const tours = await facilityToursService.searchTours(originalPrompt);
         if (tours && tours.length > 0) {
@@ -163,13 +209,16 @@ export class PromptEnhancementService {
       }
     }
     
-    // Step 3.6: Add workshop data if query is about workshops
-    if (intent.isWorkshopQuery) {
+    // Workshop data
+    if (intent.primaryIntent === 'workshop') {
       try {
-        const workshopQuery = await workshopSearchService.processWorkshopQuery(originalPrompt);
+        // Pass the embedding if available to avoid regenerating it
+        const workshopQuery = intent.queryEmbedding 
+          ? await workshopSearchService.processWorkshopQueryWithEmbedding(originalPrompt, intent.queryEmbedding)
+          : await workshopSearchService.processWorkshopQuery(originalPrompt);
         
         if (workshopQuery.found && workshopQuery.data.length > 0) {
-          console.log(`📚 PromptEnhancement: Found ${workshopQuery.data.length} workshops`);
+          console.log(`📚 PromptEnhancement: Found ${workshopQuery.data.length} workshops (embedding reused: ${!!intent.queryEmbedding})`);
           const workshopData = workshopSearchService.formatMultipleWorkshops(workshopQuery.data);
           enhancedPrompt += `\n\n${workshopQuery.context.toUpperCase()}\n${workshopData}`;
         }
@@ -178,13 +227,16 @@ export class PromptEnhancementService {
       }
     }
     
-    // Step 3.7: Add committee meeting data if query is about meetings
-    if (intent.isMeetingQuery) {
+    // Committee meetings
+    if (intent.primaryIntent === 'meeting') {
       try {
-        const meetingQuery = await committeeMeetingsService.processMeetingQuery(originalPrompt);
+        // Pass the embedding if available to avoid regenerating it
+        const meetingQuery = intent.queryEmbedding
+          ? await committeeMeetingsService.processMeetingQueryWithEmbedding(originalPrompt, intent.queryEmbedding)
+          : await committeeMeetingsService.processMeetingQuery(originalPrompt);
         
         if (meetingQuery.found && meetingQuery.data.length > 0) {
-          console.log(`📋 PromptEnhancement: Found ${meetingQuery.data.length} committee meetings`);
+          console.log(`📋 PromptEnhancement: Found ${meetingQuery.data.length} committee meetings (embedding reused: ${!!intent.queryEmbedding})`);
           const meetingData = committeeMeetingsService.formatMultipleMeetings(meetingQuery.data);
           enhancedPrompt += `\n\n${meetingQuery.context.toUpperCase()}\n${meetingData}`;
         }
@@ -193,10 +245,8 @@ export class PromptEnhancementService {
       }
     }
     
-    // Step 5: Location data will be handled by venue lookup service below
-
-    // Step 5: Tiered location lookup - scraped data → cache → Google Maps API
-    if (intent.isVenueQuery || intent.isLocationQuery) {
+    // STEP 5: Location/venue data (most expensive, do last)
+    if (intent.primaryIntent === 'venue' || intent.primaryIntent === 'location') {
       try {
         let venueData: string | null = null;
         
@@ -282,6 +332,9 @@ export class PromptEnhancementService {
       console.log('⚡ Skipping location lookup - not a location/venue query');
     }
 
+    const totalTime = performance.now() - startTime;
+    console.log(`⏱️ Total prompt enhancement: ${totalTime.toFixed(1)}ms`);
+    
     return enhancedPrompt;
   }
 
