@@ -40,25 +40,25 @@ export default function PedestalModeTab() {
 
   return (
     <>
-      <div className="space-y-6">
+      <div className="space-y-4 lg:space-y-6">
         {/* Current Status Card */}
-        <Card className="p-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className={`p-3 rounded-full ${isPedestalMode ? 'bg-green-500/20' : 'bg-gray-500/20'}`}>
-                <Monitor className={`h-6 w-6 ${isPedestalMode ? 'text-green-400' : 'text-gray-400'}`} />
+        <Card className="p-4 lg:p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-center space-x-3 lg:space-x-4">
+              <div className={`p-2 lg:p-3 rounded-full ${isPedestalMode ? 'bg-green-500/20' : 'bg-gray-500/20'}`}>
+                <Monitor className={`h-5 w-5 lg:h-6 lg:w-6 ${isPedestalMode ? 'text-green-400' : 'text-gray-400'}`} />
               </div>
               <div>
-                <h3 className="text-xl font-semibold text-white">Pedestal Mode</h3>
-                <p className="text-gray-400">
+                <h3 className="text-lg lg:text-xl font-semibold text-white">Pedestal Mode</h3>
+                <p className="text-sm lg:text-base text-gray-400">
                   {isPedestalMode 
-                    ? 'Currently active - Harper is ready for public interaction'
-                    : 'Currently inactive - Harper is in admin mode'
+                    ? 'Harper is ready for public interaction'
+                    : 'Harper is in admin mode'
                   }
                 </p>
               </div>
             </div>
-            <div className={`px-4 py-2 rounded-full text-sm font-medium ${
+            <div className={`px-3 lg:px-4 py-1.5 lg:py-2 rounded-full text-xs lg:text-sm font-medium ${
               isPedestalMode 
                 ? 'bg-green-500/20 text-green-400 border border-green-500/30'
                 : 'bg-gray-500/20 text-gray-400 border border-gray-500/30'
@@ -69,47 +69,47 @@ export default function PedestalModeTab() {
         </Card>
 
         {/* Controls Card */}
-        <Card className="p-6">
-          <h3 className="text-lg font-semibold text-white mb-4">Mode Controls</h3>
+        <Card className="p-4 lg:p-6">
+          <h3 className="text-base lg:text-lg font-semibold text-white mb-4">Mode Controls</h3>
           
           {!isPedestalMode ? (
             <div className="space-y-4">
-              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
-                <h4 className="font-medium text-blue-400 mb-2">Enable Pedestal Mode</h4>
-                <p className="text-gray-300 text-sm mb-4">
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 lg:p-4">
+                <h4 className="font-medium text-blue-400 mb-2 text-sm lg:text-base">Enable Pedestal Mode</h4>
+                <p className="text-gray-300 text-xs lg:text-sm mb-4">
                   This will activate public mode, allowing conference attendees to interact with Harper. 
                   The system will remain in this mode until manually disabled by an admin.
                 </p>
                 <button
                   onClick={handleEnablePedestalMode}
-                  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg hover:from-green-700 hover:to-emerald-700 transition-all font-medium cursor-pointer"
+                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 lg:px-6 py-2 lg:py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg hover:from-green-700 hover:to-emerald-700 transition-all font-medium cursor-pointer text-sm lg:text-base"
                 >
-                  <Power className="h-5 w-5" />
+                  <Power className="h-4 w-4 lg:h-5 lg:w-5" />
                   Enable Pedestal Mode
                 </button>
               </div>
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4">
-                <h4 className="font-medium text-amber-400 mb-2">Pedestal Mode Active</h4>
-                <p className="text-gray-300 text-sm mb-4">
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 lg:p-4">
+                <h4 className="font-medium text-amber-400 mb-2 text-sm lg:text-base">Pedestal Mode Active</h4>
+                <p className="text-gray-300 text-xs lg:text-sm mb-4">
                   Harper is currently in public mode. Conference attendees can interact with the system.
                   Click below to return to admin mode.
                 </p>
-                <div className="flex gap-3">
+                <div className="flex flex-col sm:flex-row gap-2 lg:gap-3">
                   <button
                     onClick={() => router.push('/')}
-                    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:from-indigo-700 hover:to-purple-700 transition-all font-medium cursor-pointer"
+                    className="flex items-center justify-center gap-2 px-4 lg:px-6 py-2 lg:py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:from-indigo-700 hover:to-purple-700 transition-all font-medium cursor-pointer text-sm lg:text-base"
                   >
-                    <ExternalLink className="h-5 w-5" />
+                    <ExternalLink className="h-4 w-4 lg:h-5 lg:w-5" />
                     View Public Interface
                   </button>
                   <button
                     onClick={handleDisablePedestalMode}
-                    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-red-600 to-rose-600 text-white rounded-lg hover:from-red-700 hover:to-rose-700 transition-all font-medium cursor-pointer"
+                    className="flex items-center justify-center gap-2 px-4 lg:px-6 py-2 lg:py-3 bg-gradient-to-r from-red-600 to-rose-600 text-white rounded-lg hover:from-red-700 hover:to-rose-700 transition-all font-medium cursor-pointer text-sm lg:text-base"
                   >
-                    <PowerOff className="h-5 w-5" />
+                    <PowerOff className="h-4 w-4 lg:h-5 lg:w-5" />
                     Disable Pedestal Mode
                   </button>
                 </div>
@@ -119,30 +119,30 @@ export default function PedestalModeTab() {
         </Card>
 
         {/* Information Card */}
-        <Card className="p-6">
-          <h3 className="text-lg font-semibold text-white mb-4">About Pedestal Mode</h3>
+        <Card className="p-4 lg:p-6">
+          <h3 className="text-base lg:text-lg font-semibold text-white mb-4">About Pedestal Mode</h3>
           <div className="space-y-3 text-gray-300">
             <div className="flex items-start gap-3">
-              <div className="w-2 h-2 bg-indigo-400 rounded-full mt-2 flex-shrink-0"></div>
-              <p className="text-sm">
+              <div className="w-1.5 h-1.5 lg:w-2 lg:h-2 bg-indigo-400 rounded-full mt-1.5 lg:mt-2 flex-shrink-0"></div>
+              <p className="text-xs lg:text-sm">
                 <strong className="text-white">Public Access:</strong> When enabled, attendees can interact with Harper without admin privileges
               </p>
             </div>
             <div className="flex items-start gap-3">
-              <div className="w-2 h-2 bg-indigo-400 rounded-full mt-2 flex-shrink-0"></div>
-              <p className="text-sm">
+              <div className="w-1.5 h-1.5 lg:w-2 lg:h-2 bg-indigo-400 rounded-full mt-1.5 lg:mt-2 flex-shrink-0"></div>
+              <p className="text-xs lg:text-sm">
                 <strong className="text-white">Persistent State:</strong> Mode remains active until manually disabled by an admin
               </p>
             </div>
             <div className="flex items-start gap-3">
-              <div className="w-2 h-2 bg-indigo-400 rounded-full mt-2 flex-shrink-0"></div>
-              <p className="text-sm">
+              <div className="w-1.5 h-1.5 lg:w-2 lg:h-2 bg-indigo-400 rounded-full mt-1.5 lg:mt-2 flex-shrink-0"></div>
+              <p className="text-xs lg:text-sm">
                 <strong className="text-white">Analytics Tracking:</strong> All interactions are logged and available in the Analytics tab
               </p>
             </div>
             <div className="flex items-start gap-3">
-              <div className="w-2 h-2 bg-indigo-400 rounded-full mt-2 flex-shrink-0"></div>
-              <p className="text-sm">
+              <div className="w-1.5 h-1.5 lg:w-2 lg:h-2 bg-indigo-400 rounded-full mt-1.5 lg:mt-2 flex-shrink-0"></div>
+              <p className="text-xs lg:text-sm">
                 <strong className="text-white">Admin Override:</strong> Admins can always access the admin panel regardless of mode
               </p>
             </div>

@@ -717,9 +717,8 @@ export const useVoiceChat = ({
     if (isNewNameIntroduction && extractedName) {
       console.log('👋 Processing query with name introduction for:', extractedName);
       
-      // Get the original filler response and add the greeting
-      const intentResult = await semanticIntentDetector.detectIntent(text);
-      const originalFillerResponse = semanticIntentDetector.getFillerResponse(intentResult.primaryIntent);
+      // Get the original filler response using fast keyword detection and add the greeting
+      const originalFillerResponse = IntentDetectorService.getFillerResponse(text);
       if (originalFillerResponse && speakText) {
         // Add "Nice to meet you" to the filler response
         const personalizedFiller = `Nice to meet you, ${extractedName}! ${originalFillerResponse}`;

@@ -189,12 +189,12 @@ export const FeedbackAnalytics: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="space-y-4 lg:space-y-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-6">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10 animate-pulse">
-              <div className="h-4 bg-white/10 rounded mb-2"></div>
-              <div className="h-8 bg-white/10 rounded"></div>
+            <div key={i} className="bg-white/5 backdrop-blur-sm rounded-xl p-3 lg:p-6 border border-white/10 animate-pulse">
+              <div className="h-3 lg:h-4 bg-white/10 rounded mb-2"></div>
+              <div className="h-6 lg:h-8 bg-white/10 rounded"></div>
             </div>
           ))}
         </div>
@@ -227,9 +227,9 @@ export const FeedbackAnalytics: React.FC = () => {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 lg:space-y-6">
       {/* Analytics Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-6">
         <StatCard
           title="Total Feedback"
           value={analytics.totalFeedback}
@@ -265,18 +265,18 @@ export const FeedbackAnalytics: React.FC = () => {
 
       {/* Feedback Highlights */}
       {(negativeWithText.length > 0 || positiveWithText.length > 0) && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-6">
           {/* Negative Feedback Highlights */}
           {negativeWithText.length > 0 && (
-            <Card>
+            <Card className="p-3 lg:p-4">
               <CardHeader>
-                <h3 className="text-xl font-semibold text-white">Areas for Improvement</h3>
+                <h3 className="text-base lg:text-xl font-semibold text-white">Areas for Improvement</h3>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
+                <div className="space-y-2 lg:space-y-3">
                   {negativeWithText.slice(0, 3).map((feedback, index) => (
-                    <div key={index} className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
-                      <p className="text-white/80 text-sm mb-2">"{feedback.feedbackText}"</p>
+                    <div key={index} className="p-2 lg:p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                      <p className="text-white/80 text-xs lg:text-sm mb-1 lg:mb-2">"{feedback.feedbackText}"</p>
                       <p className="text-white/40 text-xs">
                         {formatDate(feedback.timestamp)}
                       </p>
@@ -289,14 +289,14 @@ export const FeedbackAnalytics: React.FC = () => {
 
           {/* Positive Feedback Highlights */}
           {positiveWithText.length > 0 && (
-            <Card>
+            <Card className="p-3 lg:p-4">
               <CardHeader>
-                <h3 className="text-xl font-semibold text-white">Positive Highlights</h3>
+                <h3 className="text-base lg:text-xl font-semibold text-white">Positive Highlights</h3>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
+                <div className="space-y-2 lg:space-y-3">
                   {positiveWithText.slice(0, 3).map((feedback, index) => (
-                    <div key={index} className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+                    <div key={index} className="p-2 lg:p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
                       <p className="text-white/80 text-sm mb-2">"{feedback.feedbackText}"</p>
                       <p className="text-white/40 text-xs">
                         {formatDate(feedback.timestamp)}

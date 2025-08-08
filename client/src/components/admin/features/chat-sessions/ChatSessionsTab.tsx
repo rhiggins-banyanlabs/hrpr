@@ -27,27 +27,29 @@ export default function ChatSessionsTab() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <Card className="p-6">
+      <Card className="p-4 lg:p-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h2 className="text-2xl font-bold text-white mb-2">Chat Sessions</h2>
-            <p className="text-white/70">Monitor user conversations with Harper</p>
+            <h2 className="text-lg lg:text-2xl font-bold text-white mb-1 lg:mb-2">Chat Sessions</h2>
+            <p className="text-sm lg:text-base text-white/70">Monitor user conversations with Harper</p>
           </div>
           
           <div className="flex gap-3">
             <Button
               onClick={refreshData}
               variant="secondary"
-              size="md"
+              size="sm"
+              className="text-xs lg:text-sm px-3 lg:px-4 py-1.5 lg:py-2"
             >
-              Refresh Data
+              Refresh
             </Button>
             <Button
               onClick={exportData}
               variant="primary"
-              size="md"
+              size="sm"
+              className="text-xs lg:text-sm px-3 lg:px-4 py-1.5 lg:py-2"
             >
-              Export Data
+              Export
             </Button>
           </div>
         </div>
@@ -87,9 +89,9 @@ export default function ChatSessionsTab() {
             top: '50%',
             left: '50%',
             transform: 'translate(-50%, -50%)',
-            width: '90vw',
+            width: '95vw',
             maxWidth: '900px',
-            maxHeight: '85vh',
+            maxHeight: '90vh',
             backgroundColor: '#1e293b',
             color: 'white',
             borderRadius: '12px',
@@ -105,17 +107,17 @@ export default function ChatSessionsTab() {
               display: 'flex', 
               justifyContent: 'space-between', 
               alignItems: 'center',
-              padding: '20px 24px',
+              padding: '16px 20px',
               borderBottom: '1px solid rgba(255,255,255,0.1)',
               flexShrink: 0
             }}>
               <h2 style={{ 
                 margin: 0, 
-                fontSize: '20px', 
+                fontSize: window.innerWidth < 640 ? '16px' : '20px', 
                 fontWeight: '600',
                 color: 'white'
               }}>
-                Chat Session Messages
+                Session Messages
               </h2>
               <button 
                 onClick={closeMessageViewer}
@@ -138,7 +140,7 @@ export default function ChatSessionsTab() {
 
             {/* Content */}
             <div style={{ 
-              padding: '24px',
+              padding: window.innerWidth < 640 ? '16px' : '24px',
               overflow: 'auto',
               flex: 1
             }}>
@@ -152,24 +154,26 @@ export default function ChatSessionsTab() {
               }}>
                 <div style={{ 
                   display: 'flex', 
+                  flexDirection: window.innerWidth < 640 ? 'column' : 'row',
                   justifyContent: 'space-between', 
-                  alignItems: 'flex-start',
+                  alignItems: window.innerWidth < 640 ? 'flex-start' : 'flex-start',
+                  gap: window.innerWidth < 640 ? '8px' : '0',
                   marginBottom: '8px'
                 }}>
                   <div>
                     <div style={{ 
-                      fontSize: '16px', 
+                      fontSize: window.innerWidth < 640 ? '14px' : '16px', 
                       fontWeight: '600', 
                       marginBottom: '4px',
                       color: 'white'
                     }}>
-                      Session: {selectedSession.id.substring(0, 8)}...
+                      ID: {selectedSession.id.substring(0, 8)}...
                     </div>
                     <div style={{ 
-                      fontSize: '14px', 
+                      fontSize: window.innerWidth < 640 ? '12px' : '14px', 
                       color: 'rgba(255,255,255,0.7)'
                     }}>
-                      Started: {new Date(selectedSession.session_started_at).toLocaleString()}
+                      {new Date(selectedSession.session_started_at).toLocaleString()}
                     </div>
                   </div>
                   <span style={{
@@ -186,27 +190,31 @@ export default function ChatSessionsTab() {
                 
                 {/* Metadata */}
                 {selectedSession.metadata && Object.keys(selectedSession.metadata).length > 0 && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '12px' }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '12px' }}>
                     {selectedSession.metadata.source && (
                       <span style={{
                         backgroundColor: '#3b82f6',
                         color: 'white',
-                        padding: '2px 8px',
+                        padding: '2px 6px',
                         borderRadius: '12px',
-                        fontSize: '11px'
+                        fontSize: window.innerWidth < 640 ? '10px' : '11px'
                       }}>
-                        Source: {selectedSession.metadata.source}
+                        {selectedSession.metadata.source}
                       </span>
                     )}
                     {selectedSession.metadata.initial_query && (
                       <span style={{
                         backgroundColor: '#f59e0b',
                         color: 'white',
-                        padding: '2px 8px',
+                        padding: '2px 6px',
                         borderRadius: '12px',
-                        fontSize: '11px'
+                        fontSize: window.innerWidth < 640 ? '10px' : '11px',
+                        maxWidth: window.innerWidth < 640 ? '200px' : 'none',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
                       }}>
-                        Query: &quot;{selectedSession.metadata.initial_query}&quot;
+                        &quot;{selectedSession.metadata.initial_query}&quot;
                       </span>
                     )}
                   </div>
@@ -225,16 +233,16 @@ export default function ChatSessionsTab() {
                     margin: 0,
                     color: 'white', 
                     fontWeight: '500',
-                    fontSize: '16px'
+                    fontSize: window.innerWidth < 640 ? '14px' : '16px'
                   }}>
                     Messages ({sessionMessages?.length || 0})
                   </h4>
                   {messagesLoading && (
                     <div style={{ 
                       color: 'rgba(255,255,255,0.6)', 
-                      fontSize: '14px' 
+                      fontSize: window.innerWidth < 640 ? '12px' : '14px' 
                     }}>
-                      Loading messages...
+                      Loading...
                     </div>
                   )}
                 </div>
@@ -253,9 +261,9 @@ export default function ChatSessionsTab() {
                   </div>
                 ) : (
                   <div style={{ 
-                    maxHeight: '300px', 
+                    maxHeight: window.innerWidth < 640 ? '250px' : '300px', 
                     overflow: 'auto',
-                    paddingRight: '8px'
+                    paddingRight: window.innerWidth < 640 ? '4px' : '8px'
                   }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                       {sessionMessages.map((message) => (
@@ -268,8 +276,8 @@ export default function ChatSessionsTab() {
                             backgroundColor: message.sender === 'user'
                               ? 'rgba(59, 130, 246, 0.1)'
                               : 'rgba(147, 51, 234, 0.1)',
-                            marginLeft: message.sender === 'user' ? '32px' : '0',
-                            marginRight: message.sender === 'user' ? '0' : '32px'
+                            marginLeft: message.sender === 'user' ? (window.innerWidth < 640 ? '16px' : '32px') : '0',
+                            marginRight: message.sender === 'user' ? '0' : (window.innerWidth < 640 ? '16px' : '32px')
                           }}
                         >
                           <div style={{ 
@@ -303,17 +311,23 @@ export default function ChatSessionsTab() {
                             </div>
                             <span style={{ 
                               color: 'rgba(255,255,255,0.4)', 
-                              fontSize: '11px' 
+                              fontSize: window.innerWidth < 640 ? '10px' : '11px' 
                             }}>
-                              {new Date(message.message_timestamp).toLocaleString()}
+                              {new Date(message.message_timestamp).toLocaleString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
                             </span>
                           </div>
                           
                           <p style={{ 
                             margin: 0,
                             color: 'white', 
-                            fontSize: '14px', 
-                            lineHeight: '1.5'
+                            fontSize: window.innerWidth < 640 ? '13px' : '14px', 
+                            lineHeight: '1.5',
+                            wordBreak: 'break-word'
                           }}>
                             {message.message_text}
                           </p>
@@ -369,22 +383,22 @@ export default function ChatSessionsTab() {
                     <div style={{ 
                       display: 'grid', 
                       gridTemplateColumns: 'repeat(3, 1fr)', 
-                      gap: '16px',
+                      gap: window.innerWidth < 640 ? '8px' : '16px',
                       textAlign: 'center'
                     }}>
                       <div>
                         <p style={{ 
                           margin: '0 0 4px 0',
                           color: 'rgba(255,255,255,0.6)', 
-                          fontSize: '12px' 
+                          fontSize: window.innerWidth < 640 ? '11px' : '12px' 
                         }}>
-                          Total Messages
+                          Total
                         </p>
                         <p style={{ 
                           margin: 0,
                           color: 'white', 
                           fontWeight: '600',
-                          fontSize: '16px'
+                          fontSize: window.innerWidth < 640 ? '14px' : '16px'
                         }}>
                           {sessionMessages.length}
                         </p>
@@ -393,15 +407,15 @@ export default function ChatSessionsTab() {
                         <p style={{ 
                           margin: '0 0 4px 0',
                           color: 'rgba(255,255,255,0.6)', 
-                          fontSize: '12px' 
+                          fontSize: window.innerWidth < 640 ? '11px' : '12px' 
                         }}>
-                          User Messages
+                          User
                         </p>
                         <p style={{ 
                           margin: 0,
                           color: '#60a5fa', 
                           fontWeight: '600',
-                          fontSize: '16px'
+                          fontSize: window.innerWidth < 640 ? '14px' : '16px'
                         }}>
                           {sessionMessages.filter(m => m.sender === 'user').length}
                         </p>
@@ -410,15 +424,15 @@ export default function ChatSessionsTab() {
                         <p style={{ 
                           margin: '0 0 4px 0',
                           color: 'rgba(255,255,255,0.6)', 
-                          fontSize: '12px' 
+                          fontSize: window.innerWidth < 640 ? '11px' : '12px' 
                         }}>
-                          Harper Messages
+                          Harper
                         </p>
                         <p style={{ 
                           margin: 0,
                           color: '#c084fc', 
                           fontWeight: '600',
-                          fontSize: '16px'
+                          fontSize: window.innerWidth < 640 ? '14px' : '16px'
                         }}>
                           {sessionMessages.filter(m => m.sender === 'Harper').length}
                         </p>
