@@ -65,7 +65,7 @@ export default function useDatabase() {
         // Update health check with real measurements
         setHealthCheck({
           responseTime: measurements.currentResponseTime,
-          queryPerformance: measurements.avgResponseTime < 500 ? 'good' : 'slow',
+          queryPerformance: (measurements.avgResponseTime ?? 1000) < 500 ? 'good' : 'slow',
           dataIntegrity: measurements.errorRate < 5,
           lastCheck: new Date().toISOString()
         })
