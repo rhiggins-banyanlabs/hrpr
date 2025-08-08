@@ -4,7 +4,8 @@ Beacon is an interactive event chatbot app designed to enhance the attendee expe
 
 ---
 
-## File Structure
+## File Structure -
+
 
 ```
 /
