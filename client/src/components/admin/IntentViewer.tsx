@@ -1,19 +1,16 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Brain, Copy, Check, Search, Filter, RefreshCw } from 'lucide-react';
-import { semanticRouterSupabase } from '@/services/semantic-router-supabase.service';
+import { Brain, Copy, Check, Search, Filter } from 'lucide-react';
 
-interface IntentExample {
-  id: string;
-  intent: string;
-  example_text: string;
-  created_at?: string;
+interface IntentData {
+  description: string;
+  examples: string[];
+  embeddings?: number[][];
 }
 
 export function IntentViewer() {
-  const [intents, setIntents] = useState<string[]>([]);
-  const [examples, setExamples] = useState<IntentExample[]>([]);
+  const [intents, setIntents] = useState<Record<string, IntentData>>({});
   const [selectedIntent, setSelectedIntent] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
   const [copiedText, setCopiedText] = useState<string | null>(null);
@@ -24,44 +21,27 @@ export function IntentViewer() {
     loadIntents();
   }, []);
 
-  useEffect(() => {
-    if (selectedIntent) {
-      loadExamples(selectedIntent);
-    }
-  }, [selectedIntent]);
-
   const loadIntents = async () => {
     try {
       setIsLoading(true);
-      // Load intents from Supabase
-      const availableIntents = await semanticRouterSupabase.getAvailableIntents();
-      setIntents(availableIntents);
+      // Load the intent embeddings file
+      const response = await fetch('/intent-embeddings.min.json');
+      if (!response.ok) {
+        throw new Error('Failed to load intent embeddings');
+      }
+      const data = await response.json();
+      setIntents(data.intents || {});
       
       // Set first intent as selected
-      if (availableIntents.length > 0 && !selectedIntent) {
-        setSelectedIntent(availableIntents[0]);
+      const intentKeys = Object.keys(data.intents || {});
+      if (intentKeys.length > 0) {
+        setSelectedIntent(intentKeys[0]);
       }
     } catch (err) {
       console.error('Error loading intents:', err);
-      setError('Failed to load intent data from Supabase.');
+      setError('Failed to load intent data. Make sure intent-embeddings.min.json is in public folder.');
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const loadExamples = async (intent: string) => {
-    try {
-      const intentExamples = await semanticRouterSupabase.getIntentExamples(intent);
-      // Map to IntentExample format
-      const mappedExamples: IntentExample[] = intentExamples.map((item: any) => ({
-        id: item.id,
-        intent: item.intent,
-        example_text: item.example_text,
-        created_at: item.created_at
-      }));
-      setExamples(mappedExamples);
-    } catch (error) {
-      console.error('Error loading examples:', error);
     }
   };
 
@@ -71,15 +51,46 @@ export function IntentViewer() {
     setTimeout(() => setCopiedText(null), 2000);
   };
 
+  const generateAddExampleScript = (intent: string, example: string) => {
+    return `// Add this to scripts/add-intent-example.js
+const { generateEmbedding } = require('./generate-intent-embeddings-local.js');
 
-  const filteredExamples = examples.filter(example => 
-    example.example_text.toLowerCase().includes(searchTerm.toLowerCase())
+async function addExample() {
+  const intent = '${intent}';
+  const example = '${example}';
+  
+  // Load existing embeddings
+  const data = require('../src/data/intent-embeddings.json');
+  
+  // Generate embedding for new example
+  const embedding = await generateEmbedding(example);
+  
+  // Add to intent
+  data.intents[intent].examples.push(example);
+  data.intents[intent].embeddings.push(embedding);
+  
+  // Save back to file
+  fs.writeFileSync(
+    'src/data/intent-embeddings.json',
+    JSON.stringify(data, null, 2)
   );
+  
+  console.log('✅ Added example to', intent);
+}
+
+addExample();`;
+  };
+
+  const filteredExamples = selectedIntent && intents[selectedIntent] 
+    ? intents[selectedIntent].examples.filter(example => 
+        example.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : [];
 
   const stats = {
-    totalIntents: intents.length,
-    totalExamples: examples.length, // This will show total for current intent
-    currentIntentExamples: filteredExamples.length
+    totalIntents: Object.keys(intents).length,
+    totalExamples: Object.values(intents).reduce((sum, intent) => sum + intent.examples.length, 0),
+    currentIntentExamples: selectedIntent && intents[selectedIntent] ? intents[selectedIntent].examples.length : 0
   };
 
   if (isLoading) {
@@ -134,7 +145,7 @@ export function IntentViewer() {
       <div className="mb-4">
         <label className="block text-sm text-gray-400 mb-2">Select Intent Type</label>
         <div className="grid grid-cols-4 gap-2">
-          {intents.map(intent => (
+          {Object.keys(intents).map(intent => (
             <button
               key={intent}
               onClick={() => setSelectedIntent(intent)}
@@ -179,25 +190,18 @@ export function IntentViewer() {
           {filteredExamples.length === 0 ? (
             <p className="text-gray-500">No examples found</p>
           ) : (
-            filteredExamples.map((example) => (
+            filteredExamples.map((example, index) => (
               <div
-                key={example.id}
+                key={index}
                 className="flex items-center justify-between p-3 bg-gray-700 rounded hover:bg-gray-600 transition-colors group"
               >
-                <div className="flex-1">
-                  <p className="text-gray-200">{example.example_text}</p>
-                  {example.created_at && (
-                    <p className="text-xs text-gray-500 mt-1">
-                      Added: {new Date(example.created_at).toLocaleDateString()}
-                    </p>
-                  )}
-                </div>
+                <p className="text-gray-200 flex-1">{example}</p>
                 <button
-                  onClick={() => copyToClipboard(example.example_text, `example-${example.id}`)}
+                  onClick={() => copyToClipboard(example, `example-${index}`)}
                   className="ml-2 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
                   title="Copy example"
                 >
-                  {copiedText === `example-${example.id}` ? (
+                  {copiedText === `example-${index}` ? (
                     <Check className="h-4 w-4 text-green-400" />
                   ) : (
                     <Copy className="h-4 w-4 text-gray-400 hover:text-gray-200" />
@@ -209,29 +213,71 @@ export function IntentViewer() {
         </div>
       </div>
 
-      {/* Info */}
+      {/* How to Add New Examples */}
       <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-4">
-        <h3 className="text-blue-400 font-semibold mb-3">Intent Training Information</h3>
+        <h3 className="text-blue-400 font-semibold mb-3">How to Add New Examples</h3>
         
         <div className="space-y-3">
           <div>
-            <p className="text-gray-300 text-sm">
-              This viewer shows intent examples stored in Supabase. To add new examples, use the Intent Manager tab
-              or the admin interface. The system uses semantic similarity search with OpenAI embeddings.
-            </p>
+            <p className="text-gray-300 text-sm mb-2">1. Create a new example locally:</p>
+            <div className="bg-gray-800 rounded p-3">
+              <code className="text-green-400 text-xs">
+                node scripts/add-intent-example.js "{selectedIntent}" "your new example here"
+              </code>
+              <button
+                onClick={() => copyToClipboard(
+                  `node scripts/add-intent-example.js "${selectedIntent}" "your new example here"`,
+                  'command'
+                )}
+                className="ml-2 inline-flex items-center"
+              >
+                {copiedText === 'command' ? (
+                  <Check className="h-3 w-3 text-green-400" />
+                ) : (
+                  <Copy className="h-3 w-3 text-gray-400 hover:text-gray-200" />
+                )}
+              </button>
+            </div>
           </div>
-          
-          <div className="flex items-center gap-2 mt-4">
-            <button
-              onClick={() => {
-                loadIntents();
-                if (selectedIntent) loadExamples(selectedIntent);
-              }}
-              className="flex items-center gap-2 px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded transition-colors"
-            >
-              <RefreshCw className="h-4 w-4" />
-              <span className="text-sm">Refresh Data</span>
-            </button>
+
+          <div>
+            <p className="text-gray-300 text-sm mb-2">2. Or use this script template:</p>
+            <div className="bg-gray-800 rounded p-3 relative">
+              <pre className="text-green-400 text-xs overflow-x-auto">
+{generateAddExampleScript(selectedIntent, 'your example here')}
+              </pre>
+              <button
+                onClick={() => copyToClipboard(
+                  generateAddExampleScript(selectedIntent, 'your example here'),
+                  'script'
+                )}
+                className="absolute top-2 right-2"
+              >
+                {copiedText === 'script' ? (
+                  <Check className="h-4 w-4 text-green-400" />
+                ) : (
+                  <Copy className="h-4 w-4 text-gray-400 hover:text-gray-200" />
+                )}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <p className="text-gray-300 text-sm mb-2">3. After adding examples, regenerate the minified version:</p>
+            <div className="bg-gray-800 rounded p-3">
+              <code className="text-green-400 text-xs">
+                node scripts/minify-embeddings.js
+              </code>
+            </div>
+          </div>
+
+          <div>
+            <p className="text-gray-300 text-sm mb-2">4. Commit and push the changes:</p>
+            <div className="bg-gray-800 rounded p-3">
+              <code className="text-green-400 text-xs">
+                git add src/data/intent-embeddings*.json && git commit -m "Add new intent examples" && git push
+              </code>
+            </div>
           </div>
         </div>
       </div>

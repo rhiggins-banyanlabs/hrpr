@@ -313,60 +313,9 @@ export class IntentDetectorService {
       return prefix + selected;
     };
     
-    // Check for SPECIFIC date/time queries (not session times)
-    // Must be asking specifically about current time/date
-    if ((lowerQuery === 'what time is it' || lowerQuery === 'what time is it?' ||
-         lowerQuery === 'whats the time' || lowerQuery === 'what\'s the time' ||
-         lowerQuery === 'what is the time' || lowerQuery === 'tell me the time' ||
-         lowerQuery.includes('current time') && !lowerQuery.includes('session') && !lowerQuery.includes('workshop')) ||
-        (lowerQuery === 'what day is it' || lowerQuery === 'what day is it?' ||
-         lowerQuery === 'what day is today' || lowerQuery === 'what day is it today' ||
-         lowerQuery === 'what is today' || lowerQuery === 'what\'s today' ||
-         lowerQuery === 'whats today') ||
-        (lowerQuery === 'what is todays date' || lowerQuery === 'what is today\'s date' ||
-         lowerQuery === 'what\'s today\'s date' || lowerQuery === 'whats todays date' ||
-         lowerQuery === 'what\'s the date' || lowerQuery === 'what is the date' ||
-         lowerQuery === 'what date is it' || lowerQuery === 'what date is it today' ||
-         lowerQuery === 'today\'s date' || lowerQuery === 'todays date')) {
-      const responses = [
-        "Let me check the current time for you",
-        "I'll get that information for you",
-        "Let me check that for you",
-        "Let me look at the current date and time",
-        "I'll check what day it is"
-      ];
-      return addPausePrefix(responses);
-    }
-    
     // Natural, conversational filler responses
     switch (intent.primaryIntent) {
       case 'exhibitor':
-        // Check for AIDA/Ada demo specifically (not just Vantage booth)
-        if ((lowerQuery.includes('ada') && lowerQuery.includes('demo')) ||
-            lowerQuery.includes('aida') || lowerQuery.includes('aided demo') ||
-            lowerQuery.includes('interview agent') ||
-            (lowerQuery.includes('ada') && !lowerQuery.includes('booth'))) {
-          const aidaResponses = [
-            "Let me find information about the Ada demo",
-            "I'll look up the Ada demonstration locations for you",
-            "Let me check where you can experience Ada",
-            "I'll find details about the Ada Interview Agent",
-            "Let me get the Ada demo information",
-            "Let me find where Ada is being demonstrated"
-          ];
-          return addPausePrefix(aidaResponses);
-        }
-        
-        // Check for Vantage booth specifically (without AIDA context)
-        if ((lowerQuery.includes('vant4ge') || lowerQuery.includes('vantage')) && 
-            lowerQuery.includes('booth')) {
-          const responses = [
-            "Let me find the Vantage booth information",
-            "I'll look up the Vantage booth location",
-            "Let me check where Vantage is exhibiting"
-          ];
-          return addPausePrefix(responses);
-        }
         // Specific exhibitor responses
         if (lowerQuery.includes('booth')) {
           const responses = [
@@ -405,78 +354,27 @@ export class IntentDetectorService {
         return addPausePrefix(exhibitorResponses);
         
       case 'venue':
-        // Food & dining queries - check if asking for more/other options first
-        const isAskingForMore = /\b(more|other|another|else|additional|besides|different)\b/i.test(lowerQuery);
-        
-        // Coffee queries
-        if (lowerQuery.includes('coffee') || lowerQuery.includes('cafe') || lowerQuery.includes('starbucks') ||
-            lowerQuery.includes('espresso') || lowerQuery.includes('latte')) {
-          const responses = isAskingForMore ? [
-            "Let me find more coffee shops in the area",
-            "I'll look for other coffee options nearby",
-            "Let me check additional cafes around here",
-            "I'll search for more coffee places",
-            "Let me see what other coffee shops are close by",
-            "I'll find more cafe options in downtown"
-          ] : [
-            "Let me find coffee options for you",
-            "I'll look up coffee shops nearby",
-            "Let me check available coffee options",
-            "I'll search for coffee places",
-            "Let me see what coffee options are available"
+        // Food & dining
+        if (lowerQuery.includes('restaurant') || lowerQuery.includes('food') || lowerQuery.includes('eat')) {
+          const responses = [
+            "Let me check what restaurants are nearby",
+            "I'll find some good dining options for you",
+            "Let me see what food places are close by"
           ];
           return addPausePrefix(responses);
         }
-        
-        // General food & dining queries
-        if (lowerQuery.includes('restaurant') || lowerQuery.includes('food') || lowerQuery.includes('eat') ||
-            lowerQuery.includes('breakfast') || lowerQuery.includes('lunch') || lowerQuery.includes('dinner')) {
-          const responses = isAskingForMore ? [
-            "Let me find more dining options in the area",
-            "I'll look for other restaurants nearby",
-            "Let me check additional dining choices",
-            "I'll search for more places to eat",
-            "Let me see what else is available",
-            "I'll find other dining options around here",
-            "Let me look for more restaurants",
-            "I'll check what other food options are nearby",
-            "Let me search for additional restaurants",
-            "I'll find more places you might enjoy"
-          ] : [
-            "Let me find dining options for you",
-            "I'll look up restaurants nearby",
-            "Let me check available dining choices",
-            "I'll search for places to eat",
-            "Let me see what restaurants are available",
-            "I'll find dining options around here",
-            "Let me look for restaurants",
-            "I'll check what food options are nearby"
+        // Coffee
+        if (lowerQuery.includes('coffee') || lowerQuery.includes('cafe') || lowerQuery.includes('starbucks')) {
+          const responses = [
+            "Let me find the nearest coffee shops",
+            "I'll check what cafes are around here",
+            "Let me look up coffee options nearby",
+            "I'll find you some caffeine options",
+            "Let me locate coffee shops for you",
+            "I'll search for nearby coffee places"
           ];
           return addPausePrefix(responses);
         }
-        // Bar/drinks queries
-        if (lowerQuery.includes('bar') || lowerQuery.includes('drink') || lowerQuery.includes('cocktail') ||
-            lowerQuery.includes('beer') || lowerQuery.includes('wine')) {
-          const responses = isAskingForMore ? [
-            "Let me find more bars and lounges in the area",
-            "I'll look for other places to get drinks",
-            "Let me check additional bar options nearby",
-            "I'll search for more bars",
-            "Let me see what other lounges are around",
-            "I'll find more nightlife options",
-            "Let me look for other cocktail bars",
-            "I'll check what other bars are available"
-          ] : [
-            "Let me find bar options for you",
-            "I'll look up bars and lounges nearby",
-            "Let me check available bar options",
-            "I'll search for places to get drinks",
-            "Let me see what bars are around",
-            "I'll find nightlife options nearby"
-          ];
-          return addPausePrefix(responses);
-        }
-        
         // Parking
         if (lowerQuery.includes('parking') || lowerQuery.includes('park')) {
           const responses = [
@@ -643,29 +541,14 @@ export class IntentDetectorService {
         
         // AIDA demo queries - "ada demo" in voice means AIDA
         if ((lowerQuery.includes('ada') && lowerQuery.includes('demo')) ||
-            lowerQuery.includes('aida') || lowerQuery.includes('aided demo') ||
-            lowerQuery.includes('interview agent')) {
+            lowerQuery.includes('aida') || lowerQuery.includes('aided demo')) {
           const aidaResponses = [
-            "Let me find information about the Ada demo",
-            "I'll look up the Ada demonstration locations for you",
-            "Let me check where you can experience Ada",
-            "I'll find details about the Ada Interview Agent",
-            "Let me get the Ada demo information",
-            "Let me find where Ada is being demonstrated"
+            "Let me find information about the AIDA demo",
+            "I'll look up the AIDA demonstration for you",
+            "Let me check the exhibitor information for AIDA",
+            "I'll find details about the AIDA demo"
           ];
           return addPausePrefix(aidaResponses);
-        }
-        
-        // Vantage booth queries (separate from AIDA)
-        if ((lowerQuery.includes('vant4ge') || lowerQuery.includes('vantage')) && 
-            !lowerQuery.includes('aida') && !lowerQuery.includes('ada demo') && 
-            !lowerQuery.includes('interview')) {
-          const vantageResponses = [
-            "Let me check the Vantage booth information",
-            "I'll look up Vantage's exhibitor details",
-            "Let me find the Vantage booth location"
-          ];
-          return addPausePrefix(vantageResponses);
         }
         
         // ADA/Accessibility queries (only if NOT a demo)

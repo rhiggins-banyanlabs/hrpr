@@ -1,6 +1,4 @@
-import { semanticRouterSupabase, SemanticMatch } from './semantic-router-supabase.service';
-import { embeddingService } from './embedding.service';
-import { IntentDetectorService } from './intent-detector.service';
+import { semanticRouter, SemanticMatch } from './semantic-router.service';
 import OpenAI from 'openai';
 
 export interface IntentResult {
@@ -41,8 +39,8 @@ export class SemanticIntentDetectorService {
    * Detect intent using semantic similarity with pre-computed embeddings
    */
   async detectIntentWithEmbedding(queryEmbedding: number[]): Promise<IntentResult> {
-    // Get semantic matches from Supabase
-    const matches = await semanticRouterSupabase.findBestMatch(queryEmbedding);
+    // Get semantic matches
+    const matches = semanticRouter.findBestMatch(queryEmbedding);
     
     if (matches.length === 0 || matches[0].confidence < 0.5) {
       // Fallback to general if no good match
@@ -64,14 +62,11 @@ export class SemanticIntentDetectorService {
    * Detect intent using the fallback keyword method
    */
   detectIntentByKeywords(query: string): IntentResult {
-    // Use the keyword-based intent detector as fallback (static method)
-    const keywordResult = IntentDetectorService.detectIntent(query);
-    
-    // Convert keyword result to semantic format
+    const match = semanticRouter.detectIntentByKeywords(query);
     return this.createResult(
-      keywordResult.primaryIntent,
-      keywordResult.confidence,
-      undefined  // No semantic match for keyword detection
+      match.intent as any,
+      match.confidence,
+      match
     );
   }
 
@@ -79,15 +74,15 @@ export class SemanticIntentDetectorService {
    * Main intent detection method - tries semantic first, falls back to keywords
    */
   async detectIntent(query: string): Promise<IntentResult> {
-    // Initialize Supabase router if needed
-    if (!semanticRouterSupabase.isInitialized()) {
-      console.log('🔄 Initializing Supabase semantic router...');
-      await semanticRouterSupabase.initialize();
+    // Check if embeddings are loaded
+    if (!semanticRouter.isInitialized()) {
+      console.log('⚠️ Semantic router not initialized, using keyword detection');
+      return this.detectIntentByKeywords(query);
     }
 
     try {
-      // Generate embedding for the query using embedding service
-      const embedding = await embeddingService.generateEmbedding(query);
+      // Generate embedding for the query via API
+      const embedding = await this.generateEmbedding(query);
       
       if (embedding) {
         const result = await this.detectIntentWithEmbedding(embedding);
@@ -105,7 +100,47 @@ export class SemanticIntentDetectorService {
     return this.detectIntentByKeywords(query);
   }
 
-  // Removed generateEmbedding method - now using embeddingService.generateEmbedding()
+  /**
+   * Generate embedding for a query via API endpoint
+   */
+  private async generateEmbedding(text: string): Promise<number[] | null> {
+    try {
+      // Server-side: use OpenAI directly
+      if (typeof window === 'undefined' && this.openai) {
+        try {
+          const response = await this.openai.embeddings.create({
+            model: "text-embedding-ada-002",
+            input: text.toLowerCase(),
+          });
+          console.log('✅ Generated embedding server-side');
+          return response.data[0].embedding;
+        } catch (error) {
+          console.error('Error generating embedding server-side:', error);
+          return null;
+        }
+      }
+
+      // Client-side: use API endpoint
+      const response = await fetch('/api/embeddings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text: text.toLowerCase() }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate embedding');
+      }
+
+      const data = await response.json();
+      console.log('✅ Generated embedding client-side');
+      return data.embedding;
+    } catch (error) {
+      console.error('Error generating embedding:', error);
+      return null;
+    }
+  }
 
   /**
    * Create an IntentResult object
