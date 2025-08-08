@@ -57,7 +57,14 @@ export function IntentManager() {
   const loadExamples = async (intent: string) => {
     try {
       const intentExamples = await semanticRouterSupabase.getIntentExamples(intent);
-      setExamples(intentExamples as IntentExample[]);
+      // Map IntentEmbedding to IntentExample format, handling the type difference
+      const mappedExamples: IntentExample[] = intentExamples.map((item: any) => ({
+        id: item.id,
+        intent: item.intent,
+        example_text: item.example_text,
+        created_at: item.created_at || new Date().toISOString() // Use created_at if available, otherwise current date
+      }));
+      setExamples(mappedExamples);
     } catch (error) {
       console.error('Error loading examples:', error);
     }
