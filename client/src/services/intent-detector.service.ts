@@ -53,7 +53,7 @@ export class IntentDetectorService {
   private static readonly CONFERENCE_INFO_KEYWORDS = [
     'badge', 'lost badge', 'replacement badge', 'credential', 'name tag',
     'parking', 'park', 'garage', 'car', 'vehicle',
-    'disability', 'wheelchair', 'accessible', 'assistance', 'special needs',
+    'ada', 'disability', 'wheelchair', 'accessible', 'assistance', 'special needs',
     'lost and found', 'lost', 'found', 'missing', 'left behind',
     'smoking', 'smoke', 'cigarette', 'vaping',
     'photo', 'photography', 'pictures', 'video', 'recording', 'camera',
@@ -162,31 +162,6 @@ export class IntentDetectorService {
   } {
     const lowerQuery = query.toLowerCase();
     
-    // Special case: AIDA demo vs ADA assistance
-    // In voice, "AIDA" will be transcribed as "ada"
-    // If someone says "ada demo" they likely mean AIDA demo
-    const isAIDADemo = (lowerQuery.includes('ada') && lowerQuery.includes('demo')) ||
-                       lowerQuery.includes('aida') || 
-                       lowerQuery.includes('aided demo') ||
-                       lowerQuery.includes('a.i.d.a') ||
-                       lowerQuery.includes('a i d a');
-    
-    // ADA assistance - only if it's clearly about accessibility
-    // Exclude if it mentions "demo" (likely AIDA)
-    const isADAAssistance = !lowerQuery.includes('demo') && (
-      (lowerQuery.includes('ada') && (
-        lowerQuery.includes('assist') || 
-        lowerQuery.includes('help') ||
-        lowerQuery.includes('access') ||
-        lowerQuery.includes('disab') ||
-        lowerQuery.includes('wheelchair') ||
-        lowerQuery.includes('need')  // "I need ada"
-      )) ||
-      // Just "ada" alone is likely accessibility
-      (lowerQuery === 'ada') ||
-      (lowerQuery === 'i need ada')
-    );
-    
     // Special case: AI Tech Expo should be treated as conference event, not exhibitor query
     const isAITechExpo = lowerQuery.includes('ai tech') || lowerQuery.includes('tech expo') || 
                          lowerQuery.includes('ai expo') || 
@@ -229,21 +204,15 @@ export class IntentDetectorService {
     const isConferenceQuery = conferenceMatches.length > 0 || isAITechExpo;
     const isLocationQuery = locationMatches.length > 0;
     const isMeetingQuery = meetingMatches.length > 0;
-    const isExhibitorQuery = (exhibitorMatches.length > 0 || isAIDADemo) && !isAITechExpo && !isMeetingQuery; // Include AIDA demo as exhibitor query
+    const isExhibitorQuery = exhibitorMatches.length > 0 && !isAITechExpo && !isMeetingQuery; // Exclude AI Tech Expo AND meeting queries from exhibitor queries
     const isWorkshopQuery = workshopMatches.length > 0 || isSpeakerQuery; // Include speaker queries as workshop queries
-    const isConferenceInfoQuery = (conferenceInfoMatches.length > 0 || isADAAssistance) && !isAIDADemo; // Include ADA assistance but exclude AIDA demo
+    const isConferenceInfoQuery = conferenceInfoMatches.length > 0;
     
     // Determine primary intent with weighted scoring
     let primaryIntent: 'venue' | 'conference' | 'location' | 'exhibitor' | 'workshop' | 'meeting' | 'info' | 'general' = 'general';
     
-    // Special priority for specific cases
-    if (isAIDADemo) {
-      // AIDA demo should be treated as an exhibitor query
-      primaryIntent = 'exhibitor';
-    } else if (isADAAssistance) {
-      // ADA assistance should be treated as info query
-      primaryIntent = 'info';
-    } else if (isAITechExpo) {
+    // Special priority for AI Tech Expo
+    if (isAITechExpo) {
       primaryIntent = 'conference';
     } else if (isSpeakerQuery) {
       // Speaker queries should always be treated as workshop queries since speaker info is in workshop data
@@ -297,20 +266,10 @@ export class IntentDetectorService {
     const lowerQuery = query.toLowerCase();
     const intent = this.detectIntent(query);
     
-    // Helper function to add variety and prevent audio cutoff
+    // Helper function to add tiny buffer to prevent audio cutoff
     const addPausePrefix = (responses: string[]): string => {
       const selected = responses[Math.floor(Math.random() * responses.length)];
-      // Add variety with occasional prefix variations
-      const prefixes = [
-        "...",  // Small pause
-        "... ",  // Slightly longer pause
-        "... Absolutely! ",  // Enthusiastic
-        "... Sure thing! ",  // Friendly
-        "... Of course! ",  // Helpful
-        "... "
-      ];
-      const prefix = Math.random() > 0.7 ? prefixes[Math.floor(Math.random() * prefixes.length)] : "...";
-      return prefix + selected;
+      return "..." + selected; // Silence padding to prevent TTS cutoff
     };
     
     // Natural, conversational filler responses
@@ -346,10 +305,7 @@ export class IntentDetectorService {
           "Let me check our exhibitor list",
           "I'll look that up in our vendor directory",
           "Let me find that information for you",
-          "I'll search our exhibitor database",
-          "Let me see who's exhibiting",
-          "I'll check our vendor listings",
-          "Let me pull up that exhibitor info"
+          "I'll search our exhibitor database"
         ];
         return addPausePrefix(exhibitorResponses);
         
@@ -364,14 +320,11 @@ export class IntentDetectorService {
           return addPausePrefix(responses);
         }
         // Coffee
-        if (lowerQuery.includes('coffee') || lowerQuery.includes('cafe') || lowerQuery.includes('starbucks')) {
+        if (lowerQuery.includes('coffee') || lowerQuery.includes('cafe')) {
           const responses = [
             "Let me find the nearest coffee shops",
             "I'll check what cafes are around here",
-            "Let me look up coffee options nearby",
-            "I'll find you some caffeine options",
-            "Let me locate coffee shops for you",
-            "I'll search for nearby coffee places"
+            "Let me look up coffee options nearby"
           ];
           return addPausePrefix(responses);
         }
@@ -398,10 +351,7 @@ export class IntentDetectorService {
           "Let me find that for you",
           "I'll check what's available nearby",
           "Let me look up local options",
-          "I'll find that information",
-          "Let me search the area for you",
-          "I'll see what's close by",
-          "Let me check nearby options"
+          "I'll find that information"
         ];
         return addPausePrefix(venueResponses);
         
@@ -457,10 +407,7 @@ export class IntentDetectorService {
         const conferenceResponses = [
           "Let me check the conference program",
           "I'll look that up for you",
-          "Let me find that session information",
-          "I'll check the conference details",
-          "Let me pull up that information",
-          "I'll search the conference schedule"
+          "Let me find that session information"
         ];
         return addPausePrefix(conferenceResponses);
         
@@ -539,22 +486,9 @@ export class IntentDetectorService {
           return addPausePrefix(lostFoundResponses);
         }
         
-        // AIDA demo queries - "ada demo" in voice means AIDA
-        if ((lowerQuery.includes('ada') && lowerQuery.includes('demo')) ||
-            lowerQuery.includes('aida') || lowerQuery.includes('aided demo')) {
-          const aidaResponses = [
-            "Let me find information about the AIDA demo",
-            "I'll look up the AIDA demonstration for you",
-            "Let me check the exhibitor information for AIDA",
-            "I'll find details about the AIDA demo"
-          ];
-          return addPausePrefix(aidaResponses);
-        }
-        
-        // ADA/Accessibility queries (only if NOT a demo)
-        if (!lowerQuery.includes('demo') &&
-            (lowerQuery.includes('ada') || lowerQuery.includes('wheelchair') || 
-             lowerQuery.includes('accessible') || lowerQuery.includes('disability'))) {
+        // ADA/Accessibility queries
+        if (lowerQuery.includes('ada') || lowerQuery.includes('wheelchair') || lowerQuery.includes('accessible') || 
+            lowerQuery.includes('disability') || lowerQuery.includes('assistance')) {
           const adaResponses = [
             "Let me find accessibility information",
             "I'll get ADA assistance details",

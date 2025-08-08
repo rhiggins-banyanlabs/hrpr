@@ -1,7 +1,6 @@
 // hooks/useVoiceChat.ts - Voice-only chat without UI components
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { ChatStorageService } from '@/lib/supabase/chatStorage';
-import { semanticIntentDetector } from '@/services/semantic-intent-detector.service';
 import { IntentDetectorService } from '@/services/intent-detector.service';
 import { feedbackStateMachine, FeedbackStateMachine } from '@/services/feedback-state-machine.service';
 import { feedbackStorage } from '@/services/feedback-storage.service';
@@ -135,24 +134,23 @@ export const useVoiceChat = ({
           console.log('🎤 Using custom personalized filler response');
           fillerAudioPromise = customFillerPromise;
         } else {
-          // Use rich, context-sensitive filler response based on the original intent detector
           const fillerResponse = IntentDetectorService.getFillerResponse(text);
-          
-          console.log('🎤 Filler response from IntentDetector:', fillerResponse);
+          console.log('🎤 Filler response check:', {
+            query: text,
+            fillerResponse,
+            hasSpeakText: !!speakText,
+            willPlayFiller: !!(fillerResponse && speakText)
+          });
           if (fillerResponse && speakText) {
             console.log('🎤 Playing immediate filler response:', fillerResponse);
+            // Keep track of the filler audio promise so we can wait for it later
             fillerAudioPromise = speakText(fillerResponse).catch(error => {
               console.log('⚠️ Filler response TTS failed, continuing without filler:', error);
               return null;
             });
+          } else {
+            console.log('🎤 No filler played:', { noFiller: !fillerResponse, noSpeakText: !speakText });
           }
-          
-          // Detect semantic intent in parallel for data gathering (non-blocking)
-          semanticIntentDetector.detectIntent(text).then(intentResult => {
-            console.log(`🎯 Semantic voice intent: ${intentResult.primaryIntent} (confidence: ${intentResult.confidence.toFixed(2)})`);
-          }).catch(error => {
-            console.error('Semantic voice intent detection failed:', error);
-          });
         }
       } else {
         console.log('🔇 Skipping filler response - in feedback state:', currentState);
@@ -201,7 +199,8 @@ export const useVoiceChat = ({
         body: JSON.stringify({
           prompt: text,
           userName: userNameRef.current,
-          greetingAlreadyHandled: greetingAlreadyHandled
+          greetingAlreadyHandled: greetingAlreadyHandled,
+          sessionId: sessionId
         }),
         signal: abortControllerRef.current.signal
       });
@@ -580,9 +579,8 @@ export const useVoiceChat = ({
         }
       };
       
-      // Add a 5-second buffer after TTS to ensure natural conversation flow
-      // This gives users time to think before we start monitoring for silence
-      pendingSilenceDetectionRef.current = setTimeout(startDetection, 5000);
+      // Add a 2-second buffer after TTS to ensure natural conversation flow
+      pendingSilenceDetectionRef.current = setTimeout(startDetection, 2000);
     };
     
     console.log('🎯 Checking if should speak message:', {
@@ -718,8 +716,7 @@ export const useVoiceChat = ({
       console.log('👋 Processing query with name introduction for:', extractedName);
       
       // Get the original filler response and add the greeting
-      const intentResult = await semanticIntentDetector.detectIntent(text);
-      const originalFillerResponse = semanticIntentDetector.getFillerResponse(intentResult.primaryIntent);
+      const originalFillerResponse = IntentDetectorService.getFillerResponse(text);
       if (originalFillerResponse && speakText) {
         // Add "Nice to meet you" to the filler response
         const personalizedFiller = `Nice to meet you, ${extractedName}! ${originalFillerResponse}`;
