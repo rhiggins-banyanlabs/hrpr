@@ -17,6 +17,7 @@ export interface CommitteeMeeting {
   is_open_to_all?: boolean;
   keywords?: string[];
   similarity?: number;
+  queryEmbedding?: number[]; // New field for embedding reuse
 }
 
 export class CommitteeMeetingsService {
@@ -112,7 +113,16 @@ export class CommitteeMeetingsService {
   async searchByQuery(query: string, limit: number = 5): Promise<CommitteeMeeting[]> {
     try {
       const queryEmbedding = await embeddingService.generateEmbedding(query);
+      return this.searchByQueryWithEmbedding(queryEmbedding, limit);
+    } catch (error) {
+      console.error('Failed to search committee meetings:', error);
+      return [];
+    }
+  }
 
+  // Search meetings using pre-computed embedding
+  async searchByQueryWithEmbedding(queryEmbedding: number[], limit: number = 5): Promise<CommitteeMeeting[]> {
+    try {
       const { data, error } = await supabase
         .rpc('search_committee_meetings_semantic', {
           query_embedding: queryEmbedding,
@@ -127,7 +137,7 @@ export class CommitteeMeetingsService {
 
       return data || [];
     } catch (error) {
-      console.error('Failed to search committee meetings:', error);
+      console.error('Failed to search meetings with embedding:', error);
       return [];
     }
   }
@@ -227,6 +237,52 @@ export class CommitteeMeetingsService {
       case 'general':
         // For general queries, use text search for speed
         meetings = await this.searchByText(query, 10);
+        context = 'Committee meetings:';
+        break;
+    }
+
+    return {
+      found: meetings.length > 0,
+      data: meetings,
+      context
+    };
+  }
+
+  // Process meeting query using pre-computed embedding
+  async processMeetingQueryWithEmbedding(query: string, embedding: number[]): Promise<{
+    found: boolean;
+    data: CommitteeMeeting[];
+    context: string;
+  }> {
+    const detection = this.detectMeetingQuery(query);
+    
+    if (!detection.isMeetingQuery) {
+      return { found: false, data: [], context: '' };
+    }
+
+    let meetings: CommitteeMeeting[] = [];
+    let context = '';
+
+    switch (detection.queryType) {
+      case 'specific_committee':
+        meetings = await this.searchByText(detection.searchTerm!, 5);
+        context = `${detection.searchTerm} committee meetings:`;
+        break;
+
+      case 'day':
+        meetings = await this.getMeetingsByDay(detection.searchTerm!);
+        context = `Committee meetings on ${detection.searchTerm}:`;
+        break;
+
+      case 'type':
+        meetings = await this.getMeetingsByType(detection.searchTerm!);
+        context = `${detection.searchTerm} meetings:`;
+        break;
+
+      case 'general':
+        // Use pre-computed embedding for semantic search
+        console.log('♻️ Reusing embedding for committee meeting search');
+        meetings = await this.searchByQueryWithEmbedding(embedding, 10);
         context = 'Committee meetings:';
         break;
     }

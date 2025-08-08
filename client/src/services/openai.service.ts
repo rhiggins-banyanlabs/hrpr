@@ -4,6 +4,7 @@ import { PromptEnhancementService } from './prompt-enhancement.service';
 import { LoggerService } from './logger.service';
 import { ChatStorageService } from '@/lib/supabase/services/chatStorageService';
 import { envConfig } from '@/config/env.config';
+import { semanticRouter } from './semantic-router.service';
 
 export interface OpenAIResponse {
   success: boolean;
@@ -35,6 +36,19 @@ export class OpenAIService {
     this.promptEnhancer = new PromptEnhancementService(
       this.locationService
     );
+    
+    // Initialize semantic router embeddings for intent detection
+    this.initializeSemanticRouter();
+  }
+
+  private async initializeSemanticRouter(): Promise<void> {
+    try {
+      await semanticRouter.loadEmbeddings();
+      console.log('✅ Semantic router initialized with embeddings');
+    } catch (error) {
+      console.error('Failed to initialize semantic router:', error);
+      // Continue without semantic routing - will fall back to keyword detection
+    }
   }
 
   static getInstance(): OpenAIService {
@@ -60,26 +74,6 @@ export class OpenAIService {
     try {
       const enhancedPrompt = await this.promptEnhancer.createEnhancedPrompt(prompt);
       
-      // Get recent conversation context if sessionId provided
-      let conversationContext = '';
-      if (options?.sessionId) {
-        try {
-          const recentMessages = await ChatStorageService.getSessionMessages(options.sessionId);
-          // Get last 4 messages (2 exchanges) for context, excluding the current query
-          const contextMessages = recentMessages
-            .filter(msg => msg.message_text.toLowerCase() !== prompt.toLowerCase())
-            .slice(0, 4)
-            .reverse(); // Reverse to chronological order
-          
-          if (contextMessages.length > 0) {
-            conversationContext = '\n\nRECENT CONVERSATION CONTEXT:\n' + 
-              contextMessages.map(msg => `${msg.sender}: ${msg.message_text}`).join('\n') + '\n';
-          }
-        } catch (error) {
-          console.warn('Failed to get conversation context:', error);
-        }
-      }
-      
       // Check if this is an address request
       const isAddressRequest = /\b(address|location|where is|how do i get to)\b/i.test(prompt);
       
@@ -95,7 +89,7 @@ export class OpenAIService {
           messages: [
             {
               role: 'system',
-              content: `You are Harper, a warm and friendly AI assistant for the ACA conference. You're caring, approachable, helpful, and genuinely interested in making attendees feel welcome.${options?.userName ? `\n\nThe user's name is ${options.userName}. Use it naturally where appropriate, but don't overuse it.` : ''}${options?.greetingAlreadyHandled ? `\n\nIMPORTANT: You have ALREADY greeted ${options.userName || 'this person'} with "Nice to meet you" in your filler response. DO NOT say "Nice to meet you" again - just answer their question directly using their name where natural.` : ''}${conversationContext ? `${conversationContext}\nIMPORTANT: Use this recent conversation context to provide better answers. If the user asks for "more", "other", or "additional" options related to a previous topic, expand on your previous response with new information.` : ''}${isAddressRequest ? `\n\nIMPORTANT: The user is specifically asking for address/location information. Make sure to include the specific address in your response if it's available in the location data.` : ''}
+              content: `You are Harper, a warm and friendly AI assistant for the ACA conference. You're caring, approachable, helpful, and genuinely interested in making attendees feel welcome.${options?.userName ? `\n\nThe user's name is ${options.userName}. Use it naturally where appropriate, but don't overuse it.` : ''}${options?.greetingAlreadyHandled ? `\n\nIMPORTANT: You have ALREADY greeted ${options.userName || 'this person'} with "Nice to meet you" in your filler response. DO NOT say "Nice to meet you" again - just answer their question directly using their name where natural.` : ''}${isAddressRequest ? `\n\nIMPORTANT: The user is specifically asking for address/location information. Make sure to include the specific address in your response if it's available in the location data.` : ''}
 
 
 
