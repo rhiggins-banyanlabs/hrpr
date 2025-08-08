@@ -52,4 +52,4 @@ USER nextjs
 EXPOSE 3000
 
 # Start the application
-CMD ["npx", "next", "start"]
+CMD ["npx", "next", "start", "-p", "3000", "-H", "0.0.0.0"]
