@@ -1,0 +1,167 @@
+import { NextRequest, NextResponse } from 'next/server';
+
+// Type for place results
+type PlaceResult = {
+  business_status?: string;
+  geometry: {
+    location: {
+      lat: number;
+      lng: number;
+    };
+  };
+  icon: string;
+  name: string;
+  opening_hours?: {
+    open_now: boolean;
+  };
+  photos?: Array<{
+    height: number;
+    html_attributions: string[];
+    photo_reference: string;
+    width: number;
+  }>;
+  place_id: string;
+  price_level?: number;
+  rating?: number;
+  reference: string;
+  types: string[];
+  user_ratings_total?: number;
+  vicinity: string;
+  formatted_address?: string; // Added for detailed address
+}
+
+// Function to fetch place details for addresses
+async function fetchPlaceDetails(placeId: string, apiKey: string): Promise<{ formatted_address?: string }> {
+  try {
+    const response = await fetch(
+      `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=formatted_address&key=${apiKey}`,
+      {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+        signal: AbortSignal.timeout(3000)
+      }
+    );
+    
+    if (response.ok) {
+      const data = await response.json();
+      return { formatted_address: data.result?.formatted_address };
+    }
+  } catch (error) {
+    console.error(`Failed to fetch details for place ${placeId}:`, error);
+  }
+  
+  return {};
+}
+
+// Function to enhance places with detailed addresses
+async function enhancePlacesWithAddresses(places: PlaceResult[], apiKey: string): Promise<PlaceResult[]> {
+  // Only enhance first 3 places to avoid excessive API calls
+  const placesToEnhance = places.slice(0, 3);
+  const remainingPlaces = places.slice(3);
+  
+  const enhancedPlaces = await Promise.all(
+    placesToEnhance.map(async (place) => {
+      const details = await fetchPlaceDetails(place.place_id, apiKey);
+      return { ...place, ...details };
+    })
+  );
+  
+  return [...enhancedPlaces, ...remainingPlaces];
+}
+
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const type = searchParams.get('type');
+  const keyword = searchParams.get('keyword');
+  const radius = searchParams.get('radius') || '1500';
+  
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+  
+  if (!apiKey) {
+    return NextResponse.json({ error: 'Google Maps API key not configured' }, { status: 500 });
+  }
+  
+  const CONFERENCE_VENUE = {
+    lat: 39.7432,
+    lng: -104.9959
+  };
+  
+  try {
+    const params = new URLSearchParams({
+      location: `${CONFERENCE_VENUE.lat},${CONFERENCE_VENUE.lng}`,
+      radius: radius,
+      key: apiKey
+    });
+    
+    if (type) {
+      params.append('type', type);
+    }
+    
+    if (keyword) {
+      params.append('keyword', keyword);
+    }
+    
+    const response = await fetch(
+      `https://maps.googleapis.com/maps/api/place/nearbysearch/json?${params.toString()}`,
+      {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+        },
+        signal: AbortSignal.timeout(5000)
+      }
+    );
+    
+    if (!response.ok) {
+      throw new Error(`Google Maps API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    let results = data.results || [];
+    
+    // For fast food searches, if we don't get good results, try a broader search
+    if (keyword === 'fast food' && results.length < 3) {
+      const broaderParams = new URLSearchParams({
+        location: `${CONFERENCE_VENUE.lat},${CONFERENCE_VENUE.lng}`,
+        radius: radius,
+        type: 'restaurant',
+        key: apiKey
+      });
+      
+      const broaderResponse = await fetch(
+        `https://maps.googleapis.com/maps/api/place/nearbysearch/json?${broaderParams.toString()}`,
+        {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+          },
+          signal: AbortSignal.timeout(5000)
+        }
+      );
+      
+      if (broaderResponse.ok) {
+        const broaderData = await broaderResponse.json();
+        
+        // Filter for fast food-like places
+        const fastFoodKeywords = ['mcdonalds', 'burger king', 'wendys', 'subway', 'taco bell', 'kfc', 'pizza hut', 'dominos', 'chipotle', 'panera', 'starbucks'];
+        const fastFoodPlaces = broaderData.results?.filter((place: PlaceResult) => {
+          const name = place.name?.toLowerCase() || '';
+          const isFastFood = fastFoodKeywords.some(keyword => name.includes(keyword));
+          const isLowPrice = place.price_level !== undefined && place.price_level <= 2;
+          return isFastFood || isLowPrice;
+        }) || [];
+        
+        results = fastFoodPlaces;
+      }
+    }
+    
+    // Enhance results with detailed addresses
+    const enhancedResults = await enhancePlacesWithAddresses(results, apiKey);
+    
+    return NextResponse.json({ results: enhancedResults });
+    
+  } catch (error) {
+    console.error('Error searching nearby places:', error);
+    return NextResponse.json({ error: 'Failed to search places' }, { status: 500 });
+  }
+}

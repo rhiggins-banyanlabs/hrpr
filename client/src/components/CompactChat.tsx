@@ -1,0 +1,405 @@
+"use client"
+import React, { useEffect, useRef, useCallback, useState, memo } from "react"
+import { useOptimizedVoice } from "@/hooks/useOptimizedVoice"
+import { useChat } from "@/hooks/useChat"
+import { VoiceSelector } from "@/features/voice"
+import { ChatMessages } from "@/components/ChatMessages"
+import { ChatInput } from "@/components/ChatInput"
+import { VoiceInput } from "@/features/voice"
+import { Button } from "@/shared/components/ui/button"
+import { Square, RotateCcw } from "lucide-react"
+
+interface CompactChatProps {
+  onClose: () => void
+  sessionId: string | null
+  isVoiceInputActive: boolean
+  onVoiceInputToggle: () => void
+  onSpeakingChange?: (isSpeaking: boolean) => void
+}
+
+const CompactChatComponent = ({ 
+  onClose, 
+  sessionId, 
+  isVoiceInputActive, 
+  onVoiceInputToggle,
+  onSpeakingChange
+}: CompactChatProps) => {
+  // Voice input state
+  const [voiceTranscript, setVoiceTranscript] = useState("")
+  const [isVoiceTranscribing, setIsVoiceTranscribing] = useState(false)
+
+  // Refs for state management
+  const hasPlayedIntroRef = useRef(false)
+  const introRequestInProgressRef = useRef(false)
+  const isProcessingVoiceQueryRef = useRef(false)
+  const thinkingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const lastMessageRef = useRef<string>("")
+  const messageCountRef = useRef(0)
+
+  // Voice hooks
+  const { speakText, isSpeaking, selectedVoice, setSelectedVoice, unlockAudio } = useOptimizedVoice()
+
+  // Notify parent of speaking state changes
+  useEffect(() => {
+    if (onSpeakingChange) {
+      onSpeakingChange(isSpeaking)
+    }
+  }, [isSpeaking, onSpeakingChange])
+
+  // Chat hook - now uses the combined version
+  const {
+    messages,
+    isBotTyping,
+    isBotThinking,
+    typingBotMsg,
+    sendMessage,
+    sendBotMessage,
+    isProcessing,
+    sendIntroMessage,
+    stopTyping,
+  } = useChat({
+    speakText,
+    unlockAudio,
+    sessionId,
+    selectedVoice,
+  })
+
+  console.log("🏗️ Compact Chat render - messages:", messages.length, "session:", sessionId)
+
+  // Reset intro flags on unmount
+  useEffect(() => {
+    return () => {
+      hasPlayedIntroRef.current = false
+      introRequestInProgressRef.current = false
+    }
+  }, [])
+
+  // Format message helper
+  const formatMessage = (message: string) => {
+    const trimmed = message.trim()
+    if (!trimmed) return trimmed
+
+    const capitalized = trimmed.charAt(0).toUpperCase() + trimmed.slice(1)
+    const endsWithPunctuation = /[.!?]$/.test(capitalized)
+    const formatted = endsWithPunctuation ? capitalized : capitalized + "?"
+
+    return formatted
+  }
+
+  // Prevent duplicate messages
+  const isDuplicateMessage = useCallback((message: string) => {
+    const isDupe = lastMessageRef.current === message
+    if (isDupe) {
+      console.log("🚫 Duplicate message detected, ignoring:", message)
+    } else {
+      lastMessageRef.current = message
+      messageCountRef.current++
+    }
+    return isDupe
+  }, [])
+
+  // Voice handlers
+  const handleVoiceTranscript = useCallback((transcript: string, isInterim: boolean) => {
+    console.log("🎤 Voice transcript update:", transcript, "isInterim:", isInterim)
+    setVoiceTranscript(transcript)
+    
+    // Set transcribing state when we start receiving any transcript
+    if (transcript.trim() && !isVoiceTranscribing) {
+      console.log("🎤 Starting voice transcription bubble")
+      setIsVoiceTranscribing(true)
+    }
+    
+    // If transcript becomes empty and we were transcribing, stop
+    if (!transcript.trim() && isVoiceTranscribing) {
+      console.log("🎤 Transcript empty, stopping transcription bubble")
+      setIsVoiceTranscribing(false)
+    }
+  }, [isVoiceTranscribing])
+
+  const handleVoiceInput = useCallback(
+    async (text: string) => {
+      console.log("🎤 ===== VOICE INPUT HANDLER CALLED =====")
+      console.log("🎤 Received text:", text)
+
+      // Clear transcribing state and voice transcript immediately
+      setIsVoiceTranscribing(false)
+      setVoiceTranscript("")
+
+      if (!text.trim()) {
+        console.log("🎤 ❌ Empty voice input, skipping")
+        onVoiceInputToggle() // Turn off voice input
+        return
+      }
+
+      // Prevent bot from responding to its own speech
+      if (isSpeaking) {
+        console.log("🎤 ❌ Bot is speaking, ignoring voice input")
+        onVoiceInputToggle() // Turn off voice input
+        return
+      }
+
+      const formattedText = formatMessage(text)
+      console.log("🎤 ✅ Voice input formatted:", formattedText)
+
+      // Check for duplicate
+      if (isDuplicateMessage(formattedText)) {
+        onVoiceInputToggle() // Turn off voice input
+        return
+      }
+
+      // Clear voice states
+      onVoiceInputToggle() // Turn off voice input
+
+      // Auto-submit the message
+      console.log("🎤 Auto-submitting voice message:", formattedText)
+      await sendMessage(formattedText, true)
+    },
+    [sendMessage, isSpeaking, isDuplicateMessage, onVoiceInputToggle],
+  )
+
+  // Send intro message after session is ready
+  useEffect(() => {
+    const sendIntro = async () => {
+      console.log("🎯 Intro message effect triggered:", {
+        hasPlayedIntro: hasPlayedIntroRef.current,
+        sessionId,
+        messagesCount: messages.length
+      })
+      
+      // Only send intro if we have a session and haven't sent it yet
+      if (!hasPlayedIntroRef.current && !introRequestInProgressRef.current && sessionId) {
+        // Set both flags immediately to prevent race condition in StrictMode
+        hasPlayedIntroRef.current = true
+        introRequestInProgressRef.current = true
+        console.log("🎯 Session ready, sending intro message to session:", sessionId)
+
+        // Wait a moment to ensure the session is fully ready
+        await new Promise(resolve => setTimeout(resolve, 500))
+
+        // Double-check the flag hasn't been set by another effect run
+        if (messages.length === 0) {
+          console.log("🎯 Sending intro message now")
+          try {
+            await sendIntroMessage()
+            console.log("🎯 Intro message sent successfully")
+          } catch (error) {
+            console.error("🎯 Error sending intro message:", error)
+            // Reset flags on error so it can retry
+            hasPlayedIntroRef.current = false
+            introRequestInProgressRef.current = false
+          }
+        } else {
+          console.log("🎯 Skipping intro - messages already exist")
+        }
+        
+        // Reset progress flag after completion
+        introRequestInProgressRef.current = false
+      }
+    }
+
+    sendIntro()
+  }, [sessionId, sendIntroMessage, messages.length])
+
+  // Aggressive thinking state timeout - force clear after 15 seconds
+  useEffect(() => {
+    if (isBotThinking || isProcessing) {
+      console.log("🤖 Bot started thinking/processing, setting 15s timeout")
+      thinkingTimeoutRef.current = setTimeout(() => {
+        console.log("⏰ FORCE STOPPING - Bot thinking timeout reached!")
+        handleForceStop()
+      }, 15000) // 15 second timeout
+    } else {
+      // Clear timeout when thinking stops
+      if (thinkingTimeoutRef.current) {
+        console.log("🤖 Bot stopped thinking, clearing timeout")
+        clearTimeout(thinkingTimeoutRef.current)
+        thinkingTimeoutRef.current = null
+      }
+    }
+
+    return () => {
+      if (thinkingTimeoutRef.current) {
+        clearTimeout(thinkingTimeoutRef.current)
+      }
+    }
+  }, [isBotThinking, isProcessing])
+
+  // Monitor message changes to detect completion
+  useEffect(() => {
+    if (messages.length > 0) {
+      const lastMessage = messages[messages.length - 1]
+      if (lastMessage.sender === 'Harper' && !isBotTyping && !isProcessing && !isBotThinking) {
+        console.log("🤖 Bot message completed, ensuring all states are clear")
+        isProcessingVoiceQueryRef.current = false
+
+        // Clear any lingering timeout
+        if (thinkingTimeoutRef.current) {
+          clearTimeout(thinkingTimeoutRef.current)
+          thinkingTimeoutRef.current = null
+        }
+      }
+    }
+  }, [messages, isBotTyping, isProcessing, isBotThinking])
+
+  // Force stop function
+  const handleForceStop = useCallback(() => {
+    console.log("🛑 FORCE STOP - Clearing all bot states")
+    stopTyping()
+    isProcessingVoiceQueryRef.current = false
+
+    // Clear timeout
+    if (thinkingTimeoutRef.current) {
+      clearTimeout(thinkingTimeoutRef.current)
+      thinkingTimeoutRef.current = null
+    }
+
+    // Reset voice input and clear transcript
+    console.log("🎤 Force stop - clearing all voice state")
+    if (isVoiceInputActive) {
+      onVoiceInputToggle()
+    }
+    setVoiceTranscript("")
+    setIsVoiceTranscribing(false)
+  }, [stopTyping, isVoiceInputActive, onVoiceInputToggle])
+
+  // Add cleanup when component unmounts
+  useEffect(() => {
+    return () => {
+      console.log("🧹 CompactChat unmounting, checking if should stop")
+      // Only force stop if voice input is not active - let voice input finish naturally
+      if (!isVoiceInputActive) {
+        console.log("🛑 Voice input not active, running force stop")
+        handleForceStop()
+      } else {
+        console.log("🎤 Voice input active, skipping force stop on unmount - just cleaning up bot states")
+        // Just stop bot typing without affecting voice input
+        stopTyping()
+        isProcessingVoiceQueryRef.current = false
+        if (thinkingTimeoutRef.current) {
+          clearTimeout(thinkingTimeoutRef.current)
+          thinkingTimeoutRef.current = null
+        }
+      }
+    }
+  }, [isVoiceInputActive, stopTyping])
+
+  // Handle message submission
+  const handleMessageSubmit = useCallback(
+    async (message: string) => {
+      console.log("🔧 Compact chat handleMessageSubmit received:", message)
+
+      // Check for duplicate
+      if (isDuplicateMessage(message)) {
+        return
+      }
+
+      // Clear voice input state when submitting text message
+      if (isVoiceInputActive) {
+        console.log("🎤 Clearing voice state due to text message submission")
+        onVoiceInputToggle()
+        setIsVoiceTranscribing(false)
+        setVoiceTranscript("")
+      }
+
+      await sendMessage(message, false) // Mark as text input
+    },
+    [sendMessage, isVoiceInputActive, isDuplicateMessage, onVoiceInputToggle],
+  )
+
+  // Handle stop typing - more aggressive cleanup
+  const handleStopTyping = useCallback(() => {
+    console.log("🛑 Stop button clicked")
+    handleForceStop()
+  }, [handleForceStop])
+
+  // Show loading if no session
+  if (!sessionId) {
+    return (
+      <div className="flex flex-col h-full overflow-hidden">
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-400 mx-auto mb-4"></div>
+            <p className="text-indigo-200">Creating session...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Add this right before the return statement for debugging
+  console.log("🤖 Bot States:", {
+    isBotTyping,
+    isBotThinking,
+    isProcessing,
+    isSpeaking,
+    isVoiceTranscribing,
+    voiceTranscript: voiceTranscript.substring(0, 50),
+    typingBotMsg: typingBotMsg,
+    typingBotMsgLength: typingBotMsg?.length || 0,
+    hasTimeout: !!thinkingTimeoutRef.current,
+    messageCount: messageCountRef.current,
+    lastMessage: lastMessageRef.current.substring(0, 50),
+    sessionId,
+    isVoiceInputActive,
+  })
+
+  return (
+    <div className="flex flex-col h-full max-w-4xl mx-auto overflow-hidden">
+
+      {/* Messages - Takes remaining space */}
+      <div className="flex-1 overflow-hidden">
+        <ChatMessages
+          messages={messages.filter(msg => !msg.isTemporary).map(msg => ({
+            ...msg,
+            sender: msg.sender
+          }))}
+          isThinking={isBotThinking}
+          isBotTyping={isBotTyping}
+          typingBotMsg={typingBotMsg}
+          sessionId={sessionId}
+          isUserTyping={isVoiceTranscribing}
+          userTypingMsg={voiceTranscript}
+        />
+      </div>
+
+      {/* Input - Fixed at bottom - NO MICROPHONE BUTTON */}
+      <div className="">
+        <ChatInput
+          onSubmit={handleMessageSubmit}
+          isProcessing={isProcessing}
+          isVoiceInputActive={isVoiceInputActive}
+          onVoiceInputToggle={onVoiceInputToggle}
+          selectedVoice={selectedVoice}
+          onVoiceChange={setSelectedVoice}
+          voiceTranscript={voiceTranscript}
+          isHarperSpeaking={isSpeaking}
+          showMicrophoneButton={false} // Hide the microphone button
+        />
+      </div>
+
+      {/* Voice Input Component */}
+      <VoiceInput
+        onSpeechEnd={handleVoiceInput}
+        onTranscriptUpdate={handleVoiceTranscript}
+        isListening={isVoiceInputActive}
+        onListeningChange={(listening) => {
+          if (!listening) {
+            onVoiceInputToggle() // This will turn off voice input when VoiceInput decides to stop
+          }
+        }}
+      />
+    </div>
+  )
+}
+
+// Memoize the component to prevent unnecessary re-renders
+export const CompactChat = memo(CompactChatComponent, (prevProps, nextProps) => {
+  // Only re-render if these specific props change
+  return (
+    prevProps.sessionId === nextProps.sessionId &&
+    prevProps.isVoiceInputActive === nextProps.isVoiceInputActive &&
+    prevProps.onClose === nextProps.onClose &&
+    prevProps.onVoiceInputToggle === nextProps.onVoiceInputToggle &&
+    prevProps.onSpeakingChange === nextProps.onSpeakingChange
+  )
+})
