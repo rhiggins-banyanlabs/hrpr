@@ -1,5 +1,6 @@
 import { semanticRouterSupabase, SemanticMatch } from './semantic-router-supabase.service';
 import { embeddingService } from './embedding.service';
+import { IntentDetectorService } from './intent-detector.service';
 import OpenAI from 'openai';
 
 export interface IntentResult {
@@ -63,11 +64,14 @@ export class SemanticIntentDetectorService {
    * Detect intent using the fallback keyword method
    */
   detectIntentByKeywords(query: string): IntentResult {
-    const match = semanticRouter.detectIntentByKeywords(query);
+    // Use the keyword-based intent detector as fallback (static method)
+    const keywordResult = IntentDetectorService.detectIntent(query);
+    
+    // Convert keyword result to semantic format
     return this.createResult(
-      match.intent as any,
-      match.confidence,
-      match
+      keywordResult.primaryIntent,
+      keywordResult.confidence,
+      undefined  // No semantic match for keyword detection
     );
   }
 

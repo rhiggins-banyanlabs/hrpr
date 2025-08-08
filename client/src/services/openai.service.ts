@@ -4,7 +4,7 @@ import { PromptEnhancementService } from './prompt-enhancement.service';
 import { LoggerService } from './logger.service';
 import { ChatStorageService } from '@/lib/supabase/services/chatStorageService';
 import { envConfig } from '@/config/env.config';
-import { semanticRouter } from './semantic-router.service';
+import { semanticRouterSupabase } from './semantic-router-supabase.service';
 
 export interface OpenAIResponse {
   success: boolean;
@@ -37,16 +37,16 @@ export class OpenAIService {
       this.locationService
     );
     
-    // Initialize semantic router embeddings for intent detection
+    // Initialize Supabase-based semantic router for intent detection
     this.initializeSemanticRouter();
   }
 
   private async initializeSemanticRouter(): Promise<void> {
     try {
-      await semanticRouter.loadEmbeddings();
-      console.log('✅ Semantic router initialized with embeddings');
+      await semanticRouterSupabase.initialize();
+      console.log('✅ Semantic router initialized with Supabase embeddings');
     } catch (error) {
-      console.error('Failed to initialize semantic router:', error);
+      console.error('Failed to initialize Supabase semantic router:', error);
       // Continue without semantic routing - will fall back to keyword detection
     }
   }
