@@ -88,13 +88,19 @@ export class ExhibitorSearchService {
     }
 
     // Check for category/industry queries
-    const categoryKeywords = ['technology', 'software', 'hardware', 'security', 'healthcare', 
-                            'consulting', 'services', 'solutions', 'systems'];
+    const categoryKeywords = ['technology', 'tech', 'software', 'hardware', 'security', 'healthcare', 
+                            'consulting', 'services', 'solutions', 'systems', 'digital', 'it'];
     const hasCategory = categoryKeywords.some(cat => lowerQuery.includes(cat));
-    const hasExhibitorContext = this.exhibitorKeywords.some(keyword => lowerQuery.includes(keyword));
+    const hasExhibitorContext = this.exhibitorKeywords.some(keyword => lowerQuery.includes(keyword)) ||
+                                lowerQuery.includes('companies') || lowerQuery.includes('vendors');
     
     if (hasCategory && hasExhibitorContext) {
-      const category = categoryKeywords.find(cat => lowerQuery.includes(cat));
+      // Map variations to standard categories
+      let category = categoryKeywords.find(cat => lowerQuery.includes(cat));
+      if (category === 'tech') category = 'technology';
+      if (category === 'it') category = 'technology';
+      if (category === 'digital') category = 'technology';
+      
       return {
         isExhibitorQuery: true,
         queryType: 'category',
@@ -120,12 +126,13 @@ export class ExhibitorSearchService {
   async searchByQuery(query: string, limit: number = 5): Promise<ExhibitorResult[]> {
     try {
       const queryEmbedding = await embeddingService.generateEmbedding(query);
+      const lowerQuery = query.toLowerCase();
 
       const { data, error } = await supabase
         .rpc('search_exhibitors', {
           query_embedding: queryEmbedding,
-          match_count: limit,
-          similarity_threshold: 0.5  // Lowered from 0.7 for better recall
+          match_count: limit * 2,  // Get more results to filter
+          similarity_threshold: 0.6  // Higher threshold for more relevant results
         });
 
       if (error) {
@@ -133,7 +140,20 @@ export class ExhibitorSearchService {
         return [];
       }
 
-      return data || [];
+      let results = data || [];
+      
+      // If query explicitly asks for tech companies, filter out non-tech
+      if (lowerQuery.includes('tech') || lowerQuery.includes('technology')) {
+        const techKeywords = ['tech', 'software', 'hardware', 'digital', 'it', 'system', 'computing', 
+                             'data', 'cyber', 'cloud', 'ai', 'automation', 'electronic'];
+        
+        results = results.filter((exhibitor: ExhibitorResult) => {
+          const combinedText = `${exhibitor.company_name} ${exhibitor.industry_category || ''} ${exhibitor.company_bio || ''}`.toLowerCase();
+          return techKeywords.some(keyword => combinedText.includes(keyword));
+        });
+      }
+
+      return results.slice(0, limit);
     } catch (error) {
       console.error('Failed to search exhibitors:', error);
       return [];
@@ -248,8 +268,27 @@ export class ExhibitorSearchService {
         break;
 
       case 'category':
-        exhibitors = await this.getAllExhibitorsByCategory(detection.searchTerm!);
-        context = `${detection.searchTerm} exhibitors:`;
+        // For technology queries, be more specific
+        if (detection.searchTerm === 'technology' || detection.searchTerm === 'tech') {
+          // Search for companies that are actually tech-related
+          const techCategories = ['technology', 'software', 'hardware', 'IT', 'digital', 'systems', 'computing'];
+          let techExhibitors: ExhibitorResult[] = [];
+          
+          for (const cat of techCategories) {
+            const catResults = await this.getAllExhibitorsByCategory(cat);
+            techExhibitors = techExhibitors.concat(catResults);
+          }
+          
+          // Remove duplicates
+          exhibitors = techExhibitors.filter((item, index, self) =>
+            index === self.findIndex((r) => r.id === item.id)
+          ).slice(0, 10);
+          
+          context = 'Technology companies:';
+        } else {
+          exhibitors = await this.getAllExhibitorsByCategory(detection.searchTerm!);
+          context = `${detection.searchTerm} exhibitors:`;
+        }
         break;
 
       case 'general':
