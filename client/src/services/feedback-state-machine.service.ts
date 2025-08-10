@@ -212,7 +212,7 @@ export class FeedbackStateMachine {
     // Track if feedback was actually provided
     if (oldState === FeedbackState.COLLECTING_FEEDBACK && trigger === 'user_response') {
       this.feedbackWasProvided = true;
-      console.log('✅ Feedback was provided by user');
+      console.log('✅ Feedback was provided by user during COLLECTING_FEEDBACK');
     }
 
     console.log(`🚨 FEEDBACK STATE TRANSITION: ${oldState} -> ${this.currentState} (trigger: ${trigger})`);
@@ -251,6 +251,12 @@ export class FeedbackStateMachine {
     console.trace('Reset called from:');
   }
 
+  // Explicitly mark that feedback was provided
+  setFeedbackProvided(provided: boolean) {
+    this.feedbackWasProvided = provided;
+    console.log(`📝 Feedback provided status set to: ${provided}`);
+  }
+
   // Helper to determine user intent from text
   static detectUserIntent(text: string): 'yes' | 'no' | 'other' {
     const lowerText = text.toLowerCase().trim();
@@ -271,9 +277,21 @@ export class FeedbackStateMachine {
       'stop', 'enough', 'done', 'finished'
     ];
     
+    // IMPORTANT: If yes/no is followed by additional content (like a question), treat it as 'other'
+    // This handles cases like "yes can you tell me about..." or "no but what about..."
+    const hasAdditionalContent = (pattern: string): boolean => {
+      const regex = new RegExp(`^${pattern}\\s+.{10,}`, 'i'); // Pattern followed by 10+ chars
+      return regex.test(lowerText);
+    };
+    
     // Check for yes - use word boundaries
     const yesMatch = yesPatterns.find(pattern => createWordBoundaryRegex(pattern).test(lowerText));
     if (yesMatch) {
+      // Check if there's additional content after the yes (a question)
+      if (hasAdditionalContent(yesMatch)) {
+        console.log(`❓ Intent: OTHER (yes followed by question: "${lowerText}")`);
+        return 'other';
+      }
       console.log(`✅ Intent: YES (matched pattern: "${yesMatch}")`);
       return 'yes';
     }
@@ -281,12 +299,17 @@ export class FeedbackStateMachine {
     // Check for no - use word boundaries
     const noMatch = noPatterns.find(pattern => createWordBoundaryRegex(pattern).test(lowerText));
     if (noMatch) {
+      // Check if there's additional content after the no (a question)
+      if (hasAdditionalContent(noMatch)) {
+        console.log(`❓ Intent: OTHER (no followed by question: "${lowerText}")`);
+        return 'other';
+      }
       console.log(`❌ Intent: NO (matched pattern: "${noMatch}")`);
       return 'no';
     }
     
-    // Special case: if text starts with "no " or is exactly "no", it's a no
-    if (lowerText === 'no' || lowerText.startsWith('no ')) {
+    // Special case: if text starts with "no " followed by more than a few words, it might be a question
+    if (lowerText === 'no' || (lowerText.startsWith('no ') && lowerText.split(' ').length <= 3)) {
       console.log(`❌ Intent: NO (starts with "no")`);
       return 'no';
     }

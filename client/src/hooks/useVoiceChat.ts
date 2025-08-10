@@ -317,7 +317,7 @@ export const useVoiceChat = ({
                 audio.removeEventListener('ended', handleEnded);
                 currentAudioRef.current = null;
                 resolve();
-              }, 30000); // 30 second timeout
+              }, 60000); // 60 second timeout for longer audio responses
             });
           }
           
@@ -585,14 +585,21 @@ export const useVoiceChat = ({
       pendingSilenceDetectionRef.current = setTimeout(startDetection, 5000);
     };
     
+    // For THANKING_USER state, always speak the message regardless of processing state
+    // This ensures users always hear the thank you after providing feedback
+    const shouldSpeak = (newState === FeedbackState.THANKING_USER) 
+      ? (message && speakText) 
+      : (message && speakText && !isProcessingRef.current);
+    
     console.log('🎯 Checking if should speak message:', {
       hasMessage: !!message,
       hasSpeakText: !!speakText,
       isProcessing: isProcessingRef.current,
-      willSpeak: !!(message && speakText && !isProcessingRef.current)
+      newState: newState,
+      willSpeak: shouldSpeak
     });
     
-    if (message && speakText && !isProcessingRef.current) {
+    if (shouldSpeak) {
       // Stop any currently playing audio to prevent overlap
       if (currentAudioRef.current) {
         console.log('🔊 Stopping previous audio for feedback message');
@@ -627,7 +634,7 @@ export const useVoiceChat = ({
               audio.removeEventListener('ended', handleEnded);
               currentAudioRef.current = null;
               resolve();
-            }, 15000); // 15 second timeout
+            }, 60000); // 60 second timeout for longer responses
           });
         }
       } catch (error) {
@@ -805,6 +812,13 @@ export const useVoiceChat = ({
       feedbackTextRef.current = text;
       console.log('📝 Satisfaction feedback captured:', text);
       
+      // If the response is more than just yes/no (has meaningful feedback), mark as feedback provided
+      const isDetailedFeedback = text.trim().length > 10 && intent === 'other';
+      if (isDetailedFeedback) {
+        console.log('📝 Detailed feedback provided during satisfaction question');
+        feedbackStateMachine.setFeedbackProvided(true);
+      }
+      
       if (intent === 'yes') {
         console.log('✅ User is satisfied');
         userSatisfactionRef.current = true; // User is satisfied
@@ -820,13 +834,17 @@ export const useVoiceChat = ({
         console.log('🤔 Unclear satisfaction response, treating as satisfied but saving feedback');
         userSatisfactionRef.current = true; // Default to satisfied for unclear responses
         feedbackStateMachine.transition('user_yes');
-        return; // Goodbye message and reset
+        return; // Thank you message if feedback provided, goodbye otherwise
       }
     } else if (currentState === FeedbackState.COLLECTING_FEEDBACK) {
       // Store additional feedback text (append if there was already feedback from satisfaction question)
       console.log('📝 Additional feedback collected:', text);
       const existingFeedback = feedbackTextRef.current;
       feedbackTextRef.current = existingFeedback ? `${existingFeedback}. Additional feedback: ${text}` : text;
+      
+      // Mark that feedback was provided
+      feedbackStateMachine.setFeedbackProvided(true);
+      
       feedbackStateMachine.transition('user_response');
       return; // Thank you message and reset
     }
@@ -887,9 +905,9 @@ export const useVoiceChat = ({
                   // Only start silence detection if still idle and not processing
                   if (feedbackStateMachine.getCurrentState() === FeedbackState.IDLE && 
                       !isProcessingRef.current && !isSpeaking) {
-                    console.log('🔇 Starting 15-second silence detection for user response');
+                    console.log('🔇 Starting 30-second silence detection for user response');
                     
-                    startSilenceDetection(15000, () => {
+                    startSilenceDetection(30000, () => {
                       // After silence timeout, user didn't respond to Harper's natural follow-up question
                       // Go directly to satisfaction question
                       if (feedbackStateMachine.getCurrentState() === FeedbackState.IDLE && 
@@ -901,7 +919,7 @@ export const useVoiceChat = ({
                   } else {
                     console.log('🔇 Not starting silence detection - user or system is active');
                   }
-                }, 2000); // 2 second delay to let user start speaking
+                }, 5000); // 5 second delay to let user start speaking
               }
             }, 100); // Check every 100ms if still speaking
           }
