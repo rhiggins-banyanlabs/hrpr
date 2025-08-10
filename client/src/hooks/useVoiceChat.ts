@@ -610,9 +610,9 @@ export const useVoiceChat = ({
       // Play the appropriate message for the state
       console.log(`🔊 Speaking feedback message for state ${newState}: "${message}"`);
       
-      // Check if speakText is available
-      if (!speakText) {
-        console.log('⚠️ TTS not available for feedback message');
+      // Check if speakText and message are available
+      if (!speakText || !message) {
+        console.log('⚠️ TTS or message not available for feedback message');
         return;
       }
       
