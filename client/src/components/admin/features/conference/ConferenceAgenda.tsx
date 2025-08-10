@@ -258,11 +258,11 @@ export const ConferenceAgenda: React.FC = () => {
       {/* Header */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-bold text-white">Conference Agenda</h2>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
+            <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-white">Conference Agenda</h2>
             <button
               onClick={loadAllData}
-              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+              className="px-3 sm:px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm sm:text-base"
             >
               Refresh
             </button>
@@ -271,19 +271,19 @@ export const ConferenceAgenda: React.FC = () => {
       </Card>
 
       {/* Day Selection */}
-      <div className="grid grid-cols-5 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
         {CONFERENCE_DAYS.map((dayInfo) => (
           <button
             key={dayInfo.date}
             onClick={() => setSelectedDay(dayInfo.date)}
-            className={`p-4 rounded-lg transition-all ${
+            className={`p-3 sm:p-4 rounded-lg transition-all ${
               selectedDay === dayInfo.date
                 ? 'bg-blue-500 text-white shadow-lg'
                 : 'bg-white/10 text-white/70 hover:bg-white/20'
             }`}
           >
-            <div className="font-semibold">{dayInfo.shortDay}</div>
-            <div className="text-sm">{dayInfo.date}</div>
+            <div className="font-semibold text-sm sm:text-base">{dayInfo.shortDay}</div>
+            <div className="text-xs sm:text-sm">{dayInfo.date}</div>
           </button>
         ))}
       </div>
@@ -291,11 +291,11 @@ export const ConferenceAgenda: React.FC = () => {
       {/* View Type and Filters */}
       <Card>
         <CardContent>
-          <div className="flex items-center justify-between">
-            <div className="flex gap-2">
+          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 lg:gap-0">
+            <div className="flex flex-wrap gap-2">
               <button
                 onClick={() => setViewType('schedule')}
-                className={`px-4 py-2 rounded-lg transition-colors ${
+                className={`px-3 sm:px-4 py-2 rounded-lg transition-colors text-xs sm:text-sm ${
                   viewType === 'schedule'
                     ? 'bg-blue-500 text-white'
                     : 'bg-white/10 text-white/70 hover:bg-white/20'
@@ -306,7 +306,7 @@ export const ConferenceAgenda: React.FC = () => {
               {committeeMeetings.length > 0 && (
                 <button
                   onClick={() => setViewType('meetings')}
-                  className={`px-4 py-2 rounded-lg transition-colors ${
+                  className={`px-3 sm:px-4 py-2 rounded-lg transition-colors text-xs sm:text-sm ${
                     viewType === 'meetings'
                       ? 'bg-green-500 text-white'
                       : 'bg-white/10 text-white/70 hover:bg-white/20'
@@ -318,7 +318,7 @@ export const ConferenceAgenda: React.FC = () => {
               {facilityTours.length > 0 && (
                 <button
                   onClick={() => setViewType('tours')}
-                  className={`px-4 py-2 rounded-lg transition-colors ${
+                  className={`px-3 sm:px-4 py-2 rounded-lg transition-colors text-xs sm:text-sm ${
                     viewType === 'tours'
                       ? 'bg-purple-500 text-white'
                       : 'bg-white/10 text-white/70 hover:bg-white/20'
@@ -329,7 +329,7 @@ export const ConferenceAgenda: React.FC = () => {
               )}
               <button
                 onClick={() => setViewType('all')}
-                className={`px-4 py-2 rounded-lg transition-colors ${
+                className={`px-3 sm:px-4 py-2 rounded-lg transition-colors text-xs sm:text-sm ${
                   viewType === 'all'
                     ? 'bg-yellow-500 text-white'
                     : 'bg-white/10 text-white/70 hover:bg-white/20'
@@ -343,7 +343,7 @@ export const ConferenceAgenda: React.FC = () => {
               <select
                 value={eventTypeFilter}
                 onChange={(e) => setEventTypeFilter(e.target.value)}
-                className="px-4 py-2 bg-white/10 text-white rounded-lg border border-white/20"
+                className="px-3 sm:px-4 py-2 bg-white/10 text-white rounded-lg border border-white/20 text-sm"
               >
                 <option value="all">All Event Types</option>
                 {getUniqueEventTypes().map(type => (
@@ -359,7 +359,7 @@ export const ConferenceAgenda: React.FC = () => {
       {(viewType === 'schedule' || viewType === 'all') && (
         <Card>
           <CardHeader>
-            <h3 className="text-xl font-semibold text-white">
+            <h3 className="text-lg sm:text-xl font-semibold text-white">
               {selectedDay} - Main Schedule
             </h3>
           </CardHeader>
@@ -373,18 +373,18 @@ export const ConferenceAgenda: React.FC = () => {
                 {filteredEvents().map((event) => (
                   <div
                     key={event.id}
-                    className="p-4 bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 transition-colors"
+                    className="p-3 sm:p-4 bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 transition-colors"
                   >
-                    <div className="flex items-start justify-between">
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-0">
                       <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <span className="text-white/60 font-mono text-sm">
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-2">
+                          <span className="text-white/60 font-mono text-xs sm:text-sm">
                             {event.time || formatTime(event.start_time)}
                             {event.end_time && ` - ${formatTime(event.end_time)}`}
                           </span>
                           {getEventTypeBadge(event.event_type)}
                         </div>
-                        <h4 className="text-white font-semibold text-lg mb-1">
+                        <h4 className="text-white font-semibold text-base sm:text-lg mb-1">
                           {event.event}
                         </h4>
                         {event.presenter && (
@@ -416,7 +416,7 @@ export const ConferenceAgenda: React.FC = () => {
       {(viewType === 'meetings' || viewType === 'all') && committeeMeetings.length > 0 && (
         <Card>
           <CardHeader>
-            <h3 className="text-xl font-semibold text-white">
+            <h3 className="text-lg sm:text-xl font-semibold text-white">
               {selectedDay} - Committee Meetings
             </h3>
           </CardHeader>
@@ -430,15 +430,15 @@ export const ConferenceAgenda: React.FC = () => {
                 {getMeetingsForDay(selectedDay).map((meeting) => (
                   <div
                     key={meeting.id}
-                    className="p-4 bg-green-500/10 rounded-lg border border-green-500/20 hover:bg-green-500/20 transition-colors"
+                    className="p-3 sm:p-4 bg-green-500/10 rounded-lg border border-green-500/20 hover:bg-green-500/20 transition-colors"
                   >
-                    <div className="flex items-center gap-3 mb-2">
-                      <span className="text-white/60 font-mono text-sm">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-2">
+                      <span className="text-white/60 font-mono text-xs sm:text-sm">
                         {formatTime(meeting.start_time)} - {formatTime(meeting.end_time)}
                       </span>
                       <Badge variant="success">{meeting.meeting_type}</Badge>
                     </div>
-                    <h4 className="text-white font-semibold text-lg mb-1">
+                    <h4 className="text-white font-semibold text-base sm:text-lg mb-1">
                       {meeting.committee_name}
                     </h4>
                     <p className="text-green-400 text-sm">
@@ -461,7 +461,7 @@ export const ConferenceAgenda: React.FC = () => {
       {(viewType === 'tours' || viewType === 'all') && facilityTours.length > 0 && (
         <Card>
           <CardHeader>
-            <h3 className="text-xl font-semibold text-white">
+            <h3 className="text-lg sm:text-xl font-semibold text-white">
               {selectedDay} - Facility Tours
             </h3>
           </CardHeader>
@@ -475,15 +475,15 @@ export const ConferenceAgenda: React.FC = () => {
                 {getToursForDay(selectedDay).map((tour) => (
                   <div
                     key={tour.id}
-                    className="p-4 bg-purple-500/10 rounded-lg border border-purple-500/20 hover:bg-purple-500/20 transition-colors"
+                    className="p-3 sm:p-4 bg-purple-500/10 rounded-lg border border-purple-500/20 hover:bg-purple-500/20 transition-colors"
                   >
-                    <div className="flex items-center gap-3 mb-2">
-                      <span className="text-white/60 font-mono text-sm">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-2">
+                      <span className="text-white/60 font-mono text-xs sm:text-sm break-all sm:break-normal">
                         Depart: {formatTime(tour.departure_time)} | Return: {formatTime(tour.return_time)}
                       </span>
                       <Badge variant="info">Facility Tour</Badge>
                     </div>
-                    <h4 className="text-white font-semibold text-lg mb-1">
+                    <h4 className="text-white font-semibold text-base sm:text-lg mb-1">
                       {tour.facility}
                     </h4>
                     <p className="text-purple-400 text-sm">

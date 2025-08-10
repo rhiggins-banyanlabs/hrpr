@@ -41,7 +41,7 @@ export default function Modal({ isOpen, onClose, children, size = 'md' }: ModalP
 
   return (
     <div 
-      className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm"
+      className="fixed inset-0 bg-black/50 flex items-center justify-center p-2 sm:p-4 backdrop-blur-sm"
       style={{ zIndex: 9999 }} // Force high z-index
       onClick={(e) => {
         // Close modal if clicking on backdrop
@@ -69,7 +69,7 @@ interface ModalHeaderProps {
 
 export function ModalHeader({ children, onClose, className = '' }: ModalHeaderProps) {
   return (
-    <div className={`p-6 border-b border-white/10 flex items-center justify-between flex-shrink-0 ${className}`}>
+    <div className={`p-4 sm:p-6 border-b border-white/10 flex items-center justify-between flex-shrink-0 ${className}`}>
       <div className="flex-1">{children}</div>
       {onClose && (
         <Button variant="ghost" size="sm" onClick={onClose} className="ml-4">
@@ -100,7 +100,7 @@ interface ModalFooterProps {
 
 export function ModalFooter({ children, className = '' }: ModalFooterProps) {
   return (
-    <div className={`p-6 border-t border-white/10 flex gap-3 justify-end flex-shrink-0 ${className}`}>
+    <div className={`p-4 sm:p-6 border-t border-white/10 flex gap-2 sm:gap-3 justify-end flex-shrink-0 ${className}`}>
       {children}
     </div>
   )

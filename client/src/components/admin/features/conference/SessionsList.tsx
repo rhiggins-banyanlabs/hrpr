@@ -25,8 +25,8 @@ export default function SessionsList({ sessions, loading, onAdd, onEdit, onDelet
   return (
     <Card>
       <CardHeader>
-        <div className="flex justify-between items-center">
-          <h3 className="text-xl font-semibold text-white">Sessions</h3>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-0">
+          <h3 className="text-lg sm:text-xl font-semibold text-white">Sessions</h3>
           <Button onClick={onAdd} variant="primary" size="sm">
             Add Session
           </Button>
@@ -53,9 +53,9 @@ export default function SessionsList({ sessions, loading, onAdd, onEdit, onDelet
           <div className="space-y-3">
             {sessions.map((session) => (
               <div key={session.id} className="bg-white/5 rounded-lg p-4 border border-white/10">
-                <div className="flex justify-between items-start">
+                <div className="flex flex-col xl:flex-row xl:justify-between xl:items-start gap-3 xl:gap-0">
                   <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
+                    <div className="flex flex-wrap items-center gap-2 mb-2">
                       <Badge variant="info">{session.time}</Badge>
                       {session.location && (
                         <Badge variant="warning">{session.location}</Badge>
@@ -67,7 +67,7 @@ export default function SessionsList({ sessions, loading, onAdd, onEdit, onDelet
                       <p className="text-white/60 text-sm mt-2">{session.description}</p>
                     )}
                   </div>
-                  <div className="flex gap-2 ml-4">
+                  <div className="flex gap-2 xl:ml-4 self-start xl:self-auto">
                     <Button
                       onClick={() => onEdit(session)}
                       variant="secondary"
