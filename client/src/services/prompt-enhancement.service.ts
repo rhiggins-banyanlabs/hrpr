@@ -12,6 +12,7 @@ import { workshopSearchService } from "./workshop-search.service";
 import { committeeMeetingsService } from "./committee-meetings.service"; // with embedding reuse
 import { conferenceInfoDatabaseService } from "./conference-info-db.service";
 import { AI_TECH_EXPO, isAITechExpoQuery } from "@/data/ai-tech-expo";
+import { featuredTechService } from "./featured-tech.service";
 
 export class PromptEnhancementService {
   private venueLookup: VenueLookupService | null = null;
@@ -172,6 +173,13 @@ export class PromptEnhancementService {
       }
     }
     
+    // Check for featured technology (like AIDA) first
+    const featuredTechQuery = await featuredTechService.processFeaturedTechQuery(originalPrompt);
+    if (featuredTechQuery.found) {
+      console.log(`🌟 PromptEnhancement: Found featured technology - ${featuredTechQuery.data?.name}`);
+      enhancedPrompt += `\n\nFEATURED TECHNOLOGY:\n${featuredTechQuery.formattedInfo}`;
+    }
+    
     // Exhibitor data for exhibitor queries
     if (intent.primaryIntent === 'exhibitor' && !isAITechExpoQuery(originalPrompt)) {
       try {
@@ -181,12 +189,11 @@ export class PromptEnhancementService {
           console.log(`🏢 PromptEnhancement: Found ${exhibitorQuery.data.length} exhibitors from database`);
           const exhibitorData = this.exhibitorService.formatMultipleExhibitors(exhibitorQuery.data);
           enhancedPrompt += `\n\n${exhibitorQuery.context.toUpperCase()}\n${exhibitorData}`;
-        } else {
-          // Special handling for AIDA queries that return no results
+        } else if (!featuredTechQuery.found) {
+          // Only show "not found" message if it's not a featured technology
           const lowerPrompt = originalPrompt.toLowerCase();
           if (lowerPrompt.includes('ada demo') || lowerPrompt.includes('aida')) {
-            console.log('🏢 PromptEnhancement: AIDA exhibitor not found in database');
-            enhancedPrompt += `\n\nNOTE: No exhibitor found matching "AIDA" or similar names in the exhibitor database. The user may be asking about a company that is not exhibiting at this conference.`;
+            console.log('🏢 PromptEnhancement: Query might be about AIDA but not detected as featured tech');
           }
         }
       } catch (error) {

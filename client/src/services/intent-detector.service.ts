@@ -316,6 +316,32 @@ export class IntentDetectorService {
     // Natural, conversational filler responses
     switch (intent.primaryIntent) {
       case 'exhibitor':
+        // Check for AIDA/Ada demo specifically (not just Vantage booth)
+        if ((lowerQuery.includes('ada') && lowerQuery.includes('demo')) ||
+            lowerQuery.includes('aida') || lowerQuery.includes('aided demo') ||
+            lowerQuery.includes('interview agent') ||
+            (lowerQuery.includes('ada') && !lowerQuery.includes('booth'))) {
+          const aidaResponses = [
+            "Let me find information about the Ada demo",
+            "I'll look up the Ada demonstration locations for you",
+            "Let me check where you can experience Ada",
+            "I'll find details about the Ada Interview Agent",
+            "Let me get the Ada demo information",
+            "Let me find where Ada is being demonstrated"
+          ];
+          return addPausePrefix(aidaResponses);
+        }
+        
+        // Check for Vantage booth specifically (without AIDA context)
+        if ((lowerQuery.includes('vant4ge') || lowerQuery.includes('vantage')) && 
+            lowerQuery.includes('booth')) {
+          const responses = [
+            "Let me find the Vantage booth information",
+            "I'll look up the Vantage booth location",
+            "Let me check where Vantage is exhibiting"
+          ];
+          return addPausePrefix(responses);
+        }
         // Specific exhibitor responses
         if (lowerQuery.includes('booth')) {
           const responses = [
@@ -541,14 +567,29 @@ export class IntentDetectorService {
         
         // AIDA demo queries - "ada demo" in voice means AIDA
         if ((lowerQuery.includes('ada') && lowerQuery.includes('demo')) ||
-            lowerQuery.includes('aida') || lowerQuery.includes('aided demo')) {
+            lowerQuery.includes('aida') || lowerQuery.includes('aided demo') ||
+            lowerQuery.includes('interview agent')) {
           const aidaResponses = [
-            "Let me find information about the AIDA demo",
-            "I'll look up the AIDA demonstration for you",
-            "Let me check the exhibitor information for AIDA",
-            "I'll find details about the AIDA demo"
+            "Let me find information about the Ada demo",
+            "I'll look up the Ada demonstration locations for you",
+            "Let me check where you can experience Ada",
+            "I'll find details about the Ada Interview Agent",
+            "Let me get the Ada demo information",
+            "Let me find where Ada is being demonstrated"
           ];
           return addPausePrefix(aidaResponses);
+        }
+        
+        // Vantage booth queries (separate from AIDA)
+        if ((lowerQuery.includes('vant4ge') || lowerQuery.includes('vantage')) && 
+            !lowerQuery.includes('aida') && !lowerQuery.includes('ada demo') && 
+            !lowerQuery.includes('interview')) {
+          const vantageResponses = [
+            "Let me check the Vantage booth information",
+            "I'll look up Vantage's exhibitor details",
+            "Let me find the Vantage booth location"
+          ];
+          return addPausePrefix(vantageResponses);
         }
         
         // ADA/Accessibility queries (only if NOT a demo)
