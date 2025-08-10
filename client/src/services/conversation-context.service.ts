@@ -93,9 +93,15 @@ class ConversationContextService {
     const lowerQuery = query.toLowerCase();
     
     // Handle specific follow-up patterns
-    if (/^(yes|okay|ok|sure)/.test(lowerQuery)) {
-      // User is confirming, use last query
+    if (/^(yes|okay|ok|sure)\s*[,.]?\s*$/.test(lowerQuery)) {
+      // User is just confirming without additional text, use last query
       return context.lastQuery || query;
+    }
+    
+    // If user says "yes" followed by a new question, use the new question
+    if (/^(yes|okay|ok|sure)\s+.+/.test(lowerQuery)) {
+      // Remove the confirmation word and use the rest of the query
+      return lowerQuery.replace(/^(yes|okay|ok|sure)\s+/, '');
     }
     
     // Handle "more" or "other" requests

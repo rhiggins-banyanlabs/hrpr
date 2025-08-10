@@ -83,7 +83,7 @@ export class OpenAIService {
           'Authorization': `Bearer ${envConfig.openai}`,
           'Content-Type': 'application/json',
         },
-        signal: AbortSignal.timeout(30000), // 30 second timeout
+        signal: AbortSignal.timeout(60000), // 60 second timeout for longer responses
         body: JSON.stringify({
           model: this.model,
           messages: [
@@ -110,8 +110,10 @@ CONVERSATION FLOW:${!options?.greetingAlreadyHandled ? '\n- When someone shares 
 FORMATTING RULES:
 - NEVER use numbered lists (1. 2. 3.) - speak conversationally instead
 - When mentioning multiple items, use phrases like "You might enjoy..." or "There's also..."
-- Keep responses concise - aim for 2-3 sentences maximum
-- For multiple exhibitors/places, mention 2-3 at most, conversationally
+- For workshops/tours/sessions: provide comprehensive details in a conversational way
+- For questions requiring lists: include all relevant items but present them naturally
+- For general queries: keep responses appropriately sized for the question
+- Complete your full response before asking the follow-up question
 
 RULES:
 - Use provided conference information when available - never make up conference data
@@ -129,14 +131,18 @@ You help with: conference schedules, speakers, sessions, exhibitor information, 
 
 EXHIBITOR QUERIES: When exhibitor information is provided, PRIORITIZE exhibitor data over conference information. Use exhibitor data to answer questions about companies, booths, products, and services. Always mention booth numbers when available. If user asks about "tech companies", "vendors", or "exhibitors", focus on the exhibitor data provided, not conference information.
 
-FOLLOW-UP QUESTIONS: ALWAYS end your response with one of these specific follow-up questions: "Do you have any more questions for me today?" or "Is there anything else I can help you with?"`
+CRITICAL - FOLLOW-UP QUESTIONS: 
+- You MUST ALWAYS end EVERY response with a follow-up question
+- Use one of these EXACT phrases at the end: "Do you have any more questions for me today?" or "Is there anything else I can help you with?"
+- This is MANDATORY for every single response - no exceptions
+- Place the follow-up question as the very last sentence of your response`
             },
             {
               role: 'user',
               content: enhancedPrompt
             }
           ],
-          max_tokens: 200, // Allow for more complete responses
+          max_tokens: 600, // Increased for comprehensive workshop/tour responses
           temperature: 0.3, // More natural conversation
           stream: false // Disable streaming - simpler and faster for short responses
         }),
@@ -158,7 +164,22 @@ FOLLOW-UP QUESTIONS: ALWAYS end your response with one of these specific follow-
 
       // Handle non-streaming response (faster for short responses)
       const data = await response.json();
-      const botResponse = data.choices[0]?.message?.content || 'I apologize, but I\'m having trouble generating a response right now.';
+      let botResponse = data.choices[0]?.message?.content || 'I apologize, but I\'m having trouble generating a response right now.';
+      
+      // Ensure follow-up question is always included
+      const followUpQuestions = [
+        "Do you have any more questions for me today?",
+        "Is there anything else I can help you with?"
+      ];
+      
+      // Check if response already ends with a follow-up question
+      const hasFollowUp = followUpQuestions.some(q => botResponse.includes(q));
+      if (!hasFollowUp) {
+        // Add a follow-up question if it's missing
+        const randomFollowUp = followUpQuestions[Math.floor(Math.random() * followUpQuestions.length)];
+        botResponse = botResponse.trim() + ' ' + randomFollowUp;
+        console.log('⚠️ Added missing follow-up question to response');
+      }
       
       const responseTime = Date.now() - startTime;
       const inputTokens = data.usage?.prompt_tokens || this.estimateTokens(enhancedPrompt);
