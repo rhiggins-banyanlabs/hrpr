@@ -313,6 +313,31 @@ export class IntentDetectorService {
       return prefix + selected;
     };
     
+    // Check for SPECIFIC date/time queries (not session times)
+    // Must be asking specifically about current time/date
+    if ((lowerQuery === 'what time is it' || lowerQuery === 'what time is it?' ||
+         lowerQuery === 'whats the time' || lowerQuery === 'what\'s the time' ||
+         lowerQuery === 'what is the time' || lowerQuery === 'tell me the time' ||
+         lowerQuery.includes('current time') && !lowerQuery.includes('session') && !lowerQuery.includes('workshop')) ||
+        (lowerQuery === 'what day is it' || lowerQuery === 'what day is it?' ||
+         lowerQuery === 'what day is today' || lowerQuery === 'what day is it today' ||
+         lowerQuery === 'what is today' || lowerQuery === 'what\'s today' ||
+         lowerQuery === 'whats today') ||
+        (lowerQuery === 'what is todays date' || lowerQuery === 'what is today\'s date' ||
+         lowerQuery === 'what\'s today\'s date' || lowerQuery === 'whats todays date' ||
+         lowerQuery === 'what\'s the date' || lowerQuery === 'what is the date' ||
+         lowerQuery === 'what date is it' || lowerQuery === 'what date is it today' ||
+         lowerQuery === 'today\'s date' || lowerQuery === 'todays date')) {
+      const responses = [
+        "Let me check the current time for you",
+        "I'll get that information for you",
+        "Let me check that for you",
+        "Let me look at the current date and time",
+        "I'll check what day it is"
+      ];
+      return addPausePrefix(responses);
+    }
+    
     // Natural, conversational filler responses
     switch (intent.primaryIntent) {
       case 'exhibitor':
