@@ -97,17 +97,19 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
     
     const recognition = new SpeechRecognition();
     
-    // Detect iOS/WebKit for special handling
+    // Detect mobile devices (iOS, Android, WebKit) for special handling
     const userAgent = navigator.userAgent;
     const isIOS = /iPad|iPhone|iPod/.test(userAgent) || 
                   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const isAndroid = /Android/i.test(userAgent);
     const isWebKit = /WebKit/i.test(userAgent) && !/Chrome/i.test(userAgent);
+    const isMobile = isIOS || isAndroid || ('ontouchstart' in window);
     
-    // Use different settings for iOS/WebKit to prevent concatenation
-    if (isIOS || isWebKit) {
-      console.log("📱 VoiceInput: iOS/WebKit detected - using single-shot mode");
+    // Use different settings for mobile devices to prevent concatenation
+    if (isMobile) {
+      console.log("📱 VoiceInput: Mobile device detected (iOS/Android) - using single-shot mode");
       recognition.continuous = false;  // Single-shot mode to prevent accumulation
-      recognition.interimResults = false;  // No interim results on iOS
+      recognition.interimResults = false;  // No interim results on mobile
     } else {
       console.log("💻 VoiceInput: Desktop browser - using continuous mode");
       recognition.continuous = true;
@@ -121,21 +123,23 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
     };
 
     recognition.onresult = (event: any) => {
-      // Check if we're on iOS/WebKit
+      // Check if we're on a mobile device (iOS, Android, or WebKit)
       const userAgent = navigator.userAgent;
       const isIOS = /iPad|iPhone|iPod/.test(userAgent) || 
                     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      const isAndroid = /Android/i.test(userAgent);
       const isWebKit = /WebKit/i.test(userAgent) && !/Chrome/i.test(userAgent);
+      const isMobile = isIOS || isAndroid || ('ontouchstart' in window);
       
-      if (isIOS || isWebKit) {
-        // iOS/WebKit: Take only the LAST result to prevent concatenation
+      if (isMobile) {
+        // Mobile devices: Take only the LAST result to prevent concatenation
         if (event.results.length > 0) {
           const lastResult = event.results[event.results.length - 1];
           const transcript = lastResult[0].transcript;
           
-          console.log("📱 VoiceInput iOS/WebKit - using last result only:", transcript);
+          console.log("📱 VoiceInput Mobile (iOS/Android) - using last result only:", transcript);
           
-          // Replace (not append) the final transcript
+          // Replace (not append) the final transcript - THIS IS THE KEY FIX
           finalTranscriptRef.current = transcript;
           setFinalTranscript(transcript);
           hasReceivedSpeechRef.current = true;

@@ -47,15 +47,17 @@ export const useSpeechRecognition = (
 
     recognitionRef.current = new SpeechRecognition();
     
-    // Detect iOS/WebKit for special handling
+    // Detect mobile devices (iOS, Android, WebKit) for special handling
     const userAgent = navigator.userAgent;
     const isIOS = /iPad|iPhone|iPod/.test(userAgent) || 
                   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const isAndroid = /Android/i.test(userAgent);
     const isWebKit = /WebKit/i.test(userAgent) && !/Chrome/i.test(userAgent);
+    const isMobile = isIOS || isAndroid || ('ontouchstart' in window);
     
-    // Use different settings for iOS/WebKit to prevent concatenation
-    if (isIOS || isWebKit) {
-      console.log("📱 iOS/WebKit detected - using single-shot mode to prevent concatenation");
+    // Use different settings for mobile devices to prevent concatenation
+    if (isMobile) {
+      console.log("📱 Mobile device (iOS/Android) detected - using single-shot mode to prevent concatenation");
       recognitionRef.current.continuous = false;  // Single-shot mode
       recognitionRef.current.interimResults = false;  // No interim results
     } else {
@@ -107,19 +109,21 @@ export const useSpeechRecognition = (
   }, []);
 
   const handleSpeechResult = (event: any) => {
-    // Detect if we're on iOS/WebKit
+    // Detect if we're on a mobile device (iOS, Android, or WebKit)
     const userAgent = navigator.userAgent;
     const isIOS = /iPad|iPhone|iPod/.test(userAgent) || 
                   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const isAndroid = /Android/i.test(userAgent);
     const isWebKit = /WebKit/i.test(userAgent) && !/Chrome/i.test(userAgent);
+    const isMobile = isIOS || isAndroid || ('ontouchstart' in window);
     
-    if (isIOS || isWebKit) {
-      // iOS/WebKit: Take only the LAST result to prevent concatenation
+    if (isMobile) {
+      // Mobile devices: Take only the LAST result to prevent concatenation
       if (event.results.length > 0) {
         const lastResult = event.results[event.results.length - 1];
         const transcript = lastResult[0].transcript.toLowerCase().trim();
         
-        console.log("📱 iOS/WebKit - using last result only:", transcript);
+        console.log("📱 Mobile (iOS/Android) - using last result only:", transcript);
         
         // Clear previous transcripts to prevent accumulation
         lastProcessedTranscriptRef.current = "";
@@ -129,7 +133,7 @@ export const useSpeechRecognition = (
         
         const foundHarper = detectHarperInTranscript(transcript);
         if (foundHarper && !HarperDetectedRef.current) {
-          console.log("✅ Detected Harper on iOS/WebKit!");
+          console.log("✅ Detected Harper on Mobile (iOS/Android)!");
           HarperDetectedRef.current = true;
           setTranscript(transcript + " [Harper DETECTED]");
           setTimeout(() => {
