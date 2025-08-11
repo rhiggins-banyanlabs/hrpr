@@ -231,7 +231,7 @@ export class IntentDetectorService {
     const isMeetingQuery = meetingMatches.length > 0;
     const isExhibitorQuery = (exhibitorMatches.length > 0 || isAIDADemo) && !isAITechExpo && !isMeetingQuery; // Include AIDA demo as exhibitor query
     const isWorkshopQuery = workshopMatches.length > 0 || isSpeakerQuery; // Include speaker queries as workshop queries
-    const isConferenceInfoQuery = (conferenceInfoMatches.length > 0 || isADAAssistance) && !isAIDADemo; // Include ADA assistance but exclude AIDA demo
+    // Note: Conference info queries are handled via conferenceInfoMatches but not stored in a separate variable
     
     // Determine primary intent with weighted scoring
     let primaryIntent: 'venue' | 'conference' | 'location' | 'exhibitor' | 'workshop' | 'meeting' | 'info' | 'general' = 'general';
@@ -293,8 +293,76 @@ export class IntentDetectorService {
     return this.detectIntent(query).isVenueQuery;
   }
 
+  // Helper method to detect clearly non-conference questions
+  private static isNonConferenceQuestion(lowerQuery: string): boolean {
+    // Specific cooking/recipe patterns that are clearly non-conference
+    const cookingPatterns = [
+      'how do you cook', 'how to cook', 'how do i cook', 'recipe for',
+      'how to make', 'how do you make', 'how do i make', 'cooking instructions',
+      'bake a', 'baking a', 'fry a', 'frying a', 'grill a', 'grilling a',
+      'mac and cheese', 'mac n cheese', 'scrambled eggs', 'fried chicken'
+    ];
+    
+    // Non-food topics that are clearly not conference-related
+    const clearlyNonConferenceTopics = [
+      // Weather
+      'weather', 'temperature', 'rain', 'raining', 'snow', 'snowing', 'sunny',
+      'cloudy', 'forecast', 'degrees fahrenheit', 'degrees celsius',
+      
+      // Sports & Entertainment
+      'football game', 'basketball game', 'baseball game', 'soccer match',
+      'movie', 'netflix', 'tv show', 'television show', 'streaming',
+      'music', 'song', 'band', 'artist', 'album', 'concert',
+      
+      // Technology Help (not conference tech)
+      'computer problem', 'laptop issue', 'phone not working', 'wifi password',
+      'email problem', 'internet down', 'virus scan', 'malware removal',
+      
+      // Personal Life
+      'relationship advice', 'dating tips', 'marriage counseling', 'family problems',
+      'homework help', 'school assignment', 'college application', 'job interview',
+      'salary negotiation', 'investment advice', 'stock market',
+      
+      // Hobbies & Activities
+      'gardening tips', 'plant care', 'pet care', 'cat behavior', 'dog training',
+      'book recommendation', 'travel destination', 'vacation planning',
+      'hiking trail', 'camping gear', 'fishing spot',
+      
+      // Random Questions
+      'meaning of life', 'philosophy', 'political opinion', 'election results',
+      'historical fact', 'scientific discovery', 'space exploration'
+    ];
+    
+    // Check for cooking patterns first
+    if (cookingPatterns.some(pattern => lowerQuery.includes(pattern))) {
+      return true;
+    }
+    
+    // Check for other clearly non-conference topics
+    return clearlyNonConferenceTopics.some(topic => lowerQuery.includes(topic));
+  }
+
   static getFillerResponse(query: string): string | null {
     const lowerQuery = query.toLowerCase();
+    
+    // First check if this is clearly a non-conference question
+    if (this.isNonConferenceQuestion(lowerQuery)) {
+      // Use generic responses for non-conference questions
+      const nonConferenceResponses = [
+        "Let me look that up for you",
+        "I'll find that information",
+        "Let me check on that",
+        "I'll help you with that",
+        "Let me see what I can find",
+        "I'll search for that",
+        "Let me look into that for you"
+      ];
+      const selected = nonConferenceResponses[Math.floor(Math.random() * nonConferenceResponses.length)];
+      const prefixes = ["...", "... ", "... Of course! ", "... Sure! ", "... "];
+      const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
+      return prefix + selected;
+    }
+    
     const intent = this.detectIntent(query);
     
     // Helper function to add variety and prevent audio cutoff

@@ -367,7 +367,7 @@ export const useVoiceChat = ({
       
       // Speak error message if possible
       if (speakText && error instanceof Error && error.name !== 'AbortError') {
-        const errorMessage = "I'm sorry, I encountered an error processing your request. Please try again.";
+        const errorMessage = "I'm having a technical issue, but I want to help you! Could you try asking your question again, or would you like me to connect you with someone at the registration desk?";
         try {
           await speakText(errorMessage);
         } catch (voiceError) {
