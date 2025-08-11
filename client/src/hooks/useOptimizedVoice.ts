@@ -104,8 +104,8 @@ export const useOptimizedVoice = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text, voice, speed, model: 'tts-1' }),
-        // Add timeout for TTS API
-        signal: AbortSignal.timeout(8000)
+        // Add timeout for TTS API - increased for longer responses
+        signal: AbortSignal.timeout(20000)
       });
 
       if (!res.ok) {
@@ -185,7 +185,7 @@ export const useOptimizedVoice = () => {
       // Ensure audio is fully loaded before playing to prevent cutoff
       audio.load();
       await new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error('Audio load timeout')), 5000);
+        const timeout = setTimeout(() => reject(new Error('Audio load timeout')), 10000);
         
         audio.oncanplaythrough = () => {
           clearTimeout(timeout);
