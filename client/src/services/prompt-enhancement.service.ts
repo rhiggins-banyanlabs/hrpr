@@ -2,7 +2,7 @@
 import { Strategy } from "@/types/ai-router.types";
 import { LocationService } from "./location.service";
 import { VenueLookupService } from "./venue-lookup.service";
-import { semanticIntentDetector } from "./semantic-intent-detector.service";
+import { semanticIntentDetector, type IntentResult } from "./semantic-intent-detector.service";
 import { conversationContext } from "./conversation-context.service";
 import { LocationCacheService } from "./location-cache.service";
 import { ExhibitorSearchService } from "./exhibitor-search.service";
@@ -52,7 +52,7 @@ export class PromptEnhancementService {
     
     // STEP 1: Check if this is a follow-up question and enhance with context
     const isFollowUp = conversationContext.isFollowUp(originalPrompt);
-    let queryToProcess = conversationContext.enhanceQueryWithContext(originalPrompt);
+    const queryToProcess = conversationContext.enhanceQueryWithContext(originalPrompt);
     
     if (isFollowUp) {
       console.log('🔄 Follow-up detected:', {
@@ -96,14 +96,20 @@ export class PromptEnhancementService {
       enhancedPrompt += `\n\nAI TECH EXPO (FEATURED EVENT):\n${expoInfo}\n${AI_TECH_EXPO.responses.importance}`;
     }
     
-    // STEP 2: Use semantic intent detection for accurate data routing
-    // Try semantic first, fall back to keyword if needed
+    // STEP 2: Use semantic intent detection with timeout for speed
+    // Try semantic first with timeout, fall back to keyword if needed
     let intent;
     try {
-      intent = await semanticIntentDetector.detectIntent(queryToProcess);
+      // Add timeout to semantic detection to prevent long delays
+      const semanticPromise = semanticIntentDetector.detectIntent(queryToProcess);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Semantic detection timeout')), 1000)
+      );
+      
+      intent = await Promise.race([semanticPromise, timeoutPromise]) as IntentResult;
       console.log(`🎯 Semantic intent: ${intent.primaryIntent} (${intent.confidence.toFixed(2)} confidence)`);
-    } catch (error) {
-      console.log('⚠️ Semantic detection failed, using keyword fallback');
+    } catch {
+      console.log('⚠️ Semantic detection failed/timed out, using keyword fallback');
       // Fall back to fast keyword detection
       const keywordIntent = semanticIntentDetector.detectIntentByKeywords(queryToProcess);
       intent = keywordIntent;
@@ -116,140 +122,222 @@ export class PromptEnhancementService {
     const enhancementTime = performance.now() - startTime;
     console.log(`⏱️ Intent detection took ${enhancementTime.toFixed(1)}ms`);
     
-    // STEP 4: Add data based on intent (only fetch what's needed)
+    // STEP 4: Run all data fetching operations in parallel for maximum speed
+    const dataPromises = [];
+    
     // Schedule data for conference queries
+    let schedulePromise = null;
     if (intent.isConferenceQuery && intent.primaryIntent !== 'exhibitor') {
-      try {
-        const lowerPrompt = originalPrompt.toLowerCase();
-        let scheduleData = null;
-        
-        // Check for specific days
-        if (lowerPrompt.includes('thursday') || lowerPrompt.includes('friday') || 
-            lowerPrompt.includes('saturday') || lowerPrompt.includes('sunday')) {
-          const day = lowerPrompt.includes('thursday') ? 'Thursday' :
-                      lowerPrompt.includes('friday') ? 'Friday' :
-                      lowerPrompt.includes('saturday') ? 'Saturday' : 'Sunday';
-          const daySchedule = await scheduleService.getScheduleForDay(day);
-          if (daySchedule.length > 0) {
-            console.log(`📅 PromptEnhancement: Found ${daySchedule.length} events for ${day}`);
-            scheduleData = scheduleService.formatScheduleForDisplay(daySchedule);
+      schedulePromise = (async () => {
+        try {
+          const lowerPrompt = originalPrompt.toLowerCase();
+          let scheduleData = null;
+          
+          // Check for specific days
+          if (lowerPrompt.includes('thursday') || lowerPrompt.includes('friday') || 
+              lowerPrompt.includes('saturday') || lowerPrompt.includes('sunday')) {
+            const day = lowerPrompt.includes('thursday') ? 'Thursday' :
+                        lowerPrompt.includes('friday') ? 'Friday' :
+                        lowerPrompt.includes('saturday') ? 'Saturday' : 'Sunday';
+            const daySchedule = await scheduleService.getScheduleForDay(day);
+            if (daySchedule.length > 0) {
+              console.log(`📅 PromptEnhancement: Found ${daySchedule.length} events for ${day}`);
+              scheduleData = scheduleService.formatScheduleForDisplay(daySchedule);
+            }
           }
-        }
-        // Check for event types
-        else if (lowerPrompt.includes('tour') || lowerPrompt.includes('reception') || 
-                 lowerPrompt.includes('workshop') || lowerPrompt.includes('session')) {
-          const scheduleResults = await scheduleService.searchBySemantic(originalPrompt);
-          if (scheduleResults.length > 0) {
-            console.log(`📅 PromptEnhancement: Found ${scheduleResults.length} matching events`);
-            scheduleData = scheduleService.formatScheduleForDisplay(scheduleResults);
+          // Check for event types
+          else if (lowerPrompt.includes('tour') || lowerPrompt.includes('reception') || 
+                   lowerPrompt.includes('workshop') || lowerPrompt.includes('session')) {
+            const scheduleResults = await scheduleService.searchBySemantic(originalPrompt);
+            if (scheduleResults.length > 0) {
+              console.log(`📅 PromptEnhancement: Found ${scheduleResults.length} matching events`);
+              scheduleData = scheduleService.formatScheduleForDisplay(scheduleResults);
+            }
           }
-        }
-        // General schedule query
-        else {
-          const scheduleResults = await scheduleService.searchBySemantic(originalPrompt);
-          if (scheduleResults.length > 0) {
-            console.log(`📅 PromptEnhancement: Found ${scheduleResults.length} schedule matches`);
-            scheduleData = scheduleService.formatScheduleForDisplay(scheduleResults);
+          // General schedule query
+          else {
+            const scheduleResults = await scheduleService.searchBySemantic(originalPrompt);
+            if (scheduleResults.length > 0) {
+              console.log(`📅 PromptEnhancement: Found ${scheduleResults.length} schedule matches`);
+              scheduleData = scheduleService.formatScheduleForDisplay(scheduleResults);
+            }
           }
+          
+          return scheduleData;
+        } catch (error) {
+          console.log('⚠️ Schedule lookup failed:', error);
+          return null;
         }
-        
-        if (scheduleData) {
-          enhancedPrompt += `\n\nCONFERENCE SCHEDULE:\n${scheduleData}`;
-        }
-      } catch (error) {
-        console.log('⚠️ Schedule lookup failed, continuing without schedule data:', error);
-      }
+      })();
+      dataPromises.push(schedulePromise);
     }
     
     // Conference info for info queries
+    let conferenceInfoPromise = null;
     if (intent.primaryIntent === 'info' && !intent.isExhibitorQuery) {
-      try {
-        const infoResult = await conferenceInfoDatabaseService.searchInfo(originalPrompt);
+      conferenceInfoPromise = conferenceInfoDatabaseService.searchInfo(originalPrompt).then(infoResult => {
         if (infoResult) {
           console.log('ℹ️ PromptEnhancement: Found conference information');
-          enhancedPrompt += `\n\nCONFERENCE INFORMATION:\n${infoResult}`;
+          return infoResult;
         }
-      } catch (error) {
+        return null;
+      }).catch(error => {
         console.error('Error getting conference info:', error);
-      }
+        return null;
+      });
+      dataPromises.push(conferenceInfoPromise);
     }
     
-    // Check for featured technology (like AIDA) first
-    const featuredTechQuery = await featuredTechService.processFeaturedTechQuery(originalPrompt);
-    if (featuredTechQuery.found) {
-      console.log(`🌟 PromptEnhancement: Found featured technology - ${featuredTechQuery.data?.name}`);
-      enhancedPrompt += `\n\nFEATURED TECHNOLOGY:\n${featuredTechQuery.formattedInfo}`;
-    }
+    // Check for featured technology (like AIDA)
+    const featuredTechPromise = featuredTechService.processFeaturedTechQuery(originalPrompt).catch(error => {
+      console.log('⚠️ Featured tech lookup failed:', error);
+      return { found: false };
+    });
+    dataPromises.push(featuredTechPromise);
     
     // Exhibitor data for exhibitor queries
+    let exhibitorPromise = null;
     if (intent.primaryIntent === 'exhibitor' && !isAITechExpoQuery(originalPrompt)) {
-      try {
-        const exhibitorQuery = await this.exhibitorService.processExhibitorQuery(originalPrompt);
-        
+      exhibitorPromise = this.exhibitorService.processExhibitorQuery(originalPrompt).then(exhibitorQuery => {
         if (exhibitorQuery.found && exhibitorQuery.data.length > 0) {
           console.log(`🏢 PromptEnhancement: Found ${exhibitorQuery.data.length} exhibitors from database`);
-          const exhibitorData = this.exhibitorService.formatMultipleExhibitors(exhibitorQuery.data);
-          enhancedPrompt += `\n\n${exhibitorQuery.context.toUpperCase()}\n${exhibitorData}`;
-        } else if (!featuredTechQuery.found) {
-          // Only show "not found" message if it's not a featured technology
-          const lowerPrompt = originalPrompt.toLowerCase();
-          if (lowerPrompt.includes('ada demo') || lowerPrompt.includes('aida')) {
-            console.log('🏢 PromptEnhancement: Query might be about AIDA but not detected as featured tech');
-          }
+          return {
+            context: exhibitorQuery.context.toUpperCase(),
+            data: this.exhibitorService.formatMultipleExhibitors(exhibitorQuery.data)
+          };
         }
-      } catch (error) {
+        return null;
+      }).catch(error => {
         console.log('⚠️ Exhibitor lookup failed, no data added:', error);
-        // No fallback - only use actual database data
-      }
+        return null;
+      });
+      dataPromises.push(exhibitorPromise);
     }
+    
+    // Facility tours and workshops
+    let tourPromise = null;
+    let workshopPromise = null;
     
     // Facility tours (only if explicitly about tours)
     if (intent.isConferenceQuery && facilityToursService.isTourQuery(originalPrompt)) {
-      try {
-        const tours = await facilityToursService.searchTours(originalPrompt);
+      tourPromise = facilityToursService.searchTours(originalPrompt).then(tours => {
         if (tours && tours.length > 0) {
           console.log(`🚐 PromptEnhancement: Found ${tours.length} facility tours`);
-          const tourData = facilityToursService.formatToursForDisplay(tours);
-          enhancedPrompt += `\n\nFACILITY TOURS:\n${tourData}`;
+          return facilityToursService.formatToursForDisplay(tours);
         }
-      } catch (error) {
+        return null;
+      }).catch(error => {
         console.log('⚠️ Facility tour lookup failed:', error);
-      }
+        return null;
+      });
+      dataPromises.push(tourPromise);
     }
     
     // Workshop data
     if (intent.primaryIntent === 'workshop') {
-      try {
-        // Pass the embedding if available to avoid regenerating it
-        const workshopQuery = intent.queryEmbedding 
-          ? await workshopSearchService.processWorkshopQueryWithEmbedding(originalPrompt, intent.queryEmbedding)
-          : await workshopSearchService.processWorkshopQuery(originalPrompt);
-        
+      workshopPromise = (intent.queryEmbedding 
+        ? workshopSearchService.processWorkshopQueryWithEmbedding(originalPrompt, intent.queryEmbedding)
+        : workshopSearchService.processWorkshopQuery(originalPrompt)
+      ).then(workshopQuery => {
         if (workshopQuery.found && workshopQuery.data.length > 0) {
           console.log(`📚 PromptEnhancement: Found ${workshopQuery.data.length} workshops (embedding reused: ${!!intent.queryEmbedding})`);
-          const workshopData = workshopSearchService.formatMultipleWorkshops(workshopQuery.data);
-          enhancedPrompt += `\n\n${workshopQuery.context.toUpperCase()}\n${workshopData}`;
+          return {
+            context: workshopQuery.context.toUpperCase(),
+            data: workshopSearchService.formatMultipleWorkshops(workshopQuery.data)
+          };
         }
-      } catch (error) {
+        return null;
+      }).catch(error => {
         console.log('⚠️ Workshop lookup failed:', error);
-      }
+        return null;
+      });
+      dataPromises.push(workshopPromise);
     }
     
     // Committee meetings
+    let meetingPromise = null;
     if (intent.primaryIntent === 'meeting') {
-      try {
-        // Pass the embedding if available to avoid regenerating it
-        const meetingQuery = intent.queryEmbedding
-          ? await committeeMeetingsService.processMeetingQueryWithEmbedding(originalPrompt, intent.queryEmbedding)
-          : await committeeMeetingsService.processMeetingQuery(originalPrompt);
-        
+      meetingPromise = (intent.queryEmbedding
+        ? committeeMeetingsService.processMeetingQueryWithEmbedding(originalPrompt, intent.queryEmbedding)
+        : committeeMeetingsService.processMeetingQuery(originalPrompt)
+      ).then(meetingQuery => {
         if (meetingQuery.found && meetingQuery.data.length > 0) {
           console.log(`📋 PromptEnhancement: Found ${meetingQuery.data.length} committee meetings (embedding reused: ${!!intent.queryEmbedding})`);
-          const meetingData = committeeMeetingsService.formatMultipleMeetings(meetingQuery.data);
-          enhancedPrompt += `\n\n${meetingQuery.context.toUpperCase()}\n${meetingData}`;
+          return {
+            context: meetingQuery.context.toUpperCase(),
+            data: committeeMeetingsService.formatMultipleMeetings(meetingQuery.data)
+          };
+        }
+        return null;
+      }).catch(error => {
+        console.log('⚠️ Committee meeting lookup failed:', error);
+        return null;
+      });
+      dataPromises.push(meetingPromise);
+    }
+    
+    // Wait for ALL parallel operations to complete
+    if (dataPromises.length > 0) {
+      try {
+        const results = await Promise.all(dataPromises);
+        let resultIndex = 0;
+        
+        // Process schedule data
+        if (schedulePromise) {
+          const scheduleData = results[resultIndex++];
+          if (scheduleData) {
+            enhancedPrompt += `\n\nCONFERENCE SCHEDULE:\n${scheduleData}`;
+          }
+        }
+        
+        // Process conference info
+        if (conferenceInfoPromise) {
+          const infoData = results[resultIndex++];
+          if (infoData) {
+            enhancedPrompt += `\n\nCONFERENCE INFORMATION:\n${infoData}`;
+          }
+        }
+        
+        // Process featured tech (always included)
+        const featuredTechQuery = results[resultIndex++];
+        if (featuredTechQuery && featuredTechQuery.found) {
+          console.log(`🌟 PromptEnhancement: Found featured technology - ${featuredTechQuery.data?.name}`);
+          enhancedPrompt += `\n\nFEATURED TECHNOLOGY:\n${featuredTechQuery.formattedInfo}`;
+        }
+        
+        // Process exhibitor data
+        if (exhibitorPromise) {
+          const exhibitorData = results[resultIndex++];
+          if (exhibitorData && exhibitorData.context && exhibitorData.data) {
+            enhancedPrompt += `\n\n${exhibitorData.context}\n${exhibitorData.data}`;
+          }
+        }
+        
+        // Process tour data
+        if (tourPromise) {
+          const tourData = results[resultIndex++];
+          if (tourData) {
+            enhancedPrompt += `\n\nFACILITY TOURS:\n${tourData}`;
+          }
+        }
+        
+        // Process workshop data
+        if (workshopPromise) {
+          const workshopResult = results[resultIndex++];
+          if (workshopResult && typeof workshopResult === 'object' && workshopResult.context && workshopResult.data) {
+            enhancedPrompt += `\n\n${workshopResult.context}\n${workshopResult.data}`;
+          }
+        }
+        
+        // Process meeting data
+        if (meetingPromise) {
+          const meetingResult = results[resultIndex++];
+          if (meetingResult && typeof meetingResult === 'object' && 'context' in meetingResult && 'data' in meetingResult) {
+            enhancedPrompt += `\n\n${meetingResult.context}\n${meetingResult.data}`;
+          }
         }
       } catch (error) {
-        console.log('⚠️ Committee meeting lookup failed:', error);
+        console.log('⚠️ Parallel lookup operations failed:', error);
       }
     }
     

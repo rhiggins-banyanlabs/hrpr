@@ -104,8 +104,8 @@ export const useOptimizedVoice = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text, voice, speed, model: 'tts-1' }),
-        // Add timeout for TTS API - increased for longer responses
-        signal: AbortSignal.timeout(20000)
+        // Add timeout for TTS API - optimized for tts-1 speed
+        signal: AbortSignal.timeout(18000)
       });
 
       if (!res.ok) {
@@ -182,10 +182,10 @@ export const useOptimizedVoice = () => {
         currentAudioRef.current = null;
       };
 
-      // Ensure audio is fully loaded before playing to prevent cutoff
+      // Ensure audio is ready to play - optimized for speed
       audio.load();
       await new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error('Audio load timeout')), 10000);
+        const timeout = setTimeout(() => reject(new Error('Audio load timeout')), 5000); // Reduced from 10s to 5s
         
         audio.oncanplaythrough = () => {
           clearTimeout(timeout);
@@ -193,13 +193,7 @@ export const useOptimizedVoice = () => {
         };
         audio.onerror = (event) => {
           clearTimeout(timeout);
-          console.error('🔊 Audio load error event:', event);
-          console.error('🔊 Audio error details:', {
-            error: audio.error,
-            networkState: audio.networkState,
-            readyState: audio.readyState,
-            src: audio.src
-          });
+          console.error('🔊 Audio load error:', audio.error?.message || 'Unknown error');
           reject(new Error(`Audio load error: ${audio.error?.message || 'Unknown error'}`));
         };
         
@@ -210,8 +204,8 @@ export const useOptimizedVoice = () => {
         }
       });
       
-      // Small delay to ensure audio buffer is stable
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Reduced delay for faster playback - optimized for speed
+      await new Promise(resolve => setTimeout(resolve, 50));
       
       try {
         await audio.play();

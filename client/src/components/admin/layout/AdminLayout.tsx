@@ -122,7 +122,7 @@ export default function AdminLayout() {
             {isMobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
           </button>
           
-          <h1 className="text-lg font-bold text-green-400">Beacon Admin</h1>
+          <h1 className="text-lg font-bold text-green-400">HRPR Admin</h1>
           
           <button
             onClick={handleLogout}
@@ -138,7 +138,7 @@ export default function AdminLayout() {
             <div className="flex justify-between items-center mb-6">
               <div className="flex-1">
                 <AdminHeader 
-                  title="Beacon Admin Dashboard"
+                  title="HRPR Admin Dashboard"
                   description="Configure and monitor the Harper AI system for your conference"
                 />
               </div>
