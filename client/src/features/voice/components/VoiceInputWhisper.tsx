@@ -61,8 +61,9 @@ const VoiceInputWhisper: React.FC<VoiceInputWhisperProps> = ({
       // Silence detected after speech
       silenceCountRef.current++;
       
-      // Check for sustained silence (60 frames = ~1 second at 60fps)
-      if (silenceCountRef.current > 90) { // 1.5 seconds of silence
+      // Check for sustained silence
+      // 60 frames = ~1 second at 60fps (balanced between responsiveness and allowing natural pauses)
+      if (silenceCountRef.current > 60) { // 1 second of silence
         console.log('🎤 Silence detected, stopping recording');
         stopRecording();
         return;
@@ -128,10 +129,13 @@ const VoiceInputWhisper: React.FC<VoiceInputWhisperProps> = ({
         
         // Only process if we have audio data and user spoke
         if (audioChunksRef.current.length > 0 && hasSpokenRef.current) {
+          // Show "Processing..." state
+          if (onTranscriptUpdate) {
+            onTranscriptUpdate('Processing...', true);
+          }
           await processAudio();
         } else {
           console.log('🎤 No speech detected, not processing');
-          onListeningChange(false);
         }
         
         // Cleanup
@@ -171,6 +175,9 @@ const VoiceInputWhisper: React.FC<VoiceInputWhisperProps> = ({
   const stopRecording = () => {
     console.log('🎤 Stopping recording');
     clearSilenceTimer();
+    
+    // Immediately update the UI state
+    onListeningChange(false);
     
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
@@ -225,7 +232,7 @@ const VoiceInputWhisper: React.FC<VoiceInputWhisperProps> = ({
       console.error('🎤 Error processing audio:', error);
     } finally {
       setIsProcessing(false);
-      onListeningChange(false);
+      // Don't call onListeningChange here - already called in stopRecording
       audioChunksRef.current = [];
     }
   };
@@ -261,12 +268,7 @@ const VoiceInputWhisper: React.FC<VoiceInputWhisperProps> = ({
     };
   }, []);
 
-  // Show processing indicator
-  useEffect(() => {
-    if (isProcessing && onTranscriptUpdate) {
-      onTranscriptUpdate('Processing...', true);
-    }
-  }, [isProcessing, onTranscriptUpdate]);
+  // Removed - processing indicator is now shown directly in onstop
 
   // This component is invisible - it only handles recording logic
   return null;

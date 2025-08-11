@@ -262,6 +262,30 @@ export class FeedbackStateMachine {
     const lowerText = text.toLowerCase().trim();
     console.log(`🔍 Intent detection for: "${lowerText}"`);
     
+    // Phrases that indicate user is done (variations of "no, that's it")
+    const donePatterns = [
+      'no that\'s it', 'no thats it', 'no that is it',
+      'nope that\'s it', 'nope thats it', 
+      'no i\'m good', 'no im good', 'i\'m good', 'im good',
+      'no thanks', 'no thank you', 'nothing else',
+      'that\'s all', 'thats all', 'that is all',
+      'that\'s it', 'thats it', 'that is it',
+      'all set', 'i\'m all set', 'im all set',
+      'i\'m done', 'im done', 'all done',
+      'nothing more', 'no more questions',
+      'that\'s everything', 'thats everything',
+      'no not really', 'not really', 'no nothing',
+      'i think i\'m good', 'i think im good'
+    ];
+    
+    // Check for these done patterns first (they take priority)
+    for (const pattern of donePatterns) {
+      if (lowerText.includes(pattern)) {
+        console.log(`🔍 Detected "done" pattern: "${pattern}"`);
+        return 'no';
+      }
+    }
+    
     // Use word boundaries to avoid false matches (like "no" in "keynote")
     const createWordBoundaryRegex = (word: string) => new RegExp(`\\b${word}\\b`, 'i');
     
