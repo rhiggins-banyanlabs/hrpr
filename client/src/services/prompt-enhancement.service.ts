@@ -290,13 +290,15 @@ export class PromptEnhancementService {
           // User is asking for more - skip on-site entirely and show external
         }
         
+        // Declare venueData at higher scope
+        let venueData: string | null = null;
+        
         // Show external venues if:
         // 1. User is asking for more/other options (ALWAYS show external for these)
         // 2. OR this is a general venue query (not dining specific)
         // For "more" requests, we ALWAYS want to show external venues
         if (isAskingForMore || isFollowUpContext) {
           console.log(`🏪 Showing external venues for follow-up request`);
-          let venueData: string | null = null;
           
           // Tier 1: Try scraped database data first
           await this.initializeVenueLookupIfNeeded();
@@ -338,7 +340,6 @@ export class PromptEnhancementService {
         // Also show external venues for non-dining venue queries
         } else if (!onsiteDiningService.isFoodQuery(originalPrompt)) {
           console.log(`🏪 Showing external venues for general venue query`);
-          let venueData: string | null = null;
           
           // Tier 1: Try scraped database data first
           await this.initializeVenueLookupIfNeeded();
