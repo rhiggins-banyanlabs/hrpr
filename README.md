@@ -1,6 +1,6 @@
-# Beacon: ACA Conference Event Chatbot
+# HRPR: ACA Conference Event Chatbot
 
-Beacon is an interactive event chatbot app designed to enhance the attendee experience at the ACA conference. Beacon provides real-time information, answers to frequently asked questions, and helps guide users through conference events and schedules.
+HRPR is an interactive event chatbot app designed to enhance the attendee experience at the ACA conference. HRPR provides real-time information, answers to frequently asked questions, and helps guide users through conference events and schedules.
 
 ---
 
@@ -74,7 +74,7 @@ The app will be available at [http://localhost:3000](http://localhost:3000) by d
 
 ## Running with Docker
 
-You can run the Beacon client in a Docker container, which will watch for file changes and reload automatically.
+You can run the HRPR client in a Docker container, which will watch for file changes and reload automatically.
 
 ### Prerequisites
 

@@ -300,15 +300,15 @@ export class PromptEnhancementService {
         
         // Process featured tech (always included)
         const featuredTechQuery = results[resultIndex++];
-        if (featuredTechQuery && featuredTechQuery.found) {
-          console.log(`🌟 PromptEnhancement: Found featured technology - ${featuredTechQuery.data?.name}`);
-          enhancedPrompt += `\n\nFEATURED TECHNOLOGY:\n${featuredTechQuery.formattedInfo}`;
+        if (featuredTechQuery && typeof featuredTechQuery === 'object' && 'found' in featuredTechQuery && featuredTechQuery.found) {
+          console.log(`🌟 PromptEnhancement: Found featured technology - ${(featuredTechQuery as any).data?.name}`);
+          enhancedPrompt += `\n\nFEATURED TECHNOLOGY:\n${(featuredTechQuery as any).formattedInfo}`;
         }
         
         // Process exhibitor data
         if (exhibitorPromise) {
           const exhibitorData = results[resultIndex++];
-          if (exhibitorData && exhibitorData.context && exhibitorData.data) {
+          if (exhibitorData && typeof exhibitorData === 'object' && 'context' in exhibitorData && 'data' in exhibitorData) {
             enhancedPrompt += `\n\n${exhibitorData.context}\n${exhibitorData.data}`;
           }
         }
@@ -324,7 +324,7 @@ export class PromptEnhancementService {
         // Process workshop data
         if (workshopPromise) {
           const workshopResult = results[resultIndex++];
-          if (workshopResult && typeof workshopResult === 'object' && workshopResult.context && workshopResult.data) {
+          if (workshopResult && typeof workshopResult === 'object' && 'context' in workshopResult && 'data' in workshopResult) {
             enhancedPrompt += `\n\n${workshopResult.context}\n${workshopResult.data}`;
           }
         }
