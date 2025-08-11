@@ -83,7 +83,7 @@ export class OpenAIService {
           'Authorization': `Bearer ${envConfig.openai}`,
           'Content-Type': 'application/json',
         },
-        signal: AbortSignal.timeout(60000), // 60 second timeout for longer responses
+        signal: AbortSignal.timeout(30000), // 30 second timeout - optimized for speed
         body: JSON.stringify({
           model: this.model,
           messages: [

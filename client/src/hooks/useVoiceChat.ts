@@ -170,33 +170,30 @@ export const useVoiceChat = ({
         console.log('🔇 Skipping filler response - in feedback state:', currentState);
       }
 
-      // Log analytics event
-      try {
-        await ChatStorageService.logAnalyticsEvent(activeSessionId, 'user_question', {
-          question: text.trim(),
-          category: categorizeQuestion(text),
-          timestamp: new Date().toISOString()
-        });
-      } catch (analyticsError) {
+      // Start database operations in parallel with AI processing (non-blocking for speed)
+      const analyticsPromise = ChatStorageService.logAnalyticsEvent(activeSessionId, 'user_question', {
+        question: text.trim(),
+        category: categorizeQuestion(text),
+        timestamp: new Date().toISOString()
+      }).catch(analyticsError => {
         console.error('❌ Failed to log analytics event:', analyticsError);
-      }
+      });
 
-      // Save user message to database
-      let savedUserMessage = null;
-      try {
-        savedUserMessage = await ChatStorageService.saveMessage(
-          activeSessionId,
-          'user',
-          text.trim(),
-          {
-            metadata: { source: 'voice' }
-          }
-        );
+      const saveUserMessagePromise = ChatStorageService.saveMessage(
+        activeSessionId,
+        'user',
+        text.trim(),
+        {
+          metadata: { source: 'voice' }
+        }
+      ).then(savedUserMessage => {
         console.log('💾 User message saved:', savedUserMessage?.id);
-      } catch (dbError) {
+        return savedUserMessage;
+      }).catch(dbError => {
         console.error('❌ Failed to save user message to database:', dbError);
         console.log('⚠️ Continuing with AI processing despite database error');
-      }
+        return null;
+      });
 
       // Create new abort controller for this request
       abortControllerRef.current = new AbortController();
@@ -329,7 +326,7 @@ export const useVoiceChat = ({
                 audio.removeEventListener('ended', handleEnded);
                 currentAudioRef.current = null;
                 resolve();
-              }, 60000); // 60 second timeout for longer audio responses
+              }, 45000); // 45 second timeout - optimized for speed
             });
           }
           
@@ -338,29 +335,37 @@ export const useVoiceChat = ({
         }
       }
 
-      // Save Harper's response to database
-      try {
-        const savedMessage = await ChatStorageService.saveMessage(
-          activeSessionId,
-          'Harper',
-          aiResponse.response,
-          {
-            metadata: { 
-              isVoiceResponse: true,
-              processingTime: aiResponse.responseTime,
-              tokensUsed: aiResponse.tokensUsed,
-              cost: aiResponse.cost
-            }
+      // Save Harper's response to database (non-blocking)
+      const saveHarperMessagePromise = ChatStorageService.saveMessage(
+        activeSessionId,
+        'Harper',
+        aiResponse.response,
+        {
+          metadata: { 
+            isVoiceResponse: true,
+            processingTime: aiResponse.responseTime,
+            tokensUsed: aiResponse.tokensUsed,
+            cost: aiResponse.cost
           }
-        );
+        }
+      ).then(savedMessage => {
         console.log('💾 Harper message saved:', savedMessage?.id);
-      } catch (dbError) {
+        return savedMessage;
+      }).catch(dbError => {
         console.error('❌ Failed to save Harper message to database:', dbError);
         console.log('⚠️ Continuing despite error');
-      }
+        return null;
+      });
 
       // Increment conversation count after successful response
       conversationCountRef.current++;
+      
+      // Wait for all database operations to complete (but don't block the main flow)
+      Promise.all([analyticsPromise, saveUserMessagePromise, saveHarperMessagePromise]).then(() => {
+        console.log('✅ All database operations completed');
+      }).catch(error => {
+        console.log('⚠️ Some database operations failed:', error);
+      });
       
     } catch (error) {
       console.error('❌ Error processing voice query:', error);
@@ -684,7 +689,7 @@ export const useVoiceChat = ({
               audio.removeEventListener('ended', handleEnded);
               currentAudioRef.current = null;
               resolve();
-            }, 60000); // 60 second timeout for longer responses
+            }, 45000); // 45 second timeout - optimized for speed
           });
         }
       } catch (error) {
@@ -950,7 +955,7 @@ export const useVoiceChat = ({
                 clearInterval(checkSpeaking);
                 console.log('🔊 Voice response finished, starting silence detection for follow-up response');
                 
-                // Add a 2-second delay to let user start speaking if they want to
+                // Add a 5-second delay to let user start speaking after responses
                 setTimeout(() => {
                   // Only start silence detection if still idle and not processing
                   if (feedbackStateMachine.getCurrentState() === FeedbackState.IDLE && 
@@ -969,7 +974,7 @@ export const useVoiceChat = ({
                   } else {
                     console.log('🔇 Not starting silence detection - user or system is active');
                   }
-                }, 5000); // 5 second delay to let user start speaking
+                }, 5000); // 5 second delay to let user start speaking after responses
               }
             }, 100); // Check every 100ms if still speaking
           }
