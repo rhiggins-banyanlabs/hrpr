@@ -13,6 +13,7 @@ import { committeeMeetingsService } from "./committee-meetings.service"; // with
 import { conferenceInfoDatabaseService } from "./conference-info-db.service";
 import { AI_TECH_EXPO, isAITechExpoQuery } from "@/data/ai-tech-expo";
 import { featuredTechService } from "./featured-tech.service";
+import { onsiteDiningService } from "./onsite-dining.service";
 
 export class PromptEnhancementService {
   private venueLookup: VenueLookupService | null = null;
@@ -255,16 +256,60 @@ export class PromptEnhancementService {
     // STEP 5: Location/venue data (most expensive, do last)
     if (intent.primaryIntent === 'venue' || intent.primaryIntent === 'location') {
       try {
+        // Check if this is a follow-up request for "more" options
+        const lowerOriginal = originalPrompt.toLowerCase();
+        const lowerProcessed = queryToProcess.toLowerCase();
+        const isAskingForMore = /\b(more|other|another|else|additional|besides|different)\b/.test(lowerOriginal) ||
+                               /\b(more|other|another|else|additional|besides|different)\b/.test(lowerProcessed);
+        
+        // Check if this is a follow-up based on context
+        const context = conversationContext.getContext();
+        const isFollowUpContext = isFollowUp && context?.lastIntent === 'venue';
+        
+        console.log(`🔍 Venue query analysis:`, {
+          isAskingForMore,
+          isFollowUp,
+          isFollowUpContext,
+          lastTopic: context?.lastTopic,
+          lastIntent: context?.lastIntent
+        });
+        
+        // ONLY show on-site dining if this is NOT a follow-up request for more
+        if (!isAskingForMore && !isFollowUpContext) {
+          const diningQuery = await onsiteDiningService.processDiningQuery(originalPrompt);
+          
+          if (diningQuery.found && diningQuery.isOnsiteQuery) {
+            console.log(`🍽️ PromptEnhancement: Showing ON-SITE dining (${diningQuery.data.length} options)`);
+            enhancedPrompt += `\n\n${diningQuery.formattedInfo}`;
+            
+            // Don't add external venues - just stop here for first query
+            return enhancedPrompt;
+          }
+        } else if (isAskingForMore || isFollowUpContext) {
+          console.log(`🍽️ PromptEnhancement: User asking for MORE options - skipping on-site, showing external venues`);
+          // User is asking for more - skip on-site entirely and show external
+        }
+        
+        // Declare venueData at higher scope
         let venueData: string | null = null;
         
-        // Tier 1: Try scraped database data first
-        await this.initializeVenueLookupIfNeeded();
-        
-        if (this.venueLookup) {
-          const venueCategory = this.venueLookup.detectCategory(originalPrompt);
-          console.log(`🔍 PromptEnhancement: Venue category detected: ${venueCategory || 'none'}`);
+        // Show external venues if:
+        // 1. User is asking for more/other options (ALWAYS show external for these)
+        // 2. OR this is a general venue query (not dining specific)
+        // For "more" requests, we ALWAYS want to show external venues
+        if (isAskingForMore || isFollowUpContext) {
+          console.log(`🏪 Showing external venues for follow-up request`);
           
-          if (venueCategory) {
+          // Tier 1: Try scraped database data first
+          await this.initializeVenueLookupIfNeeded();
+          
+          if (this.venueLookup) {
+            // Use the enhanced query for better category detection on follow-ups
+            const queryForCategory = isFollowUpContext ? queryToProcess : originalPrompt;
+            const venueCategory = this.venueLookup.detectCategory(queryForCategory);
+            console.log(`🔍 PromptEnhancement: Venue category detected: ${venueCategory || 'none'} from query: "${queryForCategory}"`);
+            
+            if (venueCategory) {
             venueData = await this.venueLookup.formatVenuesForResponse(venueCategory, 150);
             if (venueData && !venueData.includes('No ')) { // Check if we got actual results
               // Check if user asked for a specific brand/chain that wasn't found in scraped data
@@ -288,6 +333,26 @@ export class PromptEnhancementService {
               }
             } else {
               venueData = null; // Reset if no results found
+            }
+          }
+        }
+        
+        // Also show external venues for non-dining venue queries
+        } else if (!onsiteDiningService.isFoodQuery(originalPrompt)) {
+          console.log(`🏪 Showing external venues for general venue query`);
+          
+          // Tier 1: Try scraped database data first
+          await this.initializeVenueLookupIfNeeded();
+          
+          if (this.venueLookup) {
+            const venueCategory = this.venueLookup.detectCategory(originalPrompt);
+            console.log(`🔍 PromptEnhancement: Venue category detected: ${venueCategory || 'none'}`);
+            
+            if (venueCategory) {
+              venueData = await this.venueLookup.formatVenuesForResponse(venueCategory, 150);
+              if (venueData && !venueData.includes('No ')) { // Check if we got actual results
+                enhancedPrompt += '\n\nNEARBY VENUES:\n' + venueData;
+              }
             }
           }
         }

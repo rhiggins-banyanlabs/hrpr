@@ -380,27 +380,78 @@ export class IntentDetectorService {
         return addPausePrefix(exhibitorResponses);
         
       case 'venue':
-        // Food & dining
-        if (lowerQuery.includes('restaurant') || lowerQuery.includes('food') || lowerQuery.includes('eat')) {
-          const responses = [
-            "Let me check what restaurants are nearby",
-            "I'll find some good dining options for you",
-            "Let me see what food places are close by"
+        // Food & dining queries - check if asking for more/other options first
+        const isAskingForMore = /\b(more|other|another|else|additional|besides|different)\b/i.test(lowerQuery);
+        
+        // Coffee queries
+        if (lowerQuery.includes('coffee') || lowerQuery.includes('cafe') || lowerQuery.includes('starbucks') ||
+            lowerQuery.includes('espresso') || lowerQuery.includes('latte')) {
+          const responses = isAskingForMore ? [
+            "Let me find more coffee shops in the area",
+            "I'll look for other coffee options nearby",
+            "Let me check additional cafes around here",
+            "I'll search for more coffee places",
+            "Let me see what other coffee shops are close by",
+            "I'll find more cafe options in downtown"
+          ] : [
+            "Let me find coffee options for you",
+            "I'll look up coffee shops nearby",
+            "Let me check available coffee options",
+            "I'll search for coffee places",
+            "Let me see what coffee options are available"
           ];
           return addPausePrefix(responses);
         }
-        // Coffee
-        if (lowerQuery.includes('coffee') || lowerQuery.includes('cafe') || lowerQuery.includes('starbucks')) {
-          const responses = [
-            "Let me find the nearest coffee shops",
-            "I'll check what cafes are around here",
-            "Let me look up coffee options nearby",
-            "I'll find you some caffeine options",
-            "Let me locate coffee shops for you",
-            "I'll search for nearby coffee places"
+        
+        // General food & dining queries
+        if (lowerQuery.includes('restaurant') || lowerQuery.includes('food') || lowerQuery.includes('eat') ||
+            lowerQuery.includes('breakfast') || lowerQuery.includes('lunch') || lowerQuery.includes('dinner')) {
+          const responses = isAskingForMore ? [
+            "Let me find more dining options in the area",
+            "I'll look for other restaurants nearby",
+            "Let me check additional dining choices",
+            "I'll search for more places to eat",
+            "Let me see what else is available",
+            "I'll find other dining options around here",
+            "Let me look for more restaurants",
+            "I'll check what other food options are nearby",
+            "Let me search for additional restaurants",
+            "I'll find more places you might enjoy"
+          ] : [
+            "Let me find dining options for you",
+            "I'll look up restaurants nearby",
+            "Let me check available dining choices",
+            "I'll search for places to eat",
+            "Let me see what restaurants are available",
+            "I'll find dining options around here",
+            "Let me look for restaurants",
+            "I'll check what food options are nearby"
           ];
           return addPausePrefix(responses);
         }
+        // Bar/drinks queries
+        if (lowerQuery.includes('bar') || lowerQuery.includes('drink') || lowerQuery.includes('cocktail') ||
+            lowerQuery.includes('beer') || lowerQuery.includes('wine')) {
+          const responses = isAskingForMore ? [
+            "Let me find more bars and lounges in the area",
+            "I'll look for other places to get drinks",
+            "Let me check additional bar options nearby",
+            "I'll search for more bars",
+            "Let me see what other lounges are around",
+            "I'll find more nightlife options",
+            "Let me look for other cocktail bars",
+            "I'll check what other bars are available"
+          ] : [
+            "Let me find bar options for you",
+            "I'll look up bars and lounges nearby",
+            "Let me check available bar options",
+            "I'll search for places to get drinks",
+            "Let me see what bars are around",
+            "I'll find nightlife options nearby"
+          ];
+          return addPausePrefix(responses);
+        }
+        
         // Parking
         if (lowerQuery.includes('parking') || lowerQuery.includes('park')) {
           const responses = [
