@@ -21,6 +21,9 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isStoppingRef = useRef(false);
   const hasReceivedSpeechRef = useRef(false);
+  const lastResultTimeRef = useRef<number>(0);
+  const stableTranscriptRef = useRef<string>('');
+  const noSpeechCountRef = useRef<number>(0);
 
   // Clear silence timer
   const clearSilenceTimer = () => {
@@ -30,19 +33,47 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
     }
   };
 
-  // Start silence timer (longer for mobile)
+  // Check if transcript is stable (hasn't changed for a while)
+  const checkTranscriptStability = () => {
+    const currentTranscript = finalTranscriptRef.current || interimTranscriptRef.current;
+    
+    if (currentTranscript && currentTranscript === stableTranscriptRef.current) {
+      // Transcript hasn't changed, user might have stopped speaking
+      const timeSinceLastResult = Date.now() - lastResultTimeRef.current;
+      
+      // Check if mobile for appropriate timeout
+      const userAgent = navigator.userAgent;
+      const isMobile = /iPad|iPhone|iPod|Android/i.test(userAgent) || ('ontouchstart' in window);
+      const stabilityThreshold = isMobile ? 1500 : 1200; // 1.5s for mobile, 1.2s for desktop
+      
+      if (timeSinceLastResult > stabilityThreshold) {
+        console.log(`🎤 Speech stable for ${timeSinceLastResult}ms - user stopped speaking`);
+        finishRecognition();
+      }
+    } else {
+      // Transcript changed, update stable reference
+      stableTranscriptRef.current = currentTranscript;
+      lastResultTimeRef.current = Date.now();
+    }
+  };
+  
+  // Start silence timer (with stability checking)
   const startSilenceTimer = () => {
     clearSilenceTimer();
     
-    // Check if mobile for longer timeout
+    // Check if mobile for appropriate timeout
     const userAgent = navigator.userAgent;
     const isMobile = /iPad|iPhone|iPod|Android/i.test(userAgent) || ('ontouchstart' in window);
-    const timeout = isMobile ? 2500 : 2000; // 2.5 seconds for mobile, 2 for desktop
     
+    // Use shorter intervals for stability checking
     silenceTimerRef.current = setTimeout(() => {
-      console.log(`🎤 Silence detected after ${timeout}ms - user stopped speaking`);
-      finishRecognition();
-    }, timeout);
+      checkTranscriptStability();
+      
+      // Continue checking if still listening
+      if (!isStoppingRef.current && recognitionRef.current) {
+        startSilenceTimer();
+      }
+    }, 500); // Check every 500ms
   };
 
   // Finish recognition and send result
@@ -153,38 +184,50 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
       const isMobile = isIOS || isAndroid || ('ontouchstart' in window);
       
       if (isMobile) {
-        // Mobile devices: Take the LAST (most complete) result but don't accumulate
+        // Mobile devices: Build complete transcript from all results
         if (event.results.length > 0) {
-          // Get the LAST result which contains the complete transcript
-          const lastIndex = event.results.length - 1;
-          const lastResult = event.results[lastIndex];
-          const transcript = lastResult[0].transcript;
+          let fullTranscript = '';
+          let hasAnyFinal = false;
           
-          console.log("📱 VoiceInput Mobile - Got result:", transcript);
-          console.log("📱 Result index:", lastIndex, "of", event.results.length);
-          console.log("📱 Is final:", lastResult.isFinal);
+          // Build the complete transcript from all results
+          for (let i = 0; i < event.results.length; i++) {
+            const result = event.results[i];
+            const transcript = result[0].transcript;
+            
+            // On Android, each result is cumulative, so we just take the last one
+            // On iOS, we might need to concatenate
+            if (isAndroid) {
+              fullTranscript = transcript; // Just use the latest
+            } else {
+              // For iOS or other platforms, concatenate if needed
+              if (i === event.results.length - 1) {
+                fullTranscript = transcript;
+              }
+            }
+            
+            if (result.isFinal) {
+              hasAnyFinal = true;
+            }
+          }
           
-          // REPLACE (not append) the transcript with the latest complete version
-          finalTranscriptRef.current = transcript;
-          setFinalTranscript(transcript);
+          console.log("📱 Mobile - Transcript:", fullTranscript);
+          console.log("📱 Has final result:", hasAnyFinal);
+          
+          // REPLACE the transcript with the complete version
+          finalTranscriptRef.current = fullTranscript;
+          setFinalTranscript(fullTranscript);
           hasReceivedSpeechRef.current = true;
+          
+          // Update last result time for stability checking
+          lastResultTimeRef.current = Date.now();
           
           // Notify parent with the complete transcript
           if (onTranscriptUpdate) {
-            onTranscriptUpdate(transcript, false);
+            onTranscriptUpdate(fullTranscript, !hasAnyFinal);
           }
           
-          // Start silence timer to detect when user stops speaking
+          // Start/restart stability checking
           startSilenceTimer();
-          
-          // If this is a final result, process it immediately
-          if (lastResult.isFinal) {
-            console.log("📱 Mobile: Got final result, processing immediately");
-            // Clear the timer since we got a final result
-            clearSilenceTimer();
-            // Process the final result
-            finishRecognition();
-          }
         }
         return;
       }
