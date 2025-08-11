@@ -201,7 +201,7 @@ export default function AdminLayout() {
           </div>
 
           {/* Desktop Tabs and Content */}
-          <div className="flex-1 overflow-y-auto p-4 lg:p-6">
+          <div className="flex-1 overflow-y-auto p-4 lg:p-6 pb-20">
             <div className="max-w-7xl mx-auto">
               {/* Desktop Tabs */}
               <div className="hidden lg:block mb-6">

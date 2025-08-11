@@ -206,11 +206,41 @@ export default function ChatPage() {
     }
   }, [searchParams, sendMessage, currentSession?.id, hasPlayedIntroRef.current]);
 
+  // Clean up session when page unloads or component unmounts
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (currentSession?.id) {
+        console.log('🔚 Page unloading, ending session:', currentSession.id);
+        // Use sendBeacon for reliable cleanup on page unload
+        const url = `/api/end-session`;
+        const data = JSON.stringify({ sessionId: currentSession.id });
+        navigator.sendBeacon(url, data);
+      }
+    };
+
+    // Add event listener for page unload
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    // Cleanup on component unmount
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      if (currentSession?.id) {
+        console.log('🔚 Component unmounting, ending session:', currentSession.id);
+        endSession();
+      }
+    };
+  }, [currentSession, endSession]);
+
   // Handle back to home
-  const handleBackToHome = useCallback(() => {
+  const handleBackToHome = useCallback(async () => {
     stopTyping();
+    // End the session when navigating away
+    if (currentSession?.id) {
+      console.log('🔚 Ending session before navigation:', currentSession.id);
+      await endSession();
+    }
     router.push("/");
-  }, [router, stopTyping]);
+  }, [router, stopTyping, currentSession, endSession]);
 
   // Handle explicit session end - commented out as it's not currently used
   // const handleEndChat = useCallback(async () => {

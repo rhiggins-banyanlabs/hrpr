@@ -19,11 +19,6 @@ export default function SessionsList({
   viewSession, 
   deleteSession 
 }: SessionsListProps) {
-  // Simple test function
-  const testModal = () => {
-    alert('Button clicked! This proves the button works.')
-    console.log('🧪 Test button clicked - this should show if JavaScript is working')
-  }
 
   // Safety check for sessions
   if (!sessions || !Array.isArray(sessions)) {
@@ -82,9 +77,6 @@ export default function SessionsList({
         <CardContent>
           <div className="text-center py-12">
             <div className="text-white/70">No chat sessions found</div>
-            <Button onClick={testModal} variant="primary" className="mt-4">
-              Test Button (Should Show Alert)
-            </Button>
           </div>
         </CardContent>
       </Card>
@@ -96,12 +88,7 @@ export default function SessionsList({
   return (
     <Card>
       <CardHeader>
-        <div className="flex justify-between items-center">
-          <h3 className="text-xl font-semibold text-white">Recent Chat Sessions</h3>
-          <Button onClick={testModal} variant="secondary" size="sm">
-            Test Alert
-          </Button>
-        </div>
+        <h3 className="text-xl font-semibold text-white">Recent Chat Sessions</h3>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">

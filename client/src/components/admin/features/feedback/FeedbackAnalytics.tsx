@@ -376,9 +376,12 @@ export const FeedbackAnalytics: React.FC = () => {
       {/* All Feedback Sessions */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <h3 className="text-xl font-semibold text-white">All Feedback Sessions</h3>
-            <div className="flex items-center gap-2">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <h3 className="text-lg lg:text-xl font-semibold text-white">All Feedback Sessions</h3>
+            
+            {/* Mobile: Stack buttons vertically */}
+            <div className="flex flex-col sm:flex-row flex-wrap lg:flex-nowrap items-stretch sm:items-center gap-2">
+              {/* Delete Selected Button */}
               <button
                 onClick={handleDeleteSelected}
                 disabled={selectedIds.size === 0}
@@ -388,12 +391,14 @@ export const FeedbackAnalytics: React.FC = () => {
                     : 'bg-gray-500 opacity-50 cursor-not-allowed'
                 }`}
               >
-                Delete Selected {selectedIds.size > 0 && `(${selectedIds.size})`}
+                Delete {selectedIds.size > 0 && `(${selectedIds.size})`}
               </button>
-              <div className="flex bg-white/5 rounded-lg p-1">
+              
+              {/* Filter Buttons */}
+              <div className="flex bg-white/5 rounded-lg p-1 flex-1 sm:flex-initial">
                 <button
                   onClick={() => setFilter('all')}
-                  className={`px-3 py-1 rounded text-sm transition-colors ${
+                  className={`flex-1 sm:flex-initial px-2 sm:px-3 py-1 rounded text-xs sm:text-sm transition-colors ${
                     filter === 'all' 
                       ? 'bg-blue-500 text-white' 
                       : 'text-white/60 hover:text-white'
@@ -403,7 +408,7 @@ export const FeedbackAnalytics: React.FC = () => {
                 </button>
                 <button
                   onClick={() => setFilter('positive')}
-                  className={`px-3 py-1 rounded text-sm transition-colors ${
+                  className={`flex-1 sm:flex-initial px-2 sm:px-3 py-1 rounded text-xs sm:text-sm transition-colors ${
                     filter === 'positive' 
                       ? 'bg-green-500 text-white' 
                       : 'text-white/60 hover:text-white'
@@ -413,7 +418,7 @@ export const FeedbackAnalytics: React.FC = () => {
                 </button>
                 <button
                   onClick={() => setFilter('negative')}
-                  className={`px-3 py-1 rounded text-sm transition-colors ${
+                  className={`flex-1 sm:flex-initial px-2 sm:px-3 py-1 rounded text-xs sm:text-sm transition-colors ${
                     filter === 'negative' 
                       ? 'bg-red-500 text-white' 
                       : 'text-white/60 hover:text-white'
@@ -422,6 +427,8 @@ export const FeedbackAnalytics: React.FC = () => {
                   Negative
                 </button>
               </div>
+              
+              {/* Refresh Button */}
               <button
                 onClick={loadFeedbackData}
                 className="px-3 py-1.5 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 transition-colors"
