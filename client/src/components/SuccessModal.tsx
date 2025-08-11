@@ -1,5 +1,5 @@
 import React from "react";
-
+import { Button } from "@/components/landingPage/ui/button";
 
 interface SuccessModalProps {
   setShowSuccessModal: (show: boolean) => void;
@@ -10,7 +10,7 @@ const SuccessModal: React.FC<SuccessModalProps> = ({ setShowSuccessModal }) => {
     <>
       <div
         id="popup-modal"
-        className="overflow-y-auto overflow-x-hidden fixed z-50 justify-center content-center items-center w-full md:inset-0 h-[calc(100%-1rem)] max-h-full"
+        className="overflow-y-auto overflow-x-hidden fixed z-50 justify-center w-full md:inset-0 h-[calc(100%-1rem)] max-h-full"
       >
         <div className="justify-self-center relative p-4 w-full max-w-md max-h-full">
           <div className="relative bg-black rounded-lg shadow-sm">
@@ -32,8 +32,8 @@ const SuccessModal: React.FC<SuccessModalProps> = ({ setShowSuccessModal }) => {
                 <path
                   stroke="#6366f1"
                   strokeLinecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
                   d="m1 1 6 6m0 0 6 6M7 7l6-6M7 7l-6 6"
                 />
               </svg>
@@ -50,24 +50,24 @@ const SuccessModal: React.FC<SuccessModalProps> = ({ setShowSuccessModal }) => {
                 <path
                   stroke="currentColor"
                   strokeLinecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
                   d="M10 11V6m0 8h.01M19 10a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
                 />
               </svg>
               <h3 className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 via-purple-300 to-blue-300 text-xl sm:text-xl md:text-xl text-center">
                 Thank you for your request. We will contact you shortly.
               </h3>
-              <button
+              <Button
                 onClick={() => {
                   setShowSuccessModal(false);
                 }}
                 data-modal-hide="popup-modal"
                 type="button"
-                className="mt-4 place-self-center place-items-center w-1/4 bg-hrpr-gradient hover:opacity-90 text-brand-white font-semibold py-2 rounded-lg transition-all duration-200 text-sm font-orbitron border-0"
+                className="mt-8 w-1/2 bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 hover:opacity-90 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-200 text-lg font-orbitron border-0 cursor-pointer"
               >
                 CLOSE
-              </button>
+              </Button>
             </div>
           </div>
         </div>
