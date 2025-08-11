@@ -21,7 +21,7 @@ docker compose up --build    # Run with hot reload
 
 ## Architecture Overview
 
-Beacon is an interactive event chatbot app designed to enhance the attendee experience at the ACA conference. Built with Next.js 15 and TypeScript, it provides real-time Q&A, event schedule lookup, venue information, and a friendly voice-enabled interface. The architecture consists of:
+HRPR is an interactive event chatbot app designed to enhance the attendee experience at the ACA conference. Built with Next.js 15 and TypeScript, it provides real-time Q&A, event schedule lookup, venue information, and a friendly voice-enabled interface. The architecture consists of:
 
 ### AI Service
 - **Core Service**: `src/services/openai.service.ts` - OpenAI GPT-4o-mini integration
