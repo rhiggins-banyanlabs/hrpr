@@ -80,24 +80,43 @@ const VoiceOrb: React.FC<VoiceOrbProps> = ({
     isListeningForWakeWord, shouldShowRecordingState, showSpeaker, isProcessingQuery, isThinkingState
   });
 
-  // Handle click - allow clicks for initial activation OR when Harper is activated
-  const handleClick = () => {
-    console.log("🎤 VoiceOrb clicked!", { 
-      isChatOpen, 
-      isHarperActivated,
-      isHarperSpeaking, 
-      hasToggleFunction: !!onVoiceInputToggle,
-      isClickable 
-    })
+  // Handle click/touch - allow clicks for initial activation OR when Harper is activated
+  const handleInteraction = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     
-    // Allow clicks when:
+    // Don't trigger if already handled by touch
+    if ('touches' in e && e.type === 'touchend') {
+      // This is a touch event
+      console.log("🎤 VoiceOrb touched (touchend)!", { 
+        isChatOpen, 
+        isHarperActivated,
+        isHarperSpeaking, 
+        hasToggleFunction: !!onVoiceInputToggle,
+        isClickable 
+      })
+    } else if (!('ontouchstart' in window)) {
+      // This is a click on non-touch device
+      console.log("🎤 VoiceOrb clicked!", { 
+        isChatOpen, 
+        isHarperActivated,
+        isHarperSpeaking, 
+        hasToggleFunction: !!onVoiceInputToggle,
+        isClickable 
+      })
+    } else {
+      // This is a click on a touch device - ignore it (handled by touch)
+      return;
+    }
+    
+    // Allow interaction when:
     // 1. Harper is not activated yet (to start "Hey Harper" detection)
     // 2. Harper is activated but not speaking (for voice input)
     if (!isHarperSpeaking && onVoiceInputToggle) {
       console.log('🎤 VoiceOrb executing voice input toggle')
       onVoiceInputToggle()
     } else {
-      console.log('🎤 VoiceOrb click ignored - Harper is speaking or no toggle function')
+      console.log('🎤 VoiceOrb interaction ignored - Harper is speaking or no toggle function')
     }
   };
 
@@ -110,7 +129,8 @@ const VoiceOrb: React.FC<VoiceOrbProps> = ({
         className={`absolute inset-0 z-10 ${
           isClickable ? 'cursor-pointer' : 'cursor-default'
         }`}
-        onClick={handleClick}
+        onClick={handleInteraction}
+        onTouchEnd={handleInteraction}
       />
       <Orb
         hoverIntensity={0.6}
