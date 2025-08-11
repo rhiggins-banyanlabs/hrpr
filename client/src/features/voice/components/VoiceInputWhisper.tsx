@@ -98,13 +98,16 @@ const VoiceInputWhisper: React.FC<VoiceInputWhisperProps> = ({
 
       // Set up audio context for silence detection
       const AudioContext = (window as any).AudioContext || (window as any).webkitAudioContext;
-      audioContextRef.current = new AudioContext();
-      analyserRef.current = audioContextRef.current.createAnalyser();
-      analyserRef.current.fftSize = 2048;
-      analyserRef.current.smoothingTimeConstant = 0.8;
+      const audioContext = new AudioContext();
+      audioContextRef.current = audioContext;
       
-      const source = audioContextRef.current.createMediaStreamSource(stream);
-      source.connect(analyserRef.current);
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 2048;
+      analyser.smoothingTimeConstant = 0.8;
+      analyserRef.current = analyser;
+      
+      const source = audioContext.createMediaStreamSource(stream);
+      source.connect(analyser);
 
       // Set up MediaRecorder
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
@@ -136,7 +139,7 @@ const VoiceInputWhisper: React.FC<VoiceInputWhisperProps> = ({
           streamRef.current.getTracks().forEach(track => track.stop());
           streamRef.current = null;
         }
-        if (audioContextRef.current) {
+        if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
           audioContextRef.current.close();
           audioContextRef.current = null;
         }
@@ -252,7 +255,7 @@ const VoiceInputWhisper: React.FC<VoiceInputWhisperProps> = ({
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
       }
-      if (audioContextRef.current) {
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
         audioContextRef.current.close();
       }
     };
