@@ -29,7 +29,13 @@ export const useSpeechRecognition = (
   const lastProcessedTranscriptRef = useRef<string>("");
   const finalizedTranscriptRef = useRef<string>("");
 
-  const Harper_VARIATIONS = ["harper", "conny", "coni", "koni", "honey"];
+  const Harper_VARIATIONS = [
+    "harper", 
+    "harbor",  // Common misrecognition
+    "harpur",  // Common mispronunciation
+    "hopper",  // Common misrecognition
+    "copper"   // Sometimes heard as this
+  ];
 
   // Initialize speech recognition
   useEffect(() => {
