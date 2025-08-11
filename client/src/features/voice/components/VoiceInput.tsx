@@ -21,6 +21,11 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isStoppingRef = useRef(false);
   const hasReceivedSpeechRef = useRef(false);
+  const lastResultTimeRef = useRef<number>(0);
+  const stableTranscriptRef = useRef<string>('');
+  const noSpeechCountRef = useRef<number>(0);
+  const lastTranscriptChangeRef = useRef<number>(Date.now());
+  const endSpeechTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Clear silence timer
   const clearSilenceTimer = () => {
@@ -30,20 +35,48 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
     }
   };
 
-  // Start silence timer (2 seconds)
+  // Clear end speech timer
+  const clearEndSpeechTimer = () => {
+    if (endSpeechTimerRef.current) {
+      clearTimeout(endSpeechTimerRef.current);
+      endSpeechTimerRef.current = null;
+    }
+  };
+
+  // Set up end-of-speech detection with generous timeout
+  const setupEndOfSpeechTimer = () => {
+    clearEndSpeechTimer();
+    
+    const userAgent = navigator.userAgent;
+    const isMobile = /iPad|iPhone|iPod|Android/i.test(userAgent) || ('ontouchstart' in window);
+    
+    // Much longer timeout for mobile to avoid cutting off
+    const timeout = isMobile ? 3000 : 2000; // 3s for mobile, 2s for desktop
+    
+    endSpeechTimerRef.current = setTimeout(() => {
+      const currentTranscript = finalTranscriptRef.current || interimTranscriptRef.current;
+      if (currentTranscript && hasReceivedSpeechRef.current) {
+        const timeSinceLastChange = Date.now() - lastTranscriptChangeRef.current;
+        console.log(`🎤 No new speech for ${timeSinceLastChange}ms, ending recognition`);
+        finishRecognition();
+      }
+    }, timeout);
+  };
+  
+  // NOT USED - Replaced with setupEndOfSpeechTimer
   const startSilenceTimer = () => {
-    clearSilenceTimer();
-    silenceTimerRef.current = setTimeout(() => {
-      console.log('🎤 Silence timeout - stopping recognition');
-      finishRecognition();
-    }, 2000);
+    // Deprecated - using setupEndOfSpeechTimer instead
   };
 
   // Finish recognition and send result
   const finishRecognition = () => {
-    if (isStoppingRef.current) return;
+    if (isStoppingRef.current) {
+      console.log('🎤 Already stopping, skipping finishRecognition');
+      return;
+    }
     
     isStoppingRef.current = true;
+    console.log('🎤 finishRecognition called - marking as stopping');
     
     // Get the final transcript from refs (current values)
     const textToSend = (finalTranscriptRef.current + ' ' + interimTranscriptRef.current).trim();
@@ -57,6 +90,7 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
 
     // Clear timers
     clearSilenceTimer();
+    clearEndSpeechTimer();
 
     // Send the final transcript if we have any
     if (textToSend && hasReceivedSpeechRef.current) {
@@ -93,19 +127,107 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
       return;
     }
 
+    // Clear all state before starting
     console.log('🎤 Starting new recognition instance');
+    finalTranscriptRef.current = '';
+    interimTranscriptRef.current = '';
+    setFinalTranscript('');
+    setInterimTranscript('');
+    hasReceivedSpeechRef.current = false;
+    isStoppingRef.current = false;
+    lastTranscriptChangeRef.current = Date.now();
     
     const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
+    
+    // Detect mobile devices (iOS, Android, WebKit) for special handling
+    const userAgent = navigator.userAgent;
+    const isIOS = /iPad|iPhone|iPod/.test(userAgent) || 
+                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const isAndroid = /Android/i.test(userAgent);
+    const isWebKit = /WebKit/i.test(userAgent) && !/Chrome/i.test(userAgent);
+    const isMobile = isIOS || isAndroid || ('ontouchstart' in window);
+    
+    // Use different settings for mobile devices
+    if (isMobile) {
+      console.log("📱 VoiceInput: Mobile device detected (iOS/Android)");
+      console.log("📱 User Agent:", userAgent);
+      // Use continuous mode but handle results differently
+      recognition.continuous = true;  // Keep listening until we stop
+      recognition.interimResults = true;  // Get interim results to show progress
+      recognition.maxAlternatives = 1;  // Only one alternative
+    } else {
+      console.log("💻 VoiceInput: Desktop browser - using continuous mode");
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.maxAlternatives = 1;
+    }
     recognition.lang = 'en-US';
 
     recognition.onstart = () => {
       console.log('🎤 Recognition started');
       isStoppingRef.current = false;
+      lastTranscriptChangeRef.current = Date.now();
     };
 
     recognition.onresult = (event: any) => {
+      // Check if we're on a mobile device (iOS, Android, or WebKit)
+      const userAgent = navigator.userAgent;
+      const isIOS = /iPad|iPhone|iPod/.test(userAgent) || 
+                    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      const isAndroid = /Android/i.test(userAgent);
+      const isWebKit = /WebKit/i.test(userAgent) && !/Chrome/i.test(userAgent);
+      const isMobile = isIOS || isAndroid || ('ontouchstart' in window);
+      
+      if (isMobile) {
+        // Mobile devices: Build complete transcript from all results
+        if (event.results.length > 0) {
+          let fullTranscript = '';
+          let hasAnyFinal = false;
+          
+          // Build the complete transcript from all results
+          for (let i = 0; i < event.results.length; i++) {
+            const result = event.results[i];
+            const transcript = result[0].transcript;
+            
+            // On Android, each result is cumulative, so we just take the last one
+            // On iOS, we might need to concatenate
+            if (isAndroid) {
+              fullTranscript = transcript; // Just use the latest
+            } else {
+              // For iOS or other platforms, concatenate if needed
+              if (i === event.results.length - 1) {
+                fullTranscript = transcript;
+              }
+            }
+            
+            if (result.isFinal) {
+              hasAnyFinal = true;
+            }
+          }
+          
+          console.log("📱 Mobile - Transcript:", fullTranscript);
+          console.log("📱 Has final result:", hasAnyFinal);
+          
+          // REPLACE the transcript with the complete version
+          finalTranscriptRef.current = fullTranscript;
+          setFinalTranscript(fullTranscript);
+          hasReceivedSpeechRef.current = true;
+          
+          // Update last transcript change time
+          lastTranscriptChangeRef.current = Date.now();
+          
+          // Notify parent with the complete transcript
+          if (onTranscriptUpdate) {
+            onTranscriptUpdate(fullTranscript, !hasAnyFinal);
+          }
+          
+          // Reset end-of-speech timer on new input
+          setupEndOfSpeechTimer();
+        }
+        return;
+      }
+      
+      // Desktop: Original logic
       let newFinalTranscript = '';
       let newInterimTranscript = '';
 
@@ -134,9 +256,10 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
         onTranscriptUpdate(fullTranscript.trim(), !newFinalTranscript);
       }
 
-      // Reset silence timer when we get new results
+      // Reset end-of-speech timer when we get new results
       if (newFinalTranscript || newInterimTranscript) {
-        startSilenceTimer();
+        lastTranscriptChangeRef.current = Date.now();
+        setupEndOfSpeechTimer();
       }
     };
 
@@ -158,33 +281,55 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
     };
 
     recognition.onend = () => {
-      console.log('🎤 Recognition ended');
+      console.log('🎤 Recognition ended, isStoppingRef:', isStoppingRef.current);
       recognitionRef.current = null;
       
-      // Only restart if we're intentionally listening AND not stopping AND we haven't finished with a transcript
-      // AND we haven't received any speech (which would indicate we're done)
-      if (!isStoppingRef.current && isListening && !finalTranscriptRef.current && !hasReceivedSpeechRef.current) {
-        console.log('🎤 Recognition ended unexpectedly, checking if should restart...');
-        setTimeout(() => {
-          // Double-check that we should still be listening AND Harper is not speaking
-          if (isListening && !isStoppingRef.current && !finalTranscriptRef.current) {
-            // Check if Harper is speaking by querying the DOM or using a callback
-            // For now, don't auto-restart - let the user manually restart
-            console.log('🎤 Not auto-restarting - letting user control restart');
-          }
-        }, 100);
+      // Don't do anything if we're already stopping
+      if (isStoppingRef.current) {
+        console.log('🎤 Already stopping - not restarting');
+        return;
+      }
+      
+      // Check if we're on a mobile device
+      const userAgent = navigator.userAgent;
+      const isIOS = /iPad|iPhone|iPod/.test(userAgent) || 
+                    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      const isAndroid = /Android/i.test(userAgent);
+      const isMobile = isIOS || isAndroid || ('ontouchstart' in window);
+      
+      // On mobile, we've already processed the result in onresult
+      // Don't restart - user needs to click button again
+      if (isMobile) {
+        console.log('🎤 Mobile: Recognition ended after processing');
+        // Clear states for next interaction
+        finalTranscriptRef.current = '';
+        interimTranscriptRef.current = '';
+        hasReceivedSpeechRef.current = false;
+        isStoppingRef.current = false;
+      } else if (!isStoppingRef.current && isListening && !finalTranscriptRef.current && !hasReceivedSpeechRef.current) {
+        // Desktop: Original logic
+        console.log('🎤 Desktop: Recognition ended unexpectedly, not auto-restarting');
       } else {
-        console.log('🎤 Recognition ended normally, not restarting');
+        console.log('🎤 Recognition ended normally');
       }
     };
 
     recognitionRef.current = recognition;
-    recognition.start();
+    
+    try {
+      recognition.start();
+      console.log('🎤 Recognition.start() called successfully');
+    } catch (error) {
+      console.error('🎤 Error starting recognition:', error);
+      recognitionRef.current = null;
+      onListeningChange(false);
+    }
   };
 
   // Stop recognition
   const stopRecognition = () => {
     console.log('🎤 Stopping recognition');
+    clearEndSpeechTimer();
     finishRecognition();
   };
 
@@ -204,6 +349,7 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
     return () => {
       console.log('🎤 VoiceInput cleanup');
       clearSilenceTimer();
+      clearEndSpeechTimer();
       if (recognitionRef.current) {
         recognitionRef.current.stop();
         recognitionRef.current = null;

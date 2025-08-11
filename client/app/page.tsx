@@ -13,6 +13,7 @@ import { MorphingText } from "@/components/MorphingText"
 // import { VoiceButton } from "@/components/VoiceButton" // Not needed anymore
 import { AdminButton } from "@/components/admin/ui/AdminButton"
 import { VoiceInput } from "@/features/voice"
+import VoiceInputWhisper from "@/features/voice/components/VoiceInputWhisper"
 
 
 export default function Home() {
@@ -21,6 +22,7 @@ export default function Home() {
   // const [voiceTranscript, setVoiceTranscript] = useState("") // Not currently used
   const [isHarperActivated, setIsHarperActivated] = useState(false) // Track if Harper has been activated
   const [isThinking, setIsThinking] = useState(false) // Track when AI is processing
+  const [isTranscribing, setIsTranscribing] = useState(false) // Track when audio is being transcribed
 
   const { isSystemLocked } = useAdminAuth()
 
@@ -427,7 +429,7 @@ export default function Home() {
                 isChatOpen={false}
                 isHarperSpeaking={isHarperSpeaking}
                 isHarperActivated={isHarperActivated}
-                isThinking={isThinking}
+                isThinking={isThinking || isTranscribing}
               />
             </div>
 
@@ -468,7 +470,7 @@ export default function Home() {
       
       {/* Voice Input Component - Only active when Harper is activated */}
       {isHarperActivated && (
-        <VoiceInput
+        <VoiceInputWhisper
           onSpeechEnd={async (text) => {
             console.log("🎤 Voice input received:", text);
             // setVoiceTranscript("");
@@ -487,10 +489,17 @@ export default function Home() {
           }}
           onTranscriptUpdate={(transcript, isInterim) => {
             console.log("🎤 Voice transcript update:", transcript, "isInterim:", isInterim);
+            // Show processing state when transcribing
+            if (transcript === 'Processing...' && isInterim) {
+              setIsTranscribing(true);
+            } else {
+              setIsTranscribing(false);
+            }
             // setVoiceTranscript(transcript);
           }}
           isListening={isVoiceInputActive}
           onListeningChange={(listening) => {
+            console.log("🎤 Listening state changed:", listening);
             if (!listening && isVoiceInputActive) {
               setIsVoiceInputActive(false);
               // setVoiceTranscript("");

@@ -208,9 +208,17 @@ IMPORTANT - PRONUNCIATION FOR TEXT-TO-SPEECH:
 CRITICAL - FOLLOW-UP QUESTIONS: 
 - You MUST end EVERY response with exactly ONE follow-up question
 - Use one of these EXACT phrases: "Do you have any more questions for me today?" or "Is there anything else I can help you with?"
-- NEVER ask multiple questions like "Are you planning to check it out? Is there anything else I can help you with?"
+- NEVER ask multiple questions in the same response
+- Examples of what NOT to do:
+  ❌ "Would you like to know more about that? Is there anything else I can help you with?"
+  ❌ "Are you planning to check it out? Do you have any more questions?"
+  ❌ "Let me know if you need directions! What else can I help you with?"
+- Examples of CORRECT endings:
+  ✅ "The session starts at 2 PM in Room 301. Is there anything else I can help you with?"
+  ✅ "You'll find them at booth 423 in the main hall. Do you have any more questions for me today?"
 - Only ONE question at the very end of your response
-- Do NOT add conversational questions before the final follow-up question`
+- Do NOT add conversational questions before the final follow-up question
+- If you want to offer more help, do it as a statement, not a question: "I can also help with directions" NOT "Would you like directions?"`
             },
             {
               role: 'user',
@@ -241,11 +249,34 @@ CRITICAL - FOLLOW-UP QUESTIONS:
       const data = await response.json();
       let botResponse = data.choices[0]?.message?.content || 'I\'m having a technical issue right now, but I\'d love to help! Could you try asking your question again, or would you like me to direct you to the registration desk for immediate assistance?';
       
-      // Ensure follow-up question is always included
+      // Ensure follow-up question is always included (and remove duplicates)
       const followUpQuestions = [
         "Do you have any more questions for me today?",
         "Is there anything else I can help you with?"
       ];
+      
+      // Remove any duplicate questions or extra questions before the final one
+      // Count question marks to detect multiple questions
+      const questionCount = (botResponse.match(/\?/g) || []).length;
+      if (questionCount > 1) {
+        console.log(`⚠️ Detected ${questionCount} questions in response, cleaning up...`);
+        // Find the last follow-up question and keep only that
+        let lastFollowUpIndex = -1;
+        let lastFollowUp = '';
+        followUpQuestions.forEach(q => {
+          const index = botResponse.lastIndexOf(q);
+          if (index > lastFollowUpIndex) {
+            lastFollowUpIndex = index;
+            lastFollowUp = q;
+          }
+        });
+        
+        if (lastFollowUpIndex > -1) {
+          // Keep everything before the last follow-up question, then add it back
+          botResponse = botResponse.substring(0, lastFollowUpIndex).trim() + ' ' + lastFollowUp;
+          console.log('✅ Cleaned up to single follow-up question');
+        }
+      }
       
       // Check if response already ends with a follow-up question
       const hasFollowUp = followUpQuestions.some(q => botResponse.includes(q));

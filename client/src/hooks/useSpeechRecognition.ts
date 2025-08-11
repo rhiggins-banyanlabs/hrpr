@@ -26,8 +26,16 @@ export const useSpeechRecognition = (
   const recognitionRef = useRef<any>(null);
   const isNavigatingRef = useRef<boolean>(false);
   const HarperDetectedRef = useRef<boolean>(false);
+  const lastProcessedTranscriptRef = useRef<string>("");
+  const finalizedTranscriptRef = useRef<string>("");
 
-  const Harper_VARIATIONS = ["harper", "conny", "coni", "koni", "honey"];
+  const Harper_VARIATIONS = [
+    "harper", 
+    "harbor",  // Common misrecognition
+    "harpur",  // Common mispronunciation
+    "hopper",  // Common misrecognition
+    "copper"   // Sometimes heard as this
+  ];
 
   // Initialize speech recognition
   useEffect(() => {
@@ -44,8 +52,25 @@ export const useSpeechRecognition = (
     }
 
     recognitionRef.current = new SpeechRecognition();
-    recognitionRef.current.continuous = true;
-    recognitionRef.current.interimResults = true;
+    
+    // Detect mobile devices (iOS, Android, WebKit) for special handling
+    const userAgent = navigator.userAgent;
+    const isIOS = /iPad|iPhone|iPod/.test(userAgent) || 
+                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const isAndroid = /Android/i.test(userAgent);
+    const isWebKit = /WebKit/i.test(userAgent) && !/Chrome/i.test(userAgent);
+    const isMobile = isIOS || isAndroid || ('ontouchstart' in window);
+    
+    // Use different settings for mobile devices to prevent concatenation
+    if (isMobile) {
+      console.log("📱 Mobile device (iOS/Android) detected - using single-shot mode to prevent concatenation");
+      recognitionRef.current.continuous = false;  // Single-shot mode
+      recognitionRef.current.interimResults = false;  // No interim results
+    } else {
+      console.log("💻 Desktop browser - using continuous mode");
+      recognitionRef.current.continuous = true;
+      recognitionRef.current.interimResults = true;
+    }
     recognitionRef.current.maxAlternatives = 1;
     recognitionRef.current.lang = 'en-US';
 
@@ -90,6 +115,56 @@ export const useSpeechRecognition = (
   }, []);
 
   const handleSpeechResult = (event: any) => {
+    // Detect if we're on a mobile device (iOS, Android, or WebKit)
+    const userAgent = navigator.userAgent;
+    const isIOS = /iPad|iPhone|iPod/.test(userAgent) || 
+                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const isAndroid = /Android/i.test(userAgent);
+    const isWebKit = /WebKit/i.test(userAgent) && !/Chrome/i.test(userAgent);
+    const isMobile = isIOS || isAndroid || ('ontouchstart' in window);
+    
+    if (isMobile) {
+      // Mobile devices: Take only the LAST result to prevent concatenation
+      if (event.results.length > 0) {
+        const lastResult = event.results[event.results.length - 1];
+        const transcript = lastResult[0].transcript.toLowerCase().trim();
+        
+        console.log("📱 Mobile (iOS/Android) - using last result only:", transcript);
+        
+        // Clear previous transcripts to prevent accumulation
+        lastProcessedTranscriptRef.current = "";
+        finalizedTranscriptRef.current = "";
+        
+        setTranscript(transcript);
+        
+        const foundHarper = detectHarperInTranscript(transcript);
+        if (foundHarper && !HarperDetectedRef.current) {
+          console.log("✅ Detected Harper on Mobile (iOS/Android)!");
+          HarperDetectedRef.current = true;
+          setTranscript(transcript + " [Harper DETECTED]");
+          setTimeout(() => {
+            handleHarperDetection(transcript);
+          }, 100);
+        }
+        
+        // On iOS/WebKit, restart recognition after processing
+        if (!foundHarper && listening) {
+          setTimeout(() => {
+            if (recognitionRef.current && listening) {
+              try {
+                recognitionRef.current.start();
+              } catch (e) {
+                console.log("Recognition already started");
+              }
+            }
+          }, 500);
+        }
+        
+        return;
+      }
+    }
+    
+    // Desktop: Original logic
     let interimTranscript = "";
     let finalTranscript = "";
 
@@ -104,7 +179,7 @@ export const useSpeechRecognition = (
 
     const currentTranscript = finalTranscript || interimTranscript;
     setTranscript(currentTranscript);
-    console.log("🎤 Heard:", currentTranscript);
+    console.log("🎤 Desktop heard:", currentTranscript);
 
     const foundHarper = detectHarperInTranscript(currentTranscript);
     console.log("🔍 Harper detection result:", foundHarper);
@@ -283,6 +358,8 @@ export const useSpeechRecognition = (
     setIsNavigating(false);
     HarperDetectedRef.current = false;
     isNavigatingRef.current = false;
+    lastProcessedTranscriptRef.current = "";
+    finalizedTranscriptRef.current = "";
   };
 
   const toggleListening = useCallback(() => {
@@ -319,6 +396,8 @@ export const useSpeechRecognition = (
     setIsNavigating(false);
     isNavigatingRef.current = false;
     HarperDetectedRef.current = false;
+    lastProcessedTranscriptRef.current = "";
+    finalizedTranscriptRef.current = "";
   };
 
   const cleanup = () => {
