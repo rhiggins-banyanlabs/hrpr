@@ -96,8 +96,23 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
     console.log('🎤 Starting new recognition instance');
     
     const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
+    
+    // Detect iOS/WebKit for special handling
+    const userAgent = navigator.userAgent;
+    const isIOS = /iPad|iPhone|iPod/.test(userAgent) || 
+                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const isWebKit = /WebKit/i.test(userAgent) && !/Chrome/i.test(userAgent);
+    
+    // Use different settings for iOS/WebKit to prevent concatenation
+    if (isIOS || isWebKit) {
+      console.log("📱 VoiceInput: iOS/WebKit detected - using single-shot mode");
+      recognition.continuous = false;  // Single-shot mode to prevent accumulation
+      recognition.interimResults = false;  // No interim results on iOS
+    } else {
+      console.log("💻 VoiceInput: Desktop browser - using continuous mode");
+      recognition.continuous = true;
+      recognition.interimResults = true;
+    }
     recognition.lang = 'en-US';
 
     recognition.onstart = () => {
@@ -106,6 +121,37 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
     };
 
     recognition.onresult = (event: any) => {
+      // Check if we're on iOS/WebKit
+      const userAgent = navigator.userAgent;
+      const isIOS = /iPad|iPhone|iPod/.test(userAgent) || 
+                    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      const isWebKit = /WebKit/i.test(userAgent) && !/Chrome/i.test(userAgent);
+      
+      if (isIOS || isWebKit) {
+        // iOS/WebKit: Take only the LAST result to prevent concatenation
+        if (event.results.length > 0) {
+          const lastResult = event.results[event.results.length - 1];
+          const transcript = lastResult[0].transcript;
+          
+          console.log("📱 VoiceInput iOS/WebKit - using last result only:", transcript);
+          
+          // Replace (not append) the final transcript
+          finalTranscriptRef.current = transcript;
+          setFinalTranscript(transcript);
+          hasReceivedSpeechRef.current = true;
+          
+          // Notify parent
+          if (onTranscriptUpdate) {
+            onTranscriptUpdate(transcript, false);
+          }
+          
+          // Start silence timer
+          startSilenceTimer();
+        }
+        return;
+      }
+      
+      // Desktop: Original logic
       let newFinalTranscript = '';
       let newInterimTranscript = '';
 
