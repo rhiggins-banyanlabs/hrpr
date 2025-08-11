@@ -90,6 +90,18 @@ export const useVoiceChat = ({
       feedbackTimerRef.current = null;
     }
     
+    // CRITICAL: Stop any silence detection when user speaks (including intro timeout)
+    console.log('🔇 User spoke - stopping all silence detection (including intro timeout)');
+    if (silenceDetectorRef.current) {
+      silenceDetectorRef.current.stop();
+      silenceDetectorRef.current = null;
+    }
+    // Also clear any pending silence detection setup
+    if (pendingSilenceDetectionRef.current) {
+      clearTimeout(pendingSilenceDetectionRef.current);
+      pendingSilenceDetectionRef.current = null;
+    }
+    
     // Debounce: prevent rapid successive calls
     const now = Date.now();
     if (now - lastQueryTimeRef.current < 1000) { // 1 second debounce
@@ -417,11 +429,42 @@ export const useVoiceChat = ({
       await speakText(introMessage);
       
       console.log('🎯 Intro message sent and spoken - ready for user input');
+      
+      // Start silence detection after intro message completes
+      // Wait a bit for the user to start speaking, then start timeout
+      setTimeout(() => {
+        if (!isProcessingRef.current && !isSpeaking) {
+          console.log('🔇 Starting 30-second timeout after intro message');
+          
+          // Create and start a silence detector for the intro timeout
+          const silenceDetector = createSilenceDetector(
+            30000, // 30 second timeout
+            () => {
+              console.log('⏰ User didn\'t respond after intro - triggering session reset');
+              // User didn't respond after intro, trigger session reset
+              if (onSessionReset) {
+                onSessionReset();
+              }
+            }
+          );
+          
+          // Store reference so it can be stopped if user speaks
+          silenceDetectorRef.current = silenceDetector;
+          
+          // IMPORTANT: Start the silence detector
+          silenceDetector.start();
+          console.log('✅ Silence detector started for intro timeout');
+          
+        } else {
+          console.log('🔇 Not starting silence detection - system is busy');
+        }
+      }, 3000); // 3-second delay to give user time to start speaking
+      
     } catch (error) {
       console.error('❌ Error sending intro message:', error);
       setIsSpeaking(false);
     }
-  }, [sessionId, speakText]);
+  }, [sessionId, speakText, onSessionReset]);
 
   // Stop silence detection
   const stopSilenceDetection = useCallback(() => {
