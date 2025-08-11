@@ -110,7 +110,16 @@ export class WorkshopSearchService {
   async searchByQuery(query: string, limit: number = 5): Promise<WorkshopResult[]> {
     try {
       const queryEmbedding = await embeddingService.generateEmbedding(query);
+      return this.searchByQueryWithEmbedding(queryEmbedding, limit);
+    } catch (error) {
+      console.error('Failed to search workshops:', error);
+      return [];
+    }
+  }
 
+  // Search workshops using pre-computed embedding
+  async searchByQueryWithEmbedding(queryEmbedding: number[], limit: number = 5): Promise<WorkshopResult[]> {
+    try {
       const { data, error } = await supabase
         .rpc('search_workshops_semantic', {
           query_embedding: queryEmbedding,
@@ -125,7 +134,7 @@ export class WorkshopSearchService {
 
       return data || [];
     } catch (error) {
-      console.error('Failed to search workshops:', error);
+      console.error('Failed to search workshops with embedding:', error);
       return [];
     }
   }
@@ -214,6 +223,52 @@ export class WorkshopSearchService {
       case 'topic':
       case 'general':
         workshops = await this.searchByQuery(query);
+        context = 'Relevant workshops:';
+        break;
+    }
+
+    return {
+      found: workshops.length > 0,
+      data: workshops,
+      context
+    };
+  }
+
+  // Process a query using pre-computed embedding
+  async processWorkshopQueryWithEmbedding(query: string, embedding: number[]): Promise<{
+    found: boolean;
+    data: WorkshopResult[];
+    context: string;
+  }> {
+    const detection = this.detectWorkshopQuery(query);
+    
+    if (!detection.isWorkshopQuery) {
+      return { found: false, data: [], context: '' };
+    }
+
+    let workshops: WorkshopResult[] = [];
+    let context = '';
+
+    switch (detection.queryType) {
+      case 'day':
+        workshops = await this.searchByDay(detection.searchTerm!);
+        context = `Workshops on ${detection.searchTerm}:`;
+        break;
+
+      case 'credits':
+        const creditType = this.creditKeywords.find(c => 
+          detection.searchTerm!.toLowerCase().includes(c)
+        );
+        workshops = await this.searchByCredits(creditType);
+        context = creditType ? `Workshops with ${creditType.toUpperCase()} credits:` : 'Workshops with credits:';
+        break;
+
+      case 'speaker':
+      case 'topic':
+      case 'general':
+        // Use the pre-computed embedding for semantic search
+        console.log('♻️ Reusing embedding for workshop search');
+        workshops = await this.searchByQueryWithEmbedding(embedding);
         context = 'Relevant workshops:';
         break;
     }

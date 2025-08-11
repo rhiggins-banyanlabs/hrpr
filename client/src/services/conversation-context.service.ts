@@ -93,15 +93,9 @@ class ConversationContextService {
     const lowerQuery = query.toLowerCase();
     
     // Handle specific follow-up patterns
-    if (/^(yes|okay|ok|sure)\s*[,.]?\s*$/.test(lowerQuery)) {
-      // User is just confirming without additional text, use last query
+    if (/^(yes|okay|ok|sure)/.test(lowerQuery)) {
+      // User is confirming, use last query
       return context.lastQuery || query;
-    }
-    
-    // If user says "yes" followed by a new question, use the new question
-    if (/^(yes|okay|ok|sure)\s+.+/.test(lowerQuery)) {
-      // Remove the confirmation word and use the rest of the query
-      return lowerQuery.replace(/^(yes|okay|ok|sure)\s+/, '');
     }
     
     // Handle "more" or "other" requests
@@ -149,22 +143,6 @@ class ConversationContextService {
    */
   extractEntities(query: string): string[] {
     const entities: string[] = [];
-    const lowerQuery = query.toLowerCase();
-    
-    // Extract food/dining related topics
-    if (lowerQuery.includes('coffee') || lowerQuery.includes('starbucks') || 
-        lowerQuery.includes('espresso') || lowerQuery.includes('latte')) {
-      entities.push('coffee');
-    }
-    if (lowerQuery.includes('food') || lowerQuery.includes('restaurant') || 
-        lowerQuery.includes('dining') || lowerQuery.includes('eat')) {
-      entities.push('restaurants');
-    }
-    if (lowerQuery.includes('breakfast')) entities.push('breakfast');
-    if (lowerQuery.includes('lunch')) entities.push('lunch');
-    if (lowerQuery.includes('dinner')) entities.push('dinner');
-    if (lowerQuery.includes('bar') || lowerQuery.includes('drink') || 
-        lowerQuery.includes('cocktail')) entities.push('bars');
     
     // Extract company names (capitalized words)
     const companyPattern = /\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b/g;

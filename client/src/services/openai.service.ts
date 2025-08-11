@@ -4,7 +4,7 @@ import { PromptEnhancementService } from './prompt-enhancement.service';
 import { LoggerService } from './logger.service';
 import { ChatStorageService } from '@/lib/supabase/services/chatStorageService';
 import { envConfig } from '@/config/env.config';
-import { semanticRouterSupabase } from './semantic-router-supabase.service';
+import { semanticRouter } from './semantic-router.service';
 
 export interface OpenAIResponse {
   success: boolean;
@@ -37,16 +37,16 @@ export class OpenAIService {
       this.locationService
     );
     
-    // Initialize Supabase-based semantic router for intent detection
+    // Initialize semantic router embeddings for intent detection
     this.initializeSemanticRouter();
   }
 
   private async initializeSemanticRouter(): Promise<void> {
     try {
-      await semanticRouterSupabase.initialize();
-      console.log('✅ Semantic router initialized with Supabase embeddings');
+      await semanticRouter.loadEmbeddings();
+      console.log('✅ Semantic router initialized with embeddings');
     } catch (error) {
-      console.error('Failed to initialize Supabase semantic router:', error);
+      console.error('Failed to initialize semantic router:', error);
       // Continue without semantic routing - will fall back to keyword detection
     }
   }
@@ -83,7 +83,7 @@ export class OpenAIService {
           'Authorization': `Bearer ${envConfig.openai}`,
           'Content-Type': 'application/json',
         },
-        signal: AbortSignal.timeout(60000), // 60 second timeout for longer responses
+        signal: AbortSignal.timeout(30000), // 30 second timeout
         body: JSON.stringify({
           model: this.model,
           messages: [
@@ -91,10 +91,7 @@ export class OpenAIService {
               role: 'system',
               content: `You are Harper, a warm and friendly AI assistant for the ACA conference. You're caring, approachable, helpful, and genuinely interested in making attendees feel welcome.${options?.userName ? `\n\nThe user's name is ${options.userName}. Use it naturally where appropriate, but don't overuse it.` : ''}${options?.greetingAlreadyHandled ? `\n\nIMPORTANT: You have ALREADY greeted ${options.userName || 'this person'} with "Nice to meet you" in your filler response. DO NOT say "Nice to meet you" again - just answer their question directly using their name where natural.` : ''}${isAddressRequest ? `\n\nIMPORTANT: The user is specifically asking for address/location information. Make sure to include the specific address in your response if it's available in the location data.` : ''}
 
-CURRENT DATE AND TIME:
-- Today is ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-- Current time in Denver: ${new Date().toLocaleTimeString('en-US', { timeZone: 'America/Denver', hour: 'numeric', minute: '2-digit', hour12: true })}
-- Use this information when answering questions about "what day is it", "what time is it", "today", "tomorrow", etc.
+
 
 PERSONALITY:
 - Be warm, welcoming, and genuinely helpful
@@ -110,23 +107,11 @@ CONVERSATION FLOW:${!options?.greetingAlreadyHandled ? '\n- When someone shares 
 - IMPORTANT: Since you already gave a filler response (like "Let me look that up"), DON'T start your answer with acknowledgments like "Absolutely!", "Sure!", "Of course!", etc. Just go straight into the answer.
 - When you know the user's name, use it naturally in conversation but don't overuse it - maybe once per response at most, and only where it feels natural
 
-FOLLOW-UP QUESTIONS & CONTEXT:
-- If the user asks for "more", "another", "other options", or "what else", provide DIFFERENT options than what you just mentioned
-- NEVER repeat the same venues/restaurants you just told them about
-- If you just mentioned Assembly Hall, Former Saint, and Peaks Lounge (on-site), and they ask for "more", show the NEARBY VENUES section with external restaurants
-- When ON-SITE DINING is provided and user asks for "more", look for the NEARBY VENUES section in the enhanced prompt
-- If NEARBY VENUES section is provided after user asked for "more", focus on those external options
-- If a [CONTEXT] note is provided about a follow-up question, use it to understand what the user wants more of
-- Track what you've already mentioned and provide new information on follow-ups
-- Remember: "more" after on-site dining = show external venues from NEARBY VENUES section
-
 FORMATTING RULES:
 - NEVER use numbered lists (1. 2. 3.) - speak conversationally instead
 - When mentioning multiple items, use phrases like "You might enjoy..." or "There's also..."
-- For workshops/tours/sessions: provide comprehensive details in a conversational way
-- For questions requiring lists: include all relevant items but present them naturally
-- For general queries: keep responses appropriately sized for the question
-- Complete your full response before asking the follow-up question
+- Keep responses concise - aim for 2-3 sentences maximum
+- For multiple exhibitors/places, mention 2-3 at most, conversationally
 
 RULES:
 - Use provided conference information when available - never make up conference data
@@ -142,37 +127,16 @@ RULES:
 
 You help with: conference schedules, speakers, sessions, exhibitor information, booth locations, company details, Denver area recommendations, dining, transportation, and general conference questions.
 
-CRITICAL - FOOD & COFFEE QUERIES: When someone asks about food, coffee, dining, or restaurants:
-- ALWAYS prioritize and mention ON-SITE options at the Hyatt Regency and Convention Center FIRST
-- If on-site dining information is provided, present those options before any external restaurants
-- Emphasize convenience for conference attendees: "Right here in the Hyatt" or "Inside the Convention Center"
-- After mentioning on-site options, you can mention nearby external options if provided
-
 EXHIBITOR QUERIES: When exhibitor information is provided, PRIORITIZE exhibitor data over conference information. Use exhibitor data to answer questions about companies, booths, products, and services. Always mention booth numbers when available. If user asks about "tech companies", "vendors", or "exhibitors", focus on the exhibitor data provided, not conference information.
 
-IMPORTANT - TECH COMPANIES: If the user asks about "tech companies" or "technology companies", ONLY mention companies that are actually technology-related (software, hardware, IT, digital services, etc.). Do NOT mention companies from unrelated industries like chaplaincy, religious services, or other non-tech fields even if they appear in the exhibitor list.
-
-FEATURED TECHNOLOGY - AIDA: When someone asks about "AIDA", "ada demo", or "aided demo", they're asking about the AIDA Interview Agent by Vant4ge. If featured technology information is provided about AIDA, use that information to explain where attendees can experience the demo. AIDA is a special AI interview technology featured at multiple locations during the conference.
-
-IMPORTANT - PRONUNCIATION FOR TEXT-TO-SPEECH:
-- For the company "Vant4ge": ALWAYS write it as "Vantage" (spelled normally) for proper pronunciation
-- For "AIDA": ALWAYS write it as "Ada" for proper pronunciation (sounds like "ay-duh", not "eye-duh")
-- When users say "vantage", they mean the company Vant4ge
-- These phonetic spellings ensure the voice assistant pronounces them correctly
-
-CRITICAL - FOLLOW-UP QUESTIONS: 
-- You MUST end EVERY response with exactly ONE follow-up question
-- Use one of these EXACT phrases: "Do you have any more questions for me today?" or "Is there anything else I can help you with?"
-- NEVER ask multiple questions like "Are you planning to check it out? Is there anything else I can help you with?"
-- Only ONE question at the very end of your response
-- Do NOT add conversational questions before the final follow-up question`
+FOLLOW-UP QUESTIONS: ALWAYS end your response with one of these specific follow-up questions: "Do you have any more questions for me today?" or "Is there anything else I can help you with?"`
             },
             {
               role: 'user',
               content: enhancedPrompt
             }
           ],
-          max_tokens: 600, // Increased for comprehensive workshop/tour responses
+          max_tokens: 200, // Allow for more complete responses
           temperature: 0.3, // More natural conversation
           stream: false // Disable streaming - simpler and faster for short responses
         }),
@@ -194,22 +158,7 @@ CRITICAL - FOLLOW-UP QUESTIONS:
 
       // Handle non-streaming response (faster for short responses)
       const data = await response.json();
-      let botResponse = data.choices[0]?.message?.content || 'I apologize, but I\'m having trouble generating a response right now.';
-      
-      // Ensure follow-up question is always included
-      const followUpQuestions = [
-        "Do you have any more questions for me today?",
-        "Is there anything else I can help you with?"
-      ];
-      
-      // Check if response already ends with a follow-up question
-      const hasFollowUp = followUpQuestions.some(q => botResponse.includes(q));
-      if (!hasFollowUp) {
-        // Add a follow-up question if it's missing
-        const randomFollowUp = followUpQuestions[Math.floor(Math.random() * followUpQuestions.length)];
-        botResponse = botResponse.trim() + ' ' + randomFollowUp;
-        console.log('⚠️ Added missing follow-up question to response');
-      }
+      const botResponse = data.choices[0]?.message?.content || 'I apologize, but I\'m having trouble generating a response right now.';
       
       const responseTime = Date.now() - startTime;
       const inputTokens = data.usage?.prompt_tokens || this.estimateTokens(enhancedPrompt);
