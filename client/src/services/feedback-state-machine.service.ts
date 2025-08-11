@@ -277,11 +277,27 @@ export class FeedbackStateMachine {
       'stop', 'enough', 'done', 'finished'
     ];
     
+    // Common ending phrases that indicate finality rather than additional questions
+    const endingPhrases = [
+      "that'll be it", "that will be it", "thats it", "that's it", 
+      "i'm good", "im good", "i'm done", "im done", "i'm all set", "im all set",
+      "that's all", "thats all", "that'll do", "that will do", "all good",
+      "i'm fine", "im fine", "that's enough", "thats enough", "we're good", "were good"
+    ];
+    
     // IMPORTANT: If yes/no is followed by additional content (like a question), treat it as 'other'
     // This handles cases like "yes can you tell me about..." or "no but what about..."
+    // BUT exclude common ending phrases that indicate finality
     const hasAdditionalContent = (pattern: string): boolean => {
-      const regex = new RegExp(`^${pattern}\\s+.{10,}`, 'i'); // Pattern followed by 10+ chars
-      return regex.test(lowerText);
+      const afterPattern = lowerText.replace(new RegExp(`^${pattern}\\s+`, 'i'), '').trim();
+      
+      // If what follows is just a common ending phrase, don't treat as additional content
+      if (endingPhrases.some(phrase => afterPattern === phrase)) {
+        return false;
+      }
+      
+      // Otherwise check if there's substantial additional content (10+ chars)
+      return afterPattern.length >= 10;
     };
     
     // Check for yes - use word boundaries

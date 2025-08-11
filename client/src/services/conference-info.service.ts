@@ -118,9 +118,11 @@ class ConferenceInfoService {
     for (const info of this.conferenceInfo) {
       let score = 0;
       
-      // Check for keyword matches
+      // Check for keyword matches using word boundaries to avoid partial matches
       for (const keyword of info.keywords) {
-        if (lowerQuery.includes(keyword)) {
+        // Create regex with word boundaries for multi-word phrases and single words
+        const regex = new RegExp(`\\b${keyword.replace(/\s+/g, '\\s+')}\\b`, 'i');
+        if (regex.test(lowerQuery)) {
           score += keyword.split(' ').length; // Multi-word matches score higher
         }
       }
