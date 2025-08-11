@@ -153,6 +153,31 @@ export default function Home() {
     onSessionReset: handleSessionReset
   })
 
+  // Clean up session when page unloads or component unmounts
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (currentSession?.id) {
+        console.log('🔚 Page unloading, ending session:', currentSession.id)
+        // Use sendBeacon for reliable cleanup on page unload
+        const url = `/api/end-session`
+        const data = JSON.stringify({ sessionId: currentSession.id })
+        navigator.sendBeacon(url, data)
+      }
+    }
+
+    // Add event listener for page unload
+    window.addEventListener('beforeunload', handleBeforeUnload)
+
+    // Cleanup on component unmount
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      if (currentSession?.id) {
+        console.log('🔚 Component unmounting, ending session:', currentSession.id)
+        endSession()
+      }
+    }
+  }, [currentSession, endSession])
+
   // Forward declaration for speech recognition
   const handleHarperDetected = useCallback(async (query: string) => {
     console.log("🏠 HOME: handleHarperDetected called with query:", query || "no query")
