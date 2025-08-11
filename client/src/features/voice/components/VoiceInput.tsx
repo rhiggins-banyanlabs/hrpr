@@ -24,6 +24,8 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
   const lastResultTimeRef = useRef<number>(0);
   const stableTranscriptRef = useRef<string>('');
   const noSpeechCountRef = useRef<number>(0);
+  const lastTranscriptChangeRef = useRef<number>(Date.now());
+  const endSpeechTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Clear silence timer
   const clearSilenceTimer = () => {
@@ -33,47 +35,37 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
     }
   };
 
-  // Check if transcript is stable (hasn't changed for a while)
-  const checkTranscriptStability = () => {
-    const currentTranscript = finalTranscriptRef.current || interimTranscriptRef.current;
-    
-    if (currentTranscript && currentTranscript === stableTranscriptRef.current) {
-      // Transcript hasn't changed, user might have stopped speaking
-      const timeSinceLastResult = Date.now() - lastResultTimeRef.current;
-      
-      // Check if mobile for appropriate timeout
-      const userAgent = navigator.userAgent;
-      const isMobile = /iPad|iPhone|iPod|Android/i.test(userAgent) || ('ontouchstart' in window);
-      const stabilityThreshold = isMobile ? 1500 : 1200; // 1.5s for mobile, 1.2s for desktop
-      
-      if (timeSinceLastResult > stabilityThreshold) {
-        console.log(`🎤 Speech stable for ${timeSinceLastResult}ms - user stopped speaking`);
-        finishRecognition();
-      }
-    } else {
-      // Transcript changed, update stable reference
-      stableTranscriptRef.current = currentTranscript;
-      lastResultTimeRef.current = Date.now();
+  // Clear end speech timer
+  const clearEndSpeechTimer = () => {
+    if (endSpeechTimerRef.current) {
+      clearTimeout(endSpeechTimerRef.current);
+      endSpeechTimerRef.current = null;
     }
   };
-  
-  // Start silence timer (with stability checking)
-  const startSilenceTimer = () => {
-    clearSilenceTimer();
+
+  // Set up end-of-speech detection with generous timeout
+  const setupEndOfSpeechTimer = () => {
+    clearEndSpeechTimer();
     
-    // Check if mobile for appropriate timeout
     const userAgent = navigator.userAgent;
     const isMobile = /iPad|iPhone|iPod|Android/i.test(userAgent) || ('ontouchstart' in window);
     
-    // Use shorter intervals for stability checking
-    silenceTimerRef.current = setTimeout(() => {
-      checkTranscriptStability();
-      
-      // Continue checking if still listening
-      if (!isStoppingRef.current && recognitionRef.current) {
-        startSilenceTimer();
+    // Much longer timeout for mobile to avoid cutting off
+    const timeout = isMobile ? 3000 : 2000; // 3s for mobile, 2s for desktop
+    
+    endSpeechTimerRef.current = setTimeout(() => {
+      const currentTranscript = finalTranscriptRef.current || interimTranscriptRef.current;
+      if (currentTranscript && hasReceivedSpeechRef.current) {
+        const timeSinceLastChange = Date.now() - lastTranscriptChangeRef.current;
+        console.log(`🎤 No new speech for ${timeSinceLastChange}ms, ending recognition`);
+        finishRecognition();
       }
-    }, 500); // Check every 500ms
+    }, timeout);
+  };
+  
+  // NOT USED - Replaced with setupEndOfSpeechTimer
+  const startSilenceTimer = () => {
+    // Deprecated - using setupEndOfSpeechTimer instead
   };
 
   // Finish recognition and send result
@@ -98,6 +90,7 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
 
     // Clear timers
     clearSilenceTimer();
+    clearEndSpeechTimer();
 
     // Send the final transcript if we have any
     if (textToSend && hasReceivedSpeechRef.current) {
@@ -142,6 +135,7 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
     setInterimTranscript('');
     hasReceivedSpeechRef.current = false;
     isStoppingRef.current = false;
+    lastTranscriptChangeRef.current = Date.now();
     
     const recognition = new SpeechRecognition();
     
@@ -172,6 +166,7 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
     recognition.onstart = () => {
       console.log('🎤 Recognition started');
       isStoppingRef.current = false;
+      lastTranscriptChangeRef.current = Date.now();
     };
 
     recognition.onresult = (event: any) => {
@@ -218,16 +213,16 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
           setFinalTranscript(fullTranscript);
           hasReceivedSpeechRef.current = true;
           
-          // Update last result time for stability checking
-          lastResultTimeRef.current = Date.now();
+          // Update last transcript change time
+          lastTranscriptChangeRef.current = Date.now();
           
           // Notify parent with the complete transcript
           if (onTranscriptUpdate) {
             onTranscriptUpdate(fullTranscript, !hasAnyFinal);
           }
           
-          // Start/restart stability checking
-          startSilenceTimer();
+          // Reset end-of-speech timer on new input
+          setupEndOfSpeechTimer();
         }
         return;
       }
@@ -261,9 +256,10 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
         onTranscriptUpdate(fullTranscript.trim(), !newFinalTranscript);
       }
 
-      // Reset silence timer when we get new results
+      // Reset end-of-speech timer when we get new results
       if (newFinalTranscript || newInterimTranscript) {
-        startSilenceTimer();
+        lastTranscriptChangeRef.current = Date.now();
+        setupEndOfSpeechTimer();
       }
     };
 
@@ -333,6 +329,7 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
   // Stop recognition
   const stopRecognition = () => {
     console.log('🎤 Stopping recognition');
+    clearEndSpeechTimer();
     finishRecognition();
   };
 
@@ -352,6 +349,7 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
     return () => {
       console.log('🎤 VoiceInput cleanup');
       clearSilenceTimer();
+      clearEndSpeechTimer();
       if (recognitionRef.current) {
         recognitionRef.current.stop();
         recognitionRef.current = null;
