@@ -7,47 +7,54 @@ import Waves from "@/components/waves";
 import SuccessModal from "@/components/SuccessModal";
 import Orb from "@/shared/components/orb";
 
-
 export default function LandingPage() {
-  // State for success modal
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
-
-  // // State for contact form inputs
-  const [contactForm, setContactForm] = useState({
+  // State for contact form inputs
+  const [formData, setFormData] = useState({
     fullName: "",
     organization: "",
     email: "",
     phone: "",
   });
-
-  // // State for contact form submission status
-  const [status, setStatus] = useState<
-    "idle" | "loading" | "success" | "error"
-  >("idle");
-
-  // // Form state management
+  // State for success modal
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  // Loading state for form submission
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  // Form state management
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setContactForm({ ...contactForm, [e.target.name]: e.target.value });
+    setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  // // Handle contact form submission
-  const handleContactFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  // Handle contact form submission
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setStatus("loading");
-    // try {
-    //   // Replace this API call
-    //   await new Promise((resolve) => setTimeout(resolve, 1000));
-    //   setContactForm({
-      //     firstName: "",
-      //     lastName: "",
-      //     company: "",
-      //     email: "",
-      //     phone: "",
-      //   });
-      // setShowSuccessModal(true);
-    // } catch {
-    //   setStatus("error");
-    // }
+    setIsSubmitting(true);
+    try {
+      console.log("Submitting form data:", formData); // Debug log
+      const res = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+      console.log("Response status:", res.status); // Debug log
+      console.log("Response ok:", res.ok); // Debug log
+      if (res.ok) {
+        const result = await res.json();
+        console.log("Success response:", result); // Debug log
+        setShowSuccessModal(true);
+        setFormData({ fullName: "", organization: "", email: "", phone: "" });
+      } else {
+        const errorData = await res.json();
+        console.error("Error response:", errorData); // Debug log
+        alert(
+          `Something went wrong: ${errorData.error || "Please try again."}`
+        );
+      }
+    } catch (error) {
+      console.error("Network error:", error);
+      alert("Network error. Please check your connection and try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -83,43 +90,50 @@ export default function LandingPage() {
               >
                 HRPR
               </h1>
-              
               {/* Decorative Voice Orb - Static Version */}
-              <div className="my-24 flex flex-col items-center" style={{ transform: 'scale(2)' }}>
+              <div
+                className="my-24 flex flex-col items-center"
+                style={{ transform: "scale(2)" }}
+              >
                 <div className="relative w-32 h-32 sm:w-40 sm:h-40 transition-all duration-700">
                   {/* Main orb container */}
                   <div className="relative w-full h-full rounded-full overflow-hidden">
                     {/* WebGL Orb */}
-                    <Orb 
-                      hue={80} 
+                    <Orb
+                      hue={80}
                       hoverIntensity={0.3}
                       rotateOnHover={false}
                       forceHoverState={true}
                     />
-                    
                     {/* Speaker icon overlay */}
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <svg 
-                        className="w-12 h-12 sm:w-16 sm:h-16" 
-                        viewBox="0 0 24 24" 
+                      <svg
+                        className="w-12 h-12 sm:w-16 sm:h-16"
+                        viewBox="0 0 24 24"
                         fill="none"
                       >
                         <defs>
-                          <linearGradient id="speakerGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                          <linearGradient
+                            id="speakerGradient"
+                            x1="0%"
+                            y1="0%"
+                            x2="100%"
+                            y2="100%"
+                          >
                             <stop offset="0%" stopColor="rgb(79, 70, 229)" />
                             <stop offset="50%" stopColor="rgb(147, 51, 234)" />
                             <stop offset="100%" stopColor="rgb(59, 130, 246)" />
                           </linearGradient>
                         </defs>
-                        <path 
-                          d="M11 5L6 9H2v6h4l5 4V5z" 
+                        <path
+                          d="M11 5L6 9H2v6h4l5 4V5z"
                           fill="url(#speakerGradient)"
                           opacity="0.8"
                         />
-                        <path 
-                          d="M15.54 8.46a5 5 0 010 7.07M19.07 4.93a10 10 0 010 14.14" 
-                          stroke="url(#speakerGradient)" 
-                          strokeWidth="2" 
+                        <path
+                          d="M15.54 8.46a5 5 0 010 7.07M19.07 4.93a10 10 0 010 14.14"
+                          stroke="url(#speakerGradient)"
+                          strokeWidth="2"
                           strokeLinecap="round"
                           opacity="0.6"
                         />
@@ -132,7 +146,7 @@ export default function LandingPage() {
             <p className=" text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 via-purple-300 to-blue-300 text-4xl sm:text-2xl md:text-3xl">
               Powered by{" "}
               <a
-                href="https://banyanlabs.io"
+                href=""
                 target="_blank"
                 rel="noopener noreferrer"
                 className="bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 bg-clip-text text-transparent hover:text-white transition-all duration-200"
@@ -141,7 +155,7 @@ export default function LandingPage() {
               </a>{" "}
               | a social enterprise of{" "}
               <a
-                href="https://perseverenow.org"
+                href=""
                 target="_blank"
                 rel="noopener noreferrer"
                 className="bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 bg-clip-text text-transparent hover:text-white transition-all duration-200"
@@ -195,7 +209,7 @@ export default function LandingPage() {
                   hours.
                 </p>
               </div>
-              <form onSubmit={handleContactFormSubmit} className="space-y-6">
+              <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="grid gap-8 mb-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <label
@@ -209,13 +223,12 @@ export default function LandingPage() {
                       name="fullName"
                       type="text"
                       required
-                      value={contactForm.fullName}
+                      value={formData.fullName}
                       onChange={handleChange}
                       className="required w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 backdrop-blur-sm"
                       placeholder="Enter your full name"
                     />
                   </div>
-
                   <div className="space-y-2">
                     <label
                       htmlFor="organization"
@@ -228,7 +241,7 @@ export default function LandingPage() {
                       name="organization"
                       type="text"
                       required
-                      value={contactForm.organization}
+                      value={formData.organization}
                       onChange={handleChange}
                       className="required w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 backdrop-blur-sm"
                       placeholder="Company, nonprofit, or event name"
@@ -246,7 +259,7 @@ export default function LandingPage() {
                       name="email"
                       type="email"
                       required
-                      value={contactForm.email}
+                      value={formData.email}
                       onChange={handleChange}
                       className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 backdrop-blur-sm"
                       placeholder="Enter your email address"
@@ -263,48 +276,28 @@ export default function LandingPage() {
                       id="phone"
                       name="phone"
                       type="tel"
-                      value={contactForm.phone}
+                      value={formData.phone}
                       onChange={handleChange}
                       className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 backdrop-blur-sm"
                       placeholder="Enter your phone number"
                     />
                   </div>
-                  {/* <div className="space-y-2">
-                        <Label
-                          htmlFor="times"
-                          className="text-sm font-medium text-brand-white"
-                        >
-                          Preferred Times
-                        </Label>
-                        <Input
-                          id="times"
-                          name="times"
-                          type="text"
-                          value={contactForm.times}
-                          onChange={handleChange}
-                          className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 backdrop-blur-sm"
-                          placeholder="Suggest times for a demo or meeting"
-                        />
-                      </div> */}
                 </div>
+                <div className="mt-10 w-1/3 justify-self-center">
+                  {/* Submit button on contact form */}
+                  <Button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="place-self-center place-items-center w-full bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 hover:opacity-90 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-200 text-lg font-orbitron border-0 cursor-pointer disabled:opacity-50"
+                    style={{ letterSpacing: "0.05em" }}
+                  >
+                    {isSubmitting ? "SUBMITTING..." : "SUBMIT"}
+                  </Button>
+                </div>
+                {showSuccessModal && (
+                  <SuccessModal setShowSuccessModal={setShowSuccessModal} />
+                )}
               </form>
-              <div className="mt-10 w-1/3 justify-self-center">
-              {/* Submit button on contact form */}
-                <Button
-                  type="submit"
-                  className="place-self-center place-items-center w-full bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 hover:opacity-90 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-200 text-lg font-orbitron border-0 cursor-pointer"
-                  style={{ letterSpacing: "0.05em" }}
-                  disabled={status === "loading"}
-                  onClick={() => { setShowSuccessModal(true); }} // Temporarily simulate success on click
-                >
-                  {status === "loading" ? "Sending..." : "SUBMIT"}
-                </Button>
-              </div>
-              {status === "error" && (
-                <p className="text-center text-red-400 mt-4">
-                  Something went wrong. Please try again.
-                </p>
-              )}
               <p className="text-center text-sm text-gray-400 mt-6">
                 By submitting this form, you agree to our privacy policy and
                 terms of service.
@@ -313,10 +306,6 @@ export default function LandingPage() {
           </div>
         </section>
       </div>
-
-      {showSuccessModal && (
-        <SuccessModal setShowSuccessModal={setShowSuccessModal} />
-      )}
     </>
   );
 }
