@@ -106,8 +106,8 @@ export default function SessionsList({
       <CardContent>
         <div className="space-y-4">
           {displaySessions.map((session) => (
-            <div key={session.id} className="bg-white/5 rounded-lg p-4 border border-white/10">
-              <div className="flex justify-between items-start">
+            <div key={session.id} className="bg-white/5 rounded-lg p-3 sm:p-4 border border-white/10">
+              <div className="flex flex-col xl:flex-row xl:justify-between xl:items-start gap-3 xl:gap-0">
                 <div className="flex-1">
                   {/* Status and Session ID */}
                   <div className="flex items-center gap-3 mb-2">
@@ -120,7 +120,7 @@ export default function SessionsList({
                   </div>
                   
                   {/* Session Details */}
-                  <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-sm">
                     <div>
                       <p className="text-white/60">Started:</p>
                       <p className="text-white">{formatDate(session.session_started_at)}</p>
@@ -145,7 +145,7 @@ export default function SessionsList({
                   {session.user_agent && (
                     <div className="mt-2">
                       <p className="text-white/60 text-xs">User Agent:</p>
-                      <p className="text-white/70 text-xs truncate max-w-md">
+                      <p className="text-white/70 text-xs truncate max-w-[150px] sm:max-w-xs lg:max-w-md">
                         {session.user_agent}
                       </p>
                     </div>
@@ -155,14 +155,14 @@ export default function SessionsList({
                   {session.metadata && Object.keys(session.metadata).length > 0 && (
                     <div className="mt-2">
                       <p className="text-white/60 text-xs">Session Info:</p>
-                      <div className="text-white/70 text-xs flex flex-wrap gap-1 mt-1">
+                      <div className="text-white/70 text-xs flex flex-wrap gap-1 mt-1 max-w-full overflow-hidden">
                         {session.metadata.source && (
                           <Badge variant="info" className="text-xs">
                             {session.metadata.source}
                           </Badge>
                         )}
                         {session.metadata.initial_query && (
-                          <Badge variant="warning" className="text-xs">
+                          <Badge variant="warning" className="text-xs max-w-[200px] sm:max-w-xs lg:max-w-sm truncate inline-block">
                             &quot;{session.metadata.initial_query}&quot;
                           </Badge>
                         )}
@@ -177,7 +177,7 @@ export default function SessionsList({
                 </div>
                 
                 {/* Action Buttons */}
-                <div className="flex gap-2 ml-4">
+                <div className="flex flex-row gap-2 sm:ml-4 xl:ml-4 self-start xl:self-auto">
                   <Button
                     onClick={() => {
                       console.log('🔥 View Messages button clicked for session:', session.id)

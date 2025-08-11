@@ -47,10 +47,10 @@ export default function EnhancedAnalyticsTab() {
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="space-y-4 lg:space-y-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-6">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10 animate-pulse">
+            <div key={i} className="bg-white/5 backdrop-blur-sm rounded-xl p-4 lg:p-6 border border-white/10 animate-pulse">
               <div className="h-4 bg-white/10 rounded mb-2"></div>
               <div className="h-8 bg-white/10 rounded"></div>
             </div>
@@ -69,17 +69,17 @@ export default function EnhancedAnalyticsTab() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 lg:space-y-6">
       {/* Header */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-bold text-white">Conference Analytics</h2>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <h2 className="text-lg lg:text-2xl font-bold text-white">Conference Analytics</h2>
             <div className="flex items-center gap-2">
               <div className="flex bg-white/5 rounded-lg p-1">
                 <button
                   onClick={() => setViewMode('overview')}
-                  className={`px-3 py-1 rounded text-sm transition-colors ${
+                  className={`px-2 lg:px-3 py-1 rounded text-xs lg:text-sm transition-colors ${
                     viewMode === 'overview' 
                       ? 'bg-blue-500 text-white' 
                       : 'text-white/60 hover:text-white'
@@ -89,7 +89,7 @@ export default function EnhancedAnalyticsTab() {
                 </button>
                 <button
                   onClick={() => setViewMode('detailed')}
-                  className={`px-3 py-1 rounded text-sm transition-colors ${
+                  className={`px-2 lg:px-3 py-1 rounded text-xs lg:text-sm transition-colors ${
                     viewMode === 'detailed' 
                       ? 'bg-blue-500 text-white' 
                       : 'text-white/60 hover:text-white'
@@ -100,7 +100,7 @@ export default function EnhancedAnalyticsTab() {
               </div>
               <button
                 onClick={loadAnalytics}
-                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                className="px-3 lg:px-4 py-1.5 lg:py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-xs lg:text-sm"
               >
                 Refresh
               </button>
@@ -110,7 +110,7 @@ export default function EnhancedAnalyticsTab() {
       </Card>
 
       {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-6">
         <StatCard
           title="Total Users"
           value={analytics.totalUsers}
@@ -146,7 +146,7 @@ export default function EnhancedAnalyticsTab() {
           <h3 className="text-xl font-semibold text-white">Today's Activity</h3>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
             <div className="bg-white/5 p-4 rounded-lg">
               <div className="text-white/60 text-sm">Messages</div>
               <div className="text-2xl font-bold text-white">{analytics.todayStats.messages}</div>
@@ -168,7 +168,7 @@ export default function EnhancedAnalyticsTab() {
       </Card>
 
       {/* Top Questions and Recent Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-6">
         {/* Top 5 Most Asked Questions */}
         <Card>
           <CardHeader>
@@ -223,7 +223,7 @@ export default function EnhancedAnalyticsTab() {
           <h3 className="text-xl font-semibold text-white">Popular Topics</h3>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
             {analytics.popularTopics.map((topic, index) => (
               <div key={index} className="bg-white/5 p-4 rounded-lg">
                 <div className="flex items-center justify-between mb-2">
@@ -279,7 +279,7 @@ export default function EnhancedAnalyticsTab() {
               <h3 className="text-xl font-semibold text-white">Peak Usage Hours (Last 7 Days)</h3>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-6 md:grid-cols-12 gap-2">
+              <div className="grid grid-cols-6 lg:grid-cols-12 gap-1 lg:gap-2">
                 {analytics.peakUsageHours.map((hour, index) => (
                   <div key={index} className="text-center">
                     <div className="text-white/60 text-xs mb-1">{hour.hour}</div>

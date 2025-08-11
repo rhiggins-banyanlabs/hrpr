@@ -21,11 +21,11 @@ export default function StatCard({
   className = '' 
 }: StatCardProps) {
   return (
-    <Card className={`p-6 ${className}`}>
+    <Card className={`p-4 sm:p-6 ${className}`}>
       <div className="flex items-center justify-between">
         <div className="flex-1">
           <p className="text-white/70 text-sm mb-1">{title}</p>
-          <p className="text-2xl font-bold text-white">{value}</p>
+          <p className="text-xl sm:text-2xl font-bold text-white">{value}</p>
           {trend && (
             <div className="flex items-center mt-2">
               <span className={`text-sm font-medium ${
@@ -33,13 +33,13 @@ export default function StatCard({
               }`}>
                 {trend.isPositive ? '+' : '-'}{Math.abs(trend.value)}%
               </span>
-              <span className="text-white/60 text-sm ml-2">vs last period</span>
+              <span className="text-white/60 text-xs sm:text-sm ml-2">vs last period</span>
             </div>
           )}
         </div>
         {icon && (
-          <div className={`p-3 rounded-lg ${iconColor}/20 flex-shrink-0`}>
-            <div className={`w-6 h-6 ${iconColor} rounded flex items-center justify-center`}>
+          <div className={`p-2 sm:p-3 rounded-lg ${iconColor}/20 flex-shrink-0`}>
+            <div className={`w-5 h-5 sm:w-6 sm:h-6 ${iconColor} rounded flex items-center justify-center`}>
               {icon}
             </div>
           </div>
