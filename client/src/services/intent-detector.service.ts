@@ -380,24 +380,19 @@ export class IntentDetectorService {
         return addPausePrefix(exhibitorResponses);
         
       case 'venue':
-        // Food & dining
-        if (lowerQuery.includes('restaurant') || lowerQuery.includes('food') || lowerQuery.includes('eat')) {
+        // Food & dining queries (general - works for coffee, meals, etc.)
+        if (lowerQuery.includes('coffee') || lowerQuery.includes('cafe') || lowerQuery.includes('starbucks') ||
+            lowerQuery.includes('espresso') || lowerQuery.includes('latte') ||
+            lowerQuery.includes('restaurant') || lowerQuery.includes('food') || lowerQuery.includes('eat') ||
+            lowerQuery.includes('breakfast') || lowerQuery.includes('lunch') || lowerQuery.includes('dinner')) {
           const responses = [
-            "Let me check what restaurants are nearby",
-            "I'll find some good dining options for you",
-            "Let me see what food places are close by"
-          ];
-          return addPausePrefix(responses);
-        }
-        // Coffee
-        if (lowerQuery.includes('coffee') || lowerQuery.includes('cafe') || lowerQuery.includes('starbucks')) {
-          const responses = [
-            "Let me find the nearest coffee shops",
-            "I'll check what cafes are around here",
-            "Let me look up coffee options nearby",
-            "I'll find you some caffeine options",
-            "Let me locate coffee shops for you",
-            "I'll search for nearby coffee places"
+            "Let me check what's available",
+            "I'll find those options for you",
+            "Let me look that up",
+            "I'll search for nearby options",
+            "Let me find what's close by",
+            "I'll check what we have available",
+            "Let me see what's around here"
           ];
           return addPausePrefix(responses);
         }

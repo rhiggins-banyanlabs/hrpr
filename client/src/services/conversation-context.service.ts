@@ -149,6 +149,22 @@ class ConversationContextService {
    */
   extractEntities(query: string): string[] {
     const entities: string[] = [];
+    const lowerQuery = query.toLowerCase();
+    
+    // Extract food/dining related topics
+    if (lowerQuery.includes('coffee') || lowerQuery.includes('starbucks') || 
+        lowerQuery.includes('espresso') || lowerQuery.includes('latte')) {
+      entities.push('coffee');
+    }
+    if (lowerQuery.includes('food') || lowerQuery.includes('restaurant') || 
+        lowerQuery.includes('dining') || lowerQuery.includes('eat')) {
+      entities.push('restaurants');
+    }
+    if (lowerQuery.includes('breakfast')) entities.push('breakfast');
+    if (lowerQuery.includes('lunch')) entities.push('lunch');
+    if (lowerQuery.includes('dinner')) entities.push('dinner');
+    if (lowerQuery.includes('bar') || lowerQuery.includes('drink') || 
+        lowerQuery.includes('cocktail')) entities.push('bars');
     
     // Extract company names (capitalized words)
     const companyPattern = /\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b/g;
