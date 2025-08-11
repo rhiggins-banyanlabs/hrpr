@@ -1,6 +1,7 @@
 // hooks/useVoiceChat.ts - Voice-only chat without UI components
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { ChatStorageService } from '@/lib/supabase/chatStorage';
+import { semanticIntentDetector } from '@/services/semantic-intent-detector.service';
 import { IntentDetectorService } from '@/services/intent-detector.service';
 import { feedbackStateMachine, FeedbackStateMachine } from '@/services/feedback-state-machine.service';
 import { feedbackStorage } from '@/services/feedback-storage.service';
@@ -134,23 +135,24 @@ export const useVoiceChat = ({
           console.log('🎤 Using custom personalized filler response');
           fillerAudioPromise = customFillerPromise;
         } else {
+          // Use rich, context-sensitive filler response based on the original intent detector
           const fillerResponse = IntentDetectorService.getFillerResponse(text);
-          console.log('🎤 Filler response check:', {
-            query: text,
-            fillerResponse,
-            hasSpeakText: !!speakText,
-            willPlayFiller: !!(fillerResponse && speakText)
-          });
+          
+          console.log('🎤 Filler response from IntentDetector:', fillerResponse);
           if (fillerResponse && speakText) {
             console.log('🎤 Playing immediate filler response:', fillerResponse);
-            // Keep track of the filler audio promise so we can wait for it later
             fillerAudioPromise = speakText(fillerResponse).catch(error => {
               console.log('⚠️ Filler response TTS failed, continuing without filler:', error);
               return null;
             });
-          } else {
-            console.log('🎤 No filler played:', { noFiller: !fillerResponse, noSpeakText: !speakText });
           }
+          
+          // Detect semantic intent in parallel for data gathering (non-blocking)
+          semanticIntentDetector.detectIntent(text).then(intentResult => {
+            console.log(`🎯 Semantic voice intent: ${intentResult.primaryIntent} (confidence: ${intentResult.confidence.toFixed(2)})`);
+          }).catch(error => {
+            console.error('Semantic voice intent detection failed:', error);
+          });
         }
       } else {
         console.log('🔇 Skipping filler response - in feedback state:', currentState);
@@ -199,8 +201,7 @@ export const useVoiceChat = ({
         body: JSON.stringify({
           prompt: text,
           userName: userNameRef.current,
-          greetingAlreadyHandled: greetingAlreadyHandled,
-          sessionId: sessionId
+          greetingAlreadyHandled: greetingAlreadyHandled
         }),
         signal: abortControllerRef.current.signal
       });
@@ -316,7 +317,7 @@ export const useVoiceChat = ({
                 audio.removeEventListener('ended', handleEnded);
                 currentAudioRef.current = null;
                 resolve();
-              }, 30000); // 30 second timeout
+              }, 60000); // 60 second timeout for longer audio responses
             });
           }
           
@@ -579,18 +580,26 @@ export const useVoiceChat = ({
         }
       };
       
-      // Add a 2-second buffer after TTS to ensure natural conversation flow
-      pendingSilenceDetectionRef.current = setTimeout(startDetection, 2000);
+      // Add a 5-second buffer after TTS to ensure natural conversation flow
+      // This gives users time to think before we start monitoring for silence
+      pendingSilenceDetectionRef.current = setTimeout(startDetection, 5000);
     };
+    
+    // For THANKING_USER state, always speak the message regardless of processing state
+    // This ensures users always hear the thank you after providing feedback
+    const shouldSpeak = (newState === FeedbackState.THANKING_USER) 
+      ? (message && speakText) 
+      : (message && speakText && !isProcessingRef.current);
     
     console.log('🎯 Checking if should speak message:', {
       hasMessage: !!message,
       hasSpeakText: !!speakText,
       isProcessing: isProcessingRef.current,
-      willSpeak: !!(message && speakText && !isProcessingRef.current)
+      newState: newState,
+      willSpeak: shouldSpeak
     });
     
-    if (message && speakText && !isProcessingRef.current) {
+    if (shouldSpeak) {
       // Stop any currently playing audio to prevent overlap
       if (currentAudioRef.current) {
         console.log('🔊 Stopping previous audio for feedback message');
@@ -600,6 +609,13 @@ export const useVoiceChat = ({
       
       // Play the appropriate message for the state
       console.log(`🔊 Speaking feedback message for state ${newState}: "${message}"`);
+      
+      // Check if speakText and message are available
+      if (!speakText || !message) {
+        console.log('⚠️ TTS or message not available for feedback message');
+        return;
+      }
+      
       try {
         const audioResult = await speakText(message);
         
@@ -625,7 +641,7 @@ export const useVoiceChat = ({
               audio.removeEventListener('ended', handleEnded);
               currentAudioRef.current = null;
               resolve();
-            }, 15000); // 15 second timeout
+            }, 60000); // 60 second timeout for longer responses
           });
         }
       } catch (error) {
@@ -715,7 +731,7 @@ export const useVoiceChat = ({
     if (isNewNameIntroduction && extractedName) {
       console.log('👋 Processing query with name introduction for:', extractedName);
       
-      // Get the original filler response and add the greeting
+      // Get the original filler response using fast keyword detection and add the greeting
       const originalFillerResponse = IntentDetectorService.getFillerResponse(text);
       if (originalFillerResponse && speakText) {
         // Add "Nice to meet you" to the filler response
@@ -803,6 +819,13 @@ export const useVoiceChat = ({
       feedbackTextRef.current = text;
       console.log('📝 Satisfaction feedback captured:', text);
       
+      // If the response is more than just yes/no (has meaningful feedback), mark as feedback provided
+      const isDetailedFeedback = text.trim().length > 10 && intent === 'other';
+      if (isDetailedFeedback) {
+        console.log('📝 Detailed feedback provided during satisfaction question');
+        feedbackStateMachine.setFeedbackProvided(true);
+      }
+      
       if (intent === 'yes') {
         console.log('✅ User is satisfied');
         userSatisfactionRef.current = true; // User is satisfied
@@ -818,13 +841,17 @@ export const useVoiceChat = ({
         console.log('🤔 Unclear satisfaction response, treating as satisfied but saving feedback');
         userSatisfactionRef.current = true; // Default to satisfied for unclear responses
         feedbackStateMachine.transition('user_yes');
-        return; // Goodbye message and reset
+        return; // Thank you message if feedback provided, goodbye otherwise
       }
     } else if (currentState === FeedbackState.COLLECTING_FEEDBACK) {
       // Store additional feedback text (append if there was already feedback from satisfaction question)
       console.log('📝 Additional feedback collected:', text);
       const existingFeedback = feedbackTextRef.current;
       feedbackTextRef.current = existingFeedback ? `${existingFeedback}. Additional feedback: ${text}` : text;
+      
+      // Mark that feedback was provided
+      feedbackStateMachine.setFeedbackProvided(true);
+      
       feedbackStateMachine.transition('user_response');
       return; // Thank you message and reset
     }
@@ -885,9 +912,9 @@ export const useVoiceChat = ({
                   // Only start silence detection if still idle and not processing
                   if (feedbackStateMachine.getCurrentState() === FeedbackState.IDLE && 
                       !isProcessingRef.current && !isSpeaking) {
-                    console.log('🔇 Starting 15-second silence detection for user response');
+                    console.log('🔇 Starting 30-second silence detection for user response');
                     
-                    startSilenceDetection(15000, () => {
+                    startSilenceDetection(30000, () => {
                       // After silence timeout, user didn't respond to Harper's natural follow-up question
                       // Go directly to satisfaction question
                       if (feedbackStateMachine.getCurrentState() === FeedbackState.IDLE && 
@@ -899,7 +926,7 @@ export const useVoiceChat = ({
                   } else {
                     console.log('🔇 Not starting silence detection - user or system is active');
                   }
-                }, 2000); // 2 second delay to let user start speaking
+                }, 5000); // 5 second delay to let user start speaking
               }
             }, 100); // Check every 100ms if still speaking
           }

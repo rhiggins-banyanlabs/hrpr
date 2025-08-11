@@ -24,8 +24,8 @@ export default function SpeakersList({ speakers, loading, onAdd, onEdit, onDelet
   return (
     <Card>
       <CardHeader>
-        <div className="flex justify-between items-center">
-          <h3 className="text-xl font-semibold text-white">Speakers</h3>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-0">
+          <h3 className="text-lg sm:text-xl font-semibold text-white">Speakers</h3>
           <Button onClick={onAdd} variant="primary" size="sm">
             Add Speaker
           </Button>
@@ -52,7 +52,7 @@ export default function SpeakersList({ speakers, loading, onAdd, onEdit, onDelet
           <div className="space-y-3">
             {speakers.map((speaker) => (
               <div key={speaker.id} className="bg-white/5 rounded-lg p-4 border border-white/10">
-                <div className="flex justify-between items-start">
+                <div className="flex flex-col xl:flex-row xl:justify-between xl:items-start gap-3 xl:gap-0">
                   <div className="flex-1">
                     <h4 className="text-white font-semibold">{speaker.name}</h4>
                     <p className="text-white/70 text-sm">{speaker.title} at {speaker.company}</p>
@@ -60,7 +60,7 @@ export default function SpeakersList({ speakers, loading, onAdd, onEdit, onDelet
                       <p className="text-white/60 text-sm mt-2">{speaker.bio}</p>
                     )}
                   </div>
-                  <div className="flex gap-2 ml-4">
+                  <div className="flex gap-2 xl:ml-4 self-start xl:self-auto">
                     <Button
                       onClick={() => onEdit(speaker)}
                       variant="secondary"

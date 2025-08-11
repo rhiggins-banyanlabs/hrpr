@@ -35,32 +35,64 @@ export const FeedbackAnalytics: React.FC = () => {
   }, []);
 
   const analyzeSentiment = (text: string | null | undefined): 'positive' | 'negative' | 'neutral' => {
-    if (!text) return 'neutral';
+    if (!text || text.trim().length === 0) return 'neutral';
     
-    const lowerText = text.toLowerCase();
+    const lowerText = text.toLowerCase().trim();
     
-    // Negative indicators
+    // Negative indicators (more comprehensive)
     const negativeWords = [
       'bad', 'poor', 'terrible', 'awful', 'horrible', 'worst', 'hate', 'dislike',
       'unhelpful', 'confusing', 'frustrating', 'annoying', 'useless', 'wrong',
       'incorrect', 'broken', 'failed', 'disappointing', 'slow', 'difficult',
       'not helpful', 'didn\'t help', 'not useful', 'couldn\'t', 'didn\'t work',
-      'needs improvement', 'could be better', 'not satisfied', 'unsatisfied'
+      'needs improvement', 'could be better', 'not satisfied', 'unsatisfied',
+      'no good', 'not good', 'stupid', 'dumb', 'waste', 'problem', 'issue',
+      'error', 'bug', 'sucks', 'terrible', 'pathetic', 'lacking', 'insufficient'
     ];
     
-    // Positive indicators
+    // Positive indicators (more comprehensive)
     const positiveWords = [
       'good', 'great', 'excellent', 'amazing', 'fantastic', 'wonderful', 'perfect',
       'helpful', 'useful', 'awesome', 'love', 'like', 'thanks', 'thank you',
       'clear', 'easy', 'fast', 'efficient', 'brilliant', 'impressed', 'satisfied',
-      'well done', 'works great', 'very helpful', 'super', 'best'
+      'well done', 'works great', 'very helpful', 'super', 'best', 'outstanding',
+      'phenomenal', 'incredible', 'superb', 'delighted', 'pleased', 'happy',
+      'appreciate', 'grateful', 'nice work', 'well designed', 'smooth', 'intuitive'
     ];
     
-    const negativeScore = negativeWords.filter(word => lowerText.includes(word)).length;
-    const positiveScore = positiveWords.filter(word => lowerText.includes(word)).length;
+    // Weight longer phrases more heavily
+    let negativeScore = 0;
+    let positiveScore = 0;
     
-    if (negativeScore > positiveScore) return 'negative';
-    if (positiveScore > negativeScore) return 'positive';
+    negativeWords.forEach(word => {
+      if (lowerText.includes(word)) {
+        negativeScore += word.split(' ').length; // Multi-word phrases get more weight
+      }
+    });
+    
+    positiveWords.forEach(word => {
+      if (lowerText.includes(word)) {
+        positiveScore += word.split(' ').length; // Multi-word phrases get more weight
+      }
+    });
+    
+    // Debug logging for sentiment analysis
+    console.log(`🔍 Analyzing sentiment for: "${text}"`);
+    console.log(`📊 Scores - Negative: ${negativeScore}, Positive: ${positiveScore}`);
+    
+    // If any sentiment words are found, classify based on which is higher
+    // No threshold needed - any clear sentiment should be classified
+    if (negativeScore > positiveScore && negativeScore > 0) {
+      console.log(`❌ Result: NEGATIVE`);
+      return 'negative';
+    }
+    if (positiveScore > negativeScore && positiveScore > 0) {
+      console.log(`✅ Result: POSITIVE`);
+      return 'positive';
+    }
+    
+    // Only return neutral if no sentiment words found or scores are equal
+    console.log(`⚪ Result: NEUTRAL`);
     return 'neutral';
   };
 
@@ -77,11 +109,33 @@ export const FeedbackAnalytics: React.FC = () => {
       setAnalytics(analyticsData);
       
       // Enhance feedback with sentiment analysis
-      const enhancedFeedback = recentData.map(session => ({
-        ...session,
-        sentiment: session.satisfied === false ? 'negative' as const : 
-                  analyzeSentiment(session.feedbackText)
-      }));
+      const enhancedFeedback = recentData.map(session => {
+        // First analyze the text sentiment
+        const textSentiment = analyzeSentiment(session.feedbackText);
+        
+        // If text sentiment is clear (not neutral), prioritize it
+        // Otherwise, use the satisfaction button as fallback
+        let finalSentiment: 'positive' | 'negative' | 'neutral';
+        
+        if (textSentiment !== 'neutral') {
+          // Text has clear sentiment, use it
+          finalSentiment = textSentiment;
+        } else if (session.satisfied === false) {
+          // No clear text sentiment, but user clicked unsatisfied
+          finalSentiment = 'negative';
+        } else if (session.satisfied === true) {
+          // No clear text sentiment, but user clicked satisfied
+          finalSentiment = 'positive';
+        } else {
+          // No text feedback and no satisfaction rating
+          finalSentiment = 'neutral';
+        }
+        
+        return {
+          ...session,
+          sentiment: finalSentiment
+        };
+      });
       
       setRecentFeedback(enhancedFeedback);
     } catch (err) {
@@ -117,8 +171,8 @@ export const FeedbackAnalytics: React.FC = () => {
 
   const filteredFeedback = recentFeedback.filter(session => {
     if (filter === 'all') return true;
-    if (filter === 'positive') return session.satisfied && session.sentiment === 'positive';
-    if (filter === 'negative') return !session.satisfied || session.sentiment === 'negative';
+    if (filter === 'positive') return session.satisfied === true || session.sentiment === 'positive';
+    if (filter === 'negative') return session.satisfied === false || session.sentiment === 'negative';
     return true;
   });
 
@@ -189,12 +243,12 @@ export const FeedbackAnalytics: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="space-y-4 lg:space-y-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-6">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10 animate-pulse">
-              <div className="h-4 bg-white/10 rounded mb-2"></div>
-              <div className="h-8 bg-white/10 rounded"></div>
+            <div key={i} className="bg-white/5 backdrop-blur-sm rounded-xl p-3 lg:p-6 border border-white/10 animate-pulse">
+              <div className="h-3 lg:h-4 bg-white/10 rounded mb-2"></div>
+              <div className="h-6 lg:h-8 bg-white/10 rounded"></div>
             </div>
           ))}
         </div>
@@ -218,18 +272,27 @@ export const FeedbackAnalytics: React.FC = () => {
     );
   }
 
+  // Filter based on final sentiment only (not satisfaction button)
+  // This ensures no overlap between positive and negative highlights
   const negativeWithText = recentFeedback.filter(f => 
-    (!f.satisfied || f.sentiment === 'negative') && f.feedbackText
+    f.sentiment === 'negative' && f.feedbackText
   );
   
   const positiveWithText = recentFeedback.filter(f => 
-    f.satisfied && f.sentiment === 'positive' && f.feedbackText
+    f.sentiment === 'positive' && f.feedbackText
   );
+  
+  // Debug logging for highlights sections  
+  console.log(`\n🎨 HIGHLIGHTS DEBUG:`);
+  console.log(`Negative items (Areas for Improvement): ${negativeWithText.length}`);
+  negativeWithText.forEach((f, i) => console.log(`  ❌ ${i+1}. "${f.feedbackText}" (sentiment: ${f.sentiment})`));
+  console.log(`Positive items (Positive Highlights): ${positiveWithText.length}`);
+  positiveWithText.forEach((f, i) => console.log(`  ✅ ${i+1}. "${f.feedbackText}" (sentiment: ${f.sentiment})`));
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 lg:space-y-6">
       {/* Analytics Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-6">
         <StatCard
           title="Total Feedback"
           value={analytics.totalFeedback}
@@ -265,18 +328,18 @@ export const FeedbackAnalytics: React.FC = () => {
 
       {/* Feedback Highlights */}
       {(negativeWithText.length > 0 || positiveWithText.length > 0) && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-6">
           {/* Negative Feedback Highlights */}
           {negativeWithText.length > 0 && (
-            <Card>
+            <Card className="p-3 lg:p-4">
               <CardHeader>
-                <h3 className="text-xl font-semibold text-white">Areas for Improvement</h3>
+                <h3 className="text-base lg:text-xl font-semibold text-white">Areas for Improvement</h3>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
+                <div className="space-y-2 lg:space-y-3">
                   {negativeWithText.slice(0, 3).map((feedback, index) => (
-                    <div key={index} className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
-                      <p className="text-white/80 text-sm mb-2">"{feedback.feedbackText}"</p>
+                    <div key={index} className="p-2 lg:p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                      <p className="text-white/80 text-xs lg:text-sm mb-1 lg:mb-2">"{feedback.feedbackText}"</p>
                       <p className="text-white/40 text-xs">
                         {formatDate(feedback.timestamp)}
                       </p>
@@ -289,14 +352,14 @@ export const FeedbackAnalytics: React.FC = () => {
 
           {/* Positive Feedback Highlights */}
           {positiveWithText.length > 0 && (
-            <Card>
+            <Card className="p-3 lg:p-4">
               <CardHeader>
-                <h3 className="text-xl font-semibold text-white">Positive Highlights</h3>
+                <h3 className="text-base lg:text-xl font-semibold text-white">Positive Highlights</h3>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
+                <div className="space-y-2 lg:space-y-3">
                   {positiveWithText.slice(0, 3).map((feedback, index) => (
-                    <div key={index} className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+                    <div key={index} className="p-2 lg:p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
                       <p className="text-white/80 text-sm mb-2">"{feedback.feedbackText}"</p>
                       <p className="text-white/40 text-xs">
                         {formatDate(feedback.timestamp)}

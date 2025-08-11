@@ -27,27 +27,29 @@ export default function ChatSessionsTab() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <Card className="p-6">
+      <Card className="p-4 lg:p-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h2 className="text-2xl font-bold text-white mb-2">Chat Sessions</h2>
-            <p className="text-white/70">Monitor user conversations with Harper</p>
+            <h2 className="text-lg lg:text-2xl font-bold text-white mb-1 lg:mb-2">Chat Sessions</h2>
+            <p className="text-sm lg:text-base text-white/70">Monitor user conversations with Harper</p>
           </div>
           
           <div className="flex gap-3">
             <Button
               onClick={refreshData}
               variant="secondary"
-              size="md"
+              size="sm"
+              className="text-xs lg:text-sm px-3 lg:px-4 py-1.5 lg:py-2"
             >
-              Refresh Data
+              Refresh
             </Button>
             <Button
               onClick={exportData}
               variant="primary"
-              size="md"
+              size="sm"
+              className="text-xs lg:text-sm px-3 lg:px-4 py-1.5 lg:py-2"
             >
-              Export Data
+              Export
             </Button>
           </div>
         </div>
@@ -64,149 +66,61 @@ export default function ChatSessionsTab() {
         deleteSession={deleteSession}
       />
 
-      {/* Message Viewer Modal - WORKING VERSION */}
+      {/* Message Viewer Modal - RESPONSIVE VERSION */}
       {messageViewOpen && selectedSession && (
         <>
           {/* Backdrop */}
           <div 
             onClick={closeMessageViewer}
-            style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: 'rgba(0, 0, 0, 0.8)',
-              zIndex: 2147483646
-            }}
+            className="fixed inset-0 bg-black/80 z-[2147483646]"
           />
           
           {/* Modal */}
-          <div style={{
-            position: 'fixed',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            width: '90vw',
-            maxWidth: '900px',
-            maxHeight: '85vh',
-            backgroundColor: '#1e293b',
-            color: 'white',
-            borderRadius: '12px',
-            border: '1px solid rgba(255,255,255,0.1)',
-            zIndex: 2147483647,
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-            overflow: 'hidden',
-            display: 'flex',
-            flexDirection: 'column'
-          }}>
+          <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[95vw] max-w-4xl max-h-[90vh] bg-slate-800 text-white rounded-xl border border-white/10 z-[2147483647] shadow-2xl overflow-hidden flex flex-col">
             {/* Header */}
-            <div style={{ 
-              display: 'flex', 
-              justifyContent: 'space-between', 
-              alignItems: 'center',
-              padding: '20px 24px',
-              borderBottom: '1px solid rgba(255,255,255,0.1)',
-              flexShrink: 0
-            }}>
-              <h2 style={{ 
-                margin: 0, 
-                fontSize: '20px', 
-                fontWeight: '600',
-                color: 'white'
-              }}>
-                Chat Session Messages
+            <div className="flex justify-between items-center p-4 lg:p-5 border-b border-white/10 flex-shrink-0">
+              <h2 className="text-base sm:text-lg lg:text-xl font-semibold text-white m-0">
+                Session Messages
               </h2>
               <button 
                 onClick={closeMessageViewer}
-                style={{
-                  backgroundColor: '#ef4444',
-                  color: 'white',
-                  padding: '8px 16px',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  fontWeight: '500'
-                }}
-                onMouseOver={(e) => (e.target as HTMLElement).style.backgroundColor = '#dc2626'}
-                onMouseOut={(e) => (e.target as HTMLElement).style.backgroundColor = '#ef4444'}
+                className="bg-red-500 hover:bg-red-600 text-white px-3 lg:px-4 py-1.5 lg:py-2 border-none rounded-md cursor-pointer text-sm font-medium transition-colors"
               >
                 Close
               </button>
             </div>
 
             {/* Content */}
-            <div style={{ 
-              padding: '24px',
-              overflow: 'auto',
-              flex: 1
-            }}>
+            <div className="p-4 sm:p-6 lg:p-6 overflow-auto flex-1">
               {/* Session Info */}
-              <div style={{
-                backgroundColor: 'rgba(255,255,255,0.05)',
-                padding: '16px',
-                borderRadius: '8px',
-                marginBottom: '20px',
-                border: '1px solid rgba(255,255,255,0.1)'
-              }}>
-                <div style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between', 
-                  alignItems: 'flex-start',
-                  marginBottom: '8px'
-                }}>
+              <div className="bg-white/5 p-4 rounded-lg mb-5 border border-white/10">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 sm:gap-0 mb-2">
                   <div>
-                    <div style={{ 
-                      fontSize: '16px', 
-                      fontWeight: '600', 
-                      marginBottom: '4px',
-                      color: 'white'
-                    }}>
-                      Session: {selectedSession.id.substring(0, 8)}...
+                    <div className="text-sm sm:text-base font-semibold mb-1 text-white">
+                      ID: {selectedSession.id.substring(0, 8)}...
                     </div>
-                    <div style={{ 
-                      fontSize: '14px', 
-                      color: 'rgba(255,255,255,0.7)'
-                    }}>
-                      Started: {new Date(selectedSession.session_started_at).toLocaleString()}
+                    <div className="text-xs sm:text-sm text-white/70">
+                      {new Date(selectedSession.session_started_at).toLocaleString()}
                     </div>
                   </div>
-                  <span style={{
-                    backgroundColor: selectedSession.session_ended_at ? '#6b7280' : '#10b981',
-                    color: 'white',
-                    padding: '4px 12px',
-                    borderRadius: '12px',
-                    fontSize: '12px',
-                    fontWeight: '500'
-                  }}>
+                  <span className={`px-3 py-1 rounded-full text-xs font-medium text-white ${
+                    selectedSession.session_ended_at ? 'bg-gray-500' : 'bg-emerald-500'
+                  }`}>
                     {selectedSession.session_ended_at ? 'Ended' : 'Active'}
                   </span>
                 </div>
                 
                 {/* Metadata */}
                 {selectedSession.metadata && Object.keys(selectedSession.metadata).length > 0 && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '12px' }}>
+                  <div className="flex flex-wrap gap-1.5 mt-3">
                     {selectedSession.metadata.source && (
-                      <span style={{
-                        backgroundColor: '#3b82f6',
-                        color: 'white',
-                        padding: '2px 8px',
-                        borderRadius: '12px',
-                        fontSize: '11px'
-                      }}>
-                        Source: {selectedSession.metadata.source}
+                      <span className="bg-blue-500 text-white px-2 py-0.5 rounded-full text-xs">
+                        {selectedSession.metadata.source}
                       </span>
                     )}
                     {selectedSession.metadata.initial_query && (
-                      <span style={{
-                        backgroundColor: '#f59e0b',
-                        color: 'white',
-                        padding: '2px 8px',
-                        borderRadius: '12px',
-                        fontSize: '11px'
-                      }}>
-                        Query: &quot;{selectedSession.metadata.initial_query}&quot;
+                      <span className="bg-amber-500 text-white px-2 py-0.5 rounded-full text-xs max-w-[150px] sm:max-w-xs truncate inline-block">
+                        &quot;{selectedSession.metadata.initial_query}&quot;
                       </span>
                     )}
                   </div>
@@ -215,123 +129,72 @@ export default function ChatSessionsTab() {
 
               {/* Messages Section */}
               <div>
-                <div style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between', 
-                  alignItems: 'center',
-                  marginBottom: '16px'
-                }}>
-                  <h4 style={{ 
-                    margin: 0,
-                    color: 'white', 
-                    fontWeight: '500',
-                    fontSize: '16px'
-                  }}>
+                <div className="flex justify-between items-center mb-4">
+                  <h4 className="text-sm sm:text-base text-white font-medium m-0">
                     Messages ({sessionMessages?.length || 0})
                   </h4>
                   {messagesLoading && (
-                    <div style={{ 
-                      color: 'rgba(255,255,255,0.6)', 
-                      fontSize: '14px' 
-                    }}>
-                      Loading messages...
+                    <div className="text-white/60 text-xs sm:text-sm">
+                      Loading...
                     </div>
                   )}
                 </div>
 
                 {/* Message List */}
                 {!sessionMessages || sessionMessages.length === 0 ? (
-                  <div style={{ 
-                    textAlign: 'center', 
-                    padding: '40px 20px',
-                    color: 'rgba(255,255,255,0.6)'
-                  }}>
+                  <div className="text-center py-10 px-5 text-white/60">
                     <p>No messages found for this session</p>
-                    <p style={{ fontSize: '12px', marginTop: '8px' }}>
+                    <p className="text-xs mt-2">
                       Check console for debug information
                     </p>
                   </div>
                 ) : (
-                  <div style={{ 
-                    maxHeight: '300px', 
-                    overflow: 'auto',
-                    paddingRight: '8px'
-                  }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div className="max-h-[250px] sm:max-h-[300px] lg:max-h-[350px] overflow-auto pr-1 sm:pr-2">
+                    <div className="flex flex-col gap-3">
                       {sessionMessages.map((message) => (
                         <div
                           key={message.id}
-                          style={{
-                            padding: '12px 16px',
-                            borderRadius: '8px',
-                            border: '1px solid rgba(255,255,255,0.1)',
-                            backgroundColor: message.sender === 'user'
-                              ? 'rgba(59, 130, 246, 0.1)'
-                              : 'rgba(147, 51, 234, 0.1)',
-                            marginLeft: message.sender === 'user' ? '32px' : '0',
-                            marginRight: message.sender === 'user' ? '0' : '32px'
-                          }}
+                          className={`p-3 sm:p-4 rounded-lg border border-white/10 ${
+                            message.sender === 'user'
+                              ? 'bg-blue-500/10 ml-4 sm:ml-8'
+                              : 'bg-purple-500/10 mr-4 sm:mr-8'
+                          }`}
                         >
-                          <div style={{ 
-                            display: 'flex', 
-                            justifyContent: 'space-between', 
-                            alignItems: 'flex-start',
-                            marginBottom: '8px'
-                          }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <span style={{
-                                backgroundColor: message.sender === 'user' ? '#3b82f6' : '#a855f7',
-                                color: 'white',
-                                padding: '2px 8px',
-                                borderRadius: '12px',
-                                fontSize: '11px',
-                                fontWeight: '500'
-                              }}>
+                          <div className="flex justify-between items-start mb-2">
+                            <div className="flex items-center gap-2">
+                              <span className={`px-2 py-0.5 rounded-full text-xs font-medium text-white ${
+                                message.sender === 'user' ? 'bg-blue-500' : 'bg-purple-500'
+                              }`}>
                                 {message.sender === 'user' ? 'User' : 'Harper'}
                               </span>
                               {message.is_voice_input && (
-                                <span style={{
-                                  backgroundColor: '#10b981',
-                                  color: 'white',
-                                  padding: '2px 8px',
-                                  borderRadius: '12px',
-                                  fontSize: '11px'
-                                }}>
+                                <span className="bg-emerald-500 text-white px-2 py-0.5 rounded-full text-xs">
                                   🎤 Voice
                                 </span>
                               )}
                             </div>
-                            <span style={{ 
-                              color: 'rgba(255,255,255,0.4)', 
-                              fontSize: '11px' 
-                            }}>
-                              {new Date(message.message_timestamp).toLocaleString()}
+                            <span className="text-white/40 text-xs">
+                              {new Date(message.message_timestamp).toLocaleString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
                             </span>
                           </div>
                           
-                          <p style={{ 
-                            margin: 0,
-                            color: 'white', 
-                            fontSize: '14px', 
-                            lineHeight: '1.5'
-                          }}>
+                          <p className="m-0 text-white text-sm leading-relaxed break-words">
                             {message.message_text}
                           </p>
                           
                           {/* Voice transcript */}
                           {message.voice_transcript && 
                            message.voice_transcript !== message.message_text && (
-                            <div style={{ 
-                              marginTop: '8px', 
-                              padding: '8px', 
-                              backgroundColor: 'rgba(255,255,255,0.05)', 
-                              borderRadius: '4px',
-                              fontSize: '12px'
-                            }}>
-                              <span style={{ color: 'rgba(255,255,255,0.6)' }}>
+                            <div className="mt-2 p-2 bg-white/5 rounded text-xs">
+                              <span className="text-white/60">
                                 Transcript: 
                               </span>
-                              <span style={{ color: 'rgba(255,255,255,0.8)' }}>
+                              <span className="text-white/80">
                                 {message.voice_transcript}
                               </span>
                             </div>
@@ -339,14 +202,8 @@ export default function ChatSessionsTab() {
                           
                           {/* Selected voice */}
                           {message.selected_voice && (
-                            <div style={{ marginTop: '8px' }}>
-                              <span style={{
-                                backgroundColor: '#3b82f6',
-                                color: 'white',
-                                padding: '2px 8px',
-                                borderRadius: '12px',
-                                fontSize: '11px'
-                              }}>
+                            <div className="mt-2">
+                              <span className="bg-blue-500 text-white px-2 py-0.5 rounded-full text-xs">
                                 Voice: {message.selected_voice}
                               </span>
                             </div>
@@ -359,67 +216,29 @@ export default function ChatSessionsTab() {
 
                 {/* Message Statistics */}
                 {sessionMessages && sessionMessages.length > 0 && (
-                  <div style={{
-                    backgroundColor: 'rgba(255,255,255,0.05)',
-                    padding: '12px',
-                    borderRadius: '8px',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    marginTop: '16px'
-                  }}>
-                    <div style={{ 
-                      display: 'grid', 
-                      gridTemplateColumns: 'repeat(3, 1fr)', 
-                      gap: '16px',
-                      textAlign: 'center'
-                    }}>
+                  <div className="bg-white/5 p-3 rounded-lg border border-white/10 mt-4">
+                    <div className="grid grid-cols-3 gap-2 sm:gap-4 text-center">
                       <div>
-                        <p style={{ 
-                          margin: '0 0 4px 0',
-                          color: 'rgba(255,255,255,0.6)', 
-                          fontSize: '12px' 
-                        }}>
-                          Total Messages
+                        <p className="m-0 mb-1 text-white/60 text-xs">
+                          Total
                         </p>
-                        <p style={{ 
-                          margin: 0,
-                          color: 'white', 
-                          fontWeight: '600',
-                          fontSize: '16px'
-                        }}>
+                        <p className="m-0 text-white font-semibold text-sm sm:text-base">
                           {sessionMessages.length}
                         </p>
                       </div>
                       <div>
-                        <p style={{ 
-                          margin: '0 0 4px 0',
-                          color: 'rgba(255,255,255,0.6)', 
-                          fontSize: '12px' 
-                        }}>
-                          User Messages
+                        <p className="m-0 mb-1 text-white/60 text-xs">
+                          User
                         </p>
-                        <p style={{ 
-                          margin: 0,
-                          color: '#60a5fa', 
-                          fontWeight: '600',
-                          fontSize: '16px'
-                        }}>
+                        <p className="m-0 text-blue-400 font-semibold text-sm sm:text-base">
                           {sessionMessages.filter(m => m.sender === 'user').length}
                         </p>
                       </div>
                       <div>
-                        <p style={{ 
-                          margin: '0 0 4px 0',
-                          color: 'rgba(255,255,255,0.6)', 
-                          fontSize: '12px' 
-                        }}>
-                          Harper Messages
+                        <p className="m-0 mb-1 text-white/60 text-xs">
+                          Harper
                         </p>
-                        <p style={{ 
-                          margin: 0,
-                          color: '#c084fc', 
-                          fontWeight: '600',
-                          fontSize: '16px'
-                        }}>
+                        <p className="m-0 text-purple-400 font-semibold text-sm sm:text-base">
                           {sessionMessages.filter(m => m.sender === 'Harper').length}
                         </p>
                       </div>
