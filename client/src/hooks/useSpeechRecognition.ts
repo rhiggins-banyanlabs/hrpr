@@ -41,15 +41,38 @@ export const useSpeechRecognition = (
   useEffect(() => {
     if (typeof window === "undefined") return;
 
+    // Detect iOS and skip speech recognition setup entirely
+    const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    
+    console.log('🔍 Device detection:', {
+      userAgent: navigator.userAgent,
+      platform: navigator.platform,
+      maxTouchPoints: navigator.maxTouchPoints,
+      isIOSDevice
+    });
+    
+    if (isIOSDevice) {
+      console.log('🍎 iOS detected - completely skipping Web Speech Recognition setup');
+      // Explicitly clear any existing permission error and don't set one
+      setPermissionError(null);
+      return;
+    }
+
+    console.log('💻 Non-iOS device - proceeding with Web Speech Recognition setup');
+
     const SpeechRecognition = 
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
+      console.log('❌ Web Speech API not available on this browser');
       setPermissionError(
         "Your browser doesn't support speech recognition. Please try Chrome, Edge, or Safari."
       );
       return;
     }
+
+    console.log('✅ Web Speech API available, setting up recognition');
 
     recognitionRef.current = new SpeechRecognition();
     

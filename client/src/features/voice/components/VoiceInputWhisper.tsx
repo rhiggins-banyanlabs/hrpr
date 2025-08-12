@@ -48,9 +48,13 @@ const VoiceInputWhisper: React.FC<VoiceInputWhisperProps> = ({
     }
     const average = sum / bufferLength;
 
-    // Voice activity thresholds
-    const VOICE_THRESHOLD = 15;
-    const SILENCE_THRESHOLD = 10;
+    // Detect iOS for adjusted thresholds
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+    // Voice activity thresholds - iOS mics often have different sensitivity
+    const VOICE_THRESHOLD = isIOS ? 12 : 15;  // Lower threshold for iOS
+    const SILENCE_THRESHOLD = isIOS ? 8 : 10; // Lower threshold for iOS
 
     if (average > VOICE_THRESHOLD) {
       // Voice detected
@@ -62,9 +66,12 @@ const VoiceInputWhisper: React.FC<VoiceInputWhisperProps> = ({
       silenceCountRef.current++;
       
       // Check for sustained silence
-      // 60 frames = ~1 second at 60fps (balanced between responsiveness and allowing natural pauses)
-      if (silenceCountRef.current > 60) { // 1 second of silence
-        console.log('🎤 Silence detected, stopping recording');
+      // iOS: 90 frames = ~1.5 seconds (more tolerance for iOS processing)
+      // Other: 60 frames = ~1 second at 60fps
+      const silenceFrameThreshold = isIOS ? 90 : 60;
+      
+      if (silenceCountRef.current > silenceFrameThreshold) {
+        console.log(`🎤 Silence detected (iOS: ${isIOS}), stopping recording`);
         stopRecording();
         return;
       }
@@ -81,20 +88,63 @@ const VoiceInputWhisper: React.FC<VoiceInputWhisperProps> = ({
     try {
       console.log('🎤 Starting Whisper-based recording');
       
+      // Detect iOS devices
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      
       // Reset state
       audioChunksRef.current = [];
       hasSpokenRef.current = false;
       silenceCountRef.current = 0;
       isRecordingRef.current = true;
 
-      // Get microphone access
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        } 
-      });
+      // Check if we're in a secure context (HTTPS or localhost)
+      if (!window.isSecureContext) {
+        console.error('🎤 Not in secure context - microphone access requires HTTPS');
+        throw new Error('Microphone access requires HTTPS connection');
+      }
+
+      // Get microphone access with iOS-optimized settings
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ 
+          audio: isIOS ? {
+            // iOS-specific settings for better compatibility
+            echoCancellation: false,  // iOS handles this natively
+            noiseSuppression: false,  // iOS handles this natively
+            autoGainControl: false,   // iOS handles this natively
+            sampleRate: 48000,        // Higher sample rate for iOS
+          } : {
+            // Standard settings for other platforms
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          } 
+        });
+      } catch (error: any) {
+        console.error('🎤 Microphone permission error:', error);
+        
+        // Handle specific error cases
+        if (error.name === 'NotAllowedError') {
+          // Permission denied
+          if (isIOS) {
+            alert('Microphone access denied. Please go to Settings > Safari > Microphone and allow access for this website.');
+          } else {
+            alert('Microphone access denied. Please allow microphone access in your browser settings.');
+          }
+        } else if (error.name === 'NotFoundError') {
+          alert('No microphone found. Please connect a microphone and try again.');
+        } else if (error.name === 'NotReadableError') {
+          alert('Microphone is already in use by another application.');
+        } else {
+          alert(`Unable to access microphone: ${error.message}`);
+        }
+        
+        onListeningChange(false);
+        isRecordingRef.current = false;
+        return;
+      }
+      
       streamRef.current = stream;
 
       // Set up audio context for silence detection
@@ -110,12 +160,28 @@ const VoiceInputWhisper: React.FC<VoiceInputWhisperProps> = ({
       const source = audioContext.createMediaStreamSource(stream);
       source.connect(analyser);
 
-      // Set up MediaRecorder
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
-        ? 'audio/webm;codecs=opus' 
-        : 'audio/webm';
+      // Set up MediaRecorder with iOS-compatible formats
+      let mimeType = 'audio/webm';
       
-      const mediaRecorder = new MediaRecorder(stream, { mimeType });
+      if (isIOS) {
+        // iOS Safari supports limited formats
+        if (MediaRecorder.isTypeSupported('audio/mp4')) {
+          mimeType = 'audio/mp4';
+        } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+          mimeType = 'audio/webm';
+        }
+        console.log('🎤 iOS detected, using mimeType:', mimeType);
+      } else {
+        // Other browsers - use best available codec
+        if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+          mimeType = 'audio/webm;codecs=opus';
+        }
+      }
+      
+      const mediaRecorder = new MediaRecorder(stream, { 
+        mimeType,
+        audioBitsPerSecond: isIOS ? 128000 : undefined // Set bitrate for iOS
+      });
       mediaRecorderRef.current = mediaRecorder;
 
       mediaRecorder.ondataavailable = (event) => {
@@ -151,9 +217,10 @@ const VoiceInputWhisper: React.FC<VoiceInputWhisperProps> = ({
         isRecordingRef.current = false;
       };
 
-      // Start recording
-      mediaRecorder.start(100); // Collect data every 100ms
-      console.log('🎤 MediaRecorder started');
+      // Start recording with iOS-optimized timeslice
+      const timeslice = isIOS ? 250 : 100; // Larger chunks for iOS
+      mediaRecorder.start(timeslice);
+      console.log(`🎤 MediaRecorder started (timeslice: ${timeslice}ms, iOS: ${isIOS})`);
       
       // Start silence detection
       detectSilence();
@@ -195,12 +262,20 @@ const VoiceInputWhisper: React.FC<VoiceInputWhisperProps> = ({
     try {
       setIsProcessing(true);
       
-      // Create audio blob
-      const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+      // Detect iOS for proper blob type
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      
+      // Create audio blob with appropriate type
+      const blobType = isIOS && MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : 'audio/webm';
+      const audioBlob = new Blob(audioChunksRef.current, { type: blobType });
+      const filename = isIOS ? 'recording.mp4' : 'recording.webm';
+      
+      console.log(`🎤 Processing audio - iOS: ${isIOS}, Type: ${blobType}, Size: ${audioBlob.size} bytes`);
       
       // Send to Whisper API
       const formData = new FormData();
-      formData.append('audio', audioBlob, 'recording.webm');
+      formData.append('audio', audioBlob, filename);
 
       const response = await fetch('/api/transcribe', {
         method: 'POST',
