@@ -90,10 +90,7 @@ const nextConfig: NextConfig = {
     // your project has ESLint errors.
     ignoreDuringBuilds: true,
   },
-  // Add experimental features to help with SSR issues
-  experimental: {
-    esmExternals: 'loose',
-  },
+  output: 'standalone',
 };
 
 export default nextConfig;
