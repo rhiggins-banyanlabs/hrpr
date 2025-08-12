@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { audioConverter } from '@/services/audio-converter.service';
 
 // Comprehensive iOS detection
 export const isIOSDevice = (): boolean => {
@@ -198,8 +199,26 @@ export const useIOSCompatibleVoice = ({ onTranscript, onError }: UseIOSCompatibl
       setIsProcessing(true);
       console.log('🎤 Processing audio with Whisper API...');
       
+      let processedBlob = audioBlob;
+      let fileName = 'audio.webm';
+      
+      // Convert audio for iOS devices using FFmpeg
+      if (isIOSDevice()) {
+        try {
+          console.log('🎵 Converting audio for iOS compatibility...');
+          processedBlob = await audioConverter.convertToM4A(audioBlob, 'webm');
+          fileName = 'audio.m4a';
+          console.log('✅ Audio converted to m4a for iOS');
+        } catch (conversionError) {
+          console.warn('⚠️ Audio conversion failed, trying original format:', conversionError);
+          // Fall back to original format if conversion fails
+          processedBlob = audioBlob;
+          fileName = 'audio.webm';
+        }
+      }
+      
       const formData = new FormData();
-      formData.append('audio', audioBlob, 'audio.webm');
+      formData.append('audio', processedBlob, fileName);
       formData.append('model', 'whisper-1');
       formData.append('language', 'en');
       formData.append('response_format', 'json');
@@ -330,41 +349,64 @@ export const useIOSCompatibleVoice = ({ onTranscript, onError }: UseIOSCompatibl
       analyserRef.current.fftSize = 256;
       source.connect(analyserRef.current);
       
-      // Set up MediaRecorder with iOS-compatible mime type
-      // Try multiple mime types in order of preference for iOS compatibility
-      const mimeTypes = [
-        'audio/mp4',              // Most iOS-compatible
-        'audio/mp4;codecs=mp4a.40.2',  // AAC in MP4
-        'audio/mpeg',             // MP3
-        'audio/webm;codecs=opus', // Standard WebM
-        'audio/webm',             // Basic WebM
-        'audio/ogg;codecs=opus',  // OGG fallback
-        ''                        // Let browser choose default
-      ];
-      
-      // Debug: Log all supported mime types
-      console.log('🎤 Checking mime type support:');
-      mimeTypes.forEach(type => {
-        const supported = type === '' ? true : MediaRecorder.isTypeSupported(type);
-        console.log(`  ${type || 'browser default'}: ${supported ? '✅' : '❌'}`);
-      });
-      
+      // Set up MediaRecorder with device-specific mime type
+      // iOS requires specific handling since it only supports m4a/ALAC natively
       let mimeType = '';
-      for (const type of mimeTypes) {
-        if (type === '' || MediaRecorder.isTypeSupported(type)) {
-          mimeType = type;
-          console.log('🎤 Selected mime type:', mimeType || 'browser default');
-          break;
+      let selectedMimeType = 'audio/webm'; // Default fallback
+      
+      if (isIOSDevice()) {
+        // For iOS, we'll record in any supported format and convert with FFmpeg
+        const iosMimeTypes = [
+          'audio/webm;codecs=opus',
+          'audio/webm',
+          'audio/ogg;codecs=opus',
+          ''  // Browser default
+        ];
+        
+        console.log('🍎 Checking iOS-compatible recording formats:');
+        for (const type of iosMimeTypes) {
+          const supported = type === '' ? true : MediaRecorder.isTypeSupported(type);
+          console.log(`  ${type || 'browser default'}: ${supported ? '✅' : '❌'}`);
+          
+          if (supported && !mimeType) {
+            mimeType = type;
+            selectedMimeType = type || 'audio/webm';
+            console.log('🍎 Selected recording format for iOS:', mimeType || 'browser default');
+            break;
+          }
+        }
+      } else {
+        // For non-iOS devices, try standard formats
+        const standardMimeTypes = [
+          'audio/webm;codecs=opus',
+          'audio/webm',
+          'audio/ogg;codecs=opus',
+          ''
+        ];
+        
+        console.log('🎤 Checking standard recording formats:');
+        for (const type of standardMimeTypes) {
+          const supported = type === '' ? true : MediaRecorder.isTypeSupported(type);
+          console.log(`  ${type || 'browser default'}: ${supported ? '✅' : '❌'}`);
+          
+          if (supported && !mimeType) {
+            mimeType = type;
+            selectedMimeType = type || 'audio/webm';
+            console.log('🎤 Selected recording format:', mimeType || 'browser default');
+            break;
+          }
         }
       }
       
       // Store the mime type for blob creation
-      currentMimeTypeRef.current = mimeType || 'audio/webm';
+      currentMimeTypeRef.current = selectedMimeType;
       
       try {
         mediaRecorderRef.current = mimeType 
           ? new MediaRecorder(stream, { mimeType })
           : new MediaRecorder(stream);
+        
+        console.log(`📱 MediaRecorder created successfully (iOS: ${isIOSDevice()}, format: ${selectedMimeType})`);
       } catch (error) {
         console.error('🎤 MediaRecorder creation failed:', error);
         onError?.('Recording not supported on this device. Please try a different browser.');

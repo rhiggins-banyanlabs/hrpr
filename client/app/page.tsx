@@ -8,6 +8,7 @@ import { useAdminAuth } from "@/components/admin/security/AdminAuthContext"
 import { useVoiceChat } from "@/hooks/useVoiceChat"
 import { useEnhancedOptimizedVoice } from "@/hooks/useEnhancedOptimizedVoice"
 import IOSPermissionHelper from "@/components/IOSPermissionHelper"
+import { audioConverter } from "@/services/audio-converter.service"
 import Waves from "@/components/waves"
 import { useState, useRef, useCallback, useEffect } from "react"
 import { MorphingText } from "@/components/MorphingText"
@@ -331,10 +332,18 @@ export default function Home() {
     }
   }, [currentSession, endSession])
 
-  // Pre-cache intro message on mount
+  // Pre-cache intro message and preload FFmpeg for iOS on mount
   useEffect(() => {
     preCacheIntroMessage()
-  }, [preCacheIntroMessage])
+    
+    // Preload FFmpeg for iOS devices to speed up first audio conversion
+    if (isIOS) {
+      console.log('🍎 Preloading FFmpeg for iOS audio conversion...')
+      audioConverter.preload().catch(error => {
+        console.warn('⚠️ FFmpeg preload failed (will try again on first use):', error)
+      })
+    }
+  }, [preCacheIntroMessage, isIOS])
 
   if (isSystemLocked) {
     return (
@@ -486,7 +495,7 @@ export default function Home() {
               <div>Voice Input: {isVoiceInputActive ? '✅' : '❌'}</div>
             </div>
             <div className="mt-2 text-xs text-gray-300">
-              Platform: {isIOS ? 'iOS' : 'Other'} | MediaRecorder: {typeof MediaRecorder !== 'undefined' ? '✅' : '❌'}
+              Platform: {isIOS ? 'iOS' : 'Other'} | MediaRecorder: {typeof MediaRecorder !== 'undefined' ? '✅' : '❌'} | FFmpeg: {audioConverter.isReady() ? '✅' : '⏳'}
             </div>
             {unifiedVoice.transcript && (
               <div className="mt-2 p-2 bg-blue-900 bg-opacity-50 rounded">
