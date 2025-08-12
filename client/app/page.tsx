@@ -264,7 +264,7 @@ export default function Home() {
               source: 'voice',
               timestamp: new Date().toISOString()
             })
-            sessionId = newSession?.id || null
+            sessionId = newSession?.id || undefined
           }
           
           if (sessionId) {
@@ -348,8 +348,7 @@ export default function Home() {
   }
 
   return (
-    <ErrorBoundary>
-      <main className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex flex-col items-center justify-center relative overflow-hidden">
+    <main className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex flex-col items-center justify-center relative overflow-hidden">
         {/* Background waves */}
         <div className="absolute inset-0 pointer-events-none">
           <Waves />
@@ -361,7 +360,7 @@ export default function Home() {
           onClose={handleIOSHelperClose}
           onRetry={handleIOSHelperRetry}
           permissionType={iosHelperType}
-          error={permissionError}
+          error={permissionError || undefined}
         />
 
         {/* Admin Button */}
@@ -421,14 +420,14 @@ export default function Home() {
           <div className="min-h-[3rem] flex items-center justify-center">
             {unifiedVoice.isProcessing ? (
               <MorphingText
-                phrases={['Processing...', 'Transcribing...', 'Understanding...']}
+                texts={['Processing...', 'Transcribing...', 'Understanding...']}
                 className="text-blue-300 text-lg"
               />
             ) : isHarperSpeaking ? (
               <p className="text-green-300 text-lg animate-pulse">Harper is speaking...</p>
             ) : isProcessing ? (
               <MorphingText
-                phrases={['Thinking...', 'Analyzing...', 'Preparing response...']}
+                texts={['Thinking...', 'Analyzing...', 'Preparing response...']}
                 className="text-purple-300 text-lg"
               />
             ) : unifiedVoice.listening ? (
@@ -536,6 +535,5 @@ export default function Home() {
           </div>
         </div>
       </main>
-    </ErrorBoundary>
   )
 }

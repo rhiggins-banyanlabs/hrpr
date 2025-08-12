@@ -29,7 +29,7 @@ export class IOSAudioService {
     const platform = navigator.platform;
     
     // Check for iOS devices
-    const isIOS = /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream;
+    const isIOS = /iPad|iPhone|iPod/.test(userAgent) && !(window as any).MSStream;
     const isIPadOS = platform === 'MacIntel' && navigator.maxTouchPoints > 1;
     
     return isIOS || isIPadOS;

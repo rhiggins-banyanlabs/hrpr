@@ -8,7 +8,7 @@ export const isIOSDevice = (): boolean => {
   const platform = navigator.platform;
   
   // Check for iOS devices (iPhone, iPad, iPod)
-  const isIOS = /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream;
+  const isIOS = /iPad|iPhone|iPod/.test(userAgent) && !(window as any).MSStream;
   
   // Check for iPad on iOS 13+ (reports as MacIntel)
   const isIPadOS = platform === 'MacIntel' && navigator.maxTouchPoints > 1;
