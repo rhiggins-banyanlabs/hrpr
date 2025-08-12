@@ -195,17 +195,17 @@ export default function Home() {
       setIsHarperActivated(true);
       isProcessingVoiceQueryRef.current = true;
       
-      // If this is just a greeting, play intro instead of processing query
-      const isJustGreeting = /^(hey|hi|hello)?\s*(harper|conny|coni|koni|honey)\s*$/i.test(query.trim());
-      
-      if (isJustGreeting && !hasPlayedIntroRef.current) {
-        console.log("👋 Just a greeting - playing intro message");
+      // Play intro message if this is the first interaction
+      if (!hasPlayedIntroRef.current) {
+        console.log("👋 First interaction - playing intro message");
         hasPlayedIntroRef.current = true;
         await sendIntroMessage(sessionId);
-      } else if (!isJustGreeting) {
-        console.log("🎤 Processing voice query:", query);
-        await processVoiceQuery(query);
+        // Don't return - continue to process the query after intro
       }
+      
+      // Process the voice query
+      console.log("🎤 Processing voice query:", query);
+      await processVoiceQuery(query);
     } catch (error) {
       console.error("❌ Error in handleHarperDetected:", error);
     } finally {
@@ -240,50 +240,32 @@ export default function Home() {
     }
 
     if (!isHarperActivated) {
-      // Initial activation - play intro first, then start recording
+      // Initial activation - simple flow
       console.log('🎤 Initial Harper activation')
       setIsHarperActivated(true)
       
       try {
-        // Play intro message FIRST while we have user interaction context
-        if (!hasPlayedIntroRef.current) {
-          let sessionId = currentSession?.id
-          if (!sessionId) {
-            const newSession = await startNewSession({
-              source: 'voice',
-              timestamp: new Date().toISOString()
-            })
-            sessionId = newSession?.id || undefined
-          }
-          
-          if (sessionId) {
-            console.log('👋 Playing intro message first (user interaction context)')
-            hasPlayedIntroRef.current = true
-            await sendIntroMessage(sessionId)
-          }
-        }
-        
-        // Then request permission and start recording
+        // Request permission first
         if (isIOS && unifiedVoice.permissionStatus !== 'granted') {
           const hasPermission = await unifiedVoice.requestPermission()
           if (!hasPermission) {
             setIOSHelperType('microphone')
             setShowIOSHelper(true)
+            setIsHarperActivated(false)
             return
           }
         }
         
-        // Small delay to ensure intro starts playing, then start recording
-        setTimeout(() => {
-          console.log('🎤 Starting voice recording after intro delay')
-          setIsVoiceInputActive(true)
-          unifiedVoice.startListening()
-        }, 1000) // 1 second delay
+        // Start recording immediately
+        console.log('🎤 Starting voice recording')
+        setIsVoiceInputActive(true)
+        unifiedVoice.startListening()
         
       } catch (error) {
-        console.error('🎤 Failed during activation:', error)
+        console.error('🎤 Failed to start voice input:', error)
         handleVoiceError(error instanceof Error ? error.message : 'Failed to start voice input')
         setIsVoiceInputActive(false)
+        setIsHarperActivated(false)
       }
     } else {
       // Already activated - start recording
