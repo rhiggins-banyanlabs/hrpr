@@ -1,34 +1,42 @@
 // app/admin/page.tsx
 "use client"
-import { useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAdminAuth } from '@/components/admin/security/AdminAuthContext'
+import { AdminLoginModal } from '@/components/admin/security/AdminLoginModal'
+import { AdminLoginForm } from '@/components/admin/security/AdminLoginForm'
 import AdminLayout from '../../src/components/admin/layout/AdminLayout'
 
 export default function AdminPage() {
   const { isAuthenticated } = useAdminAuth()
   const router = useRouter()
+  const [showLoginModal, setShowLoginModal] = useState(false)
 
   useEffect(() => {
-    // Add a small delay to prevent race conditions
-    const checkAuth = setTimeout(() => {
-      if (!isAuthenticated) {
-        router.push('/')
-      }
-    }, 100)
-    
-    return () => clearTimeout(checkAuth)
-  }, [isAuthenticated, router])
+    // Show login modal if not authenticated instead of redirecting
+    if (!isAuthenticated) {
+      console.log('Admin page: Not authenticated, will show login modal');
+      // Small delay to ensure everything is loaded
+      const timer = setTimeout(() => {
+        console.log('Admin page: Setting showLoginModal to true');
+        setShowLoginModal(true)
+      }, 500)
+      return () => clearTimeout(timer)
+    }
+  }, [isAuthenticated])
+
+  // Handle successful login
+  const handleLoginClose = () => {
+    setShowLoginModal(false)
+    if (!isAuthenticated) {
+      // If still not authenticated (user closed modal), go home
+      router.push('/')
+    }
+  }
 
   if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-8 h-8 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
-          <div className="text-white text-sm">Loading admin panel...</div>
-        </div>
-      </div>
-    )
+    // Use inline form instead of modal for better iOS compatibility
+    return <AdminLoginForm />
   }
 
   return <AdminLayout />

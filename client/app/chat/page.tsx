@@ -1,7 +1,7 @@
 // app/chat/page.tsx - FIXED VERSION with proper session management
 "use client";
 
-import { useEffect, useRef, useCallback, useState } from "react";
+import { useEffect, useRef, useCallback, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useOptimizedVoice } from "@/hooks/useOptimizedVoice";
 import { useChat } from "@/hooks/useChat";
@@ -11,7 +11,7 @@ import { ChatMessages } from "@/components/ChatMessages";
 import { ChatInput } from "@/components/ChatInput";
 import Waves from "@/components/waves";
 
-export default function ChatPage() {
+function ChatPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
@@ -342,5 +342,19 @@ export default function ChatPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function ChatPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-500 to-blue-400 text-xl">
+          Loading chat...
+        </div>
+      </div>
+    }>
+      <ChatPageContent />
+    </Suspense>
   );
 }

@@ -1,8 +1,9 @@
 // Components
 export { default as VoiceOrb } from './components/VoiceOrb';
 export { default as VoiceSelector } from './components/VoiceSelector';
-export { default as VoiceInput } from './components/VoiceInput';
-export { default as VoiceInputWhisper } from './components/VoiceInputWhisper';
+// Use VoiceInputWhisper as the default VoiceInput for iOS compatibility
+export { default as VoiceInput } from './components/VoiceInputWhisper';
+export { default as VoiceInputWebSpeech } from './components/VoiceInput';
 
 // Hooks
 export { useVoiceInput } from './hooks/useVoiceInput';

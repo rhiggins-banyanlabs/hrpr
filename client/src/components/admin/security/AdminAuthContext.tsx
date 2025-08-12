@@ -19,60 +19,78 @@ interface AdminAuthProviderProps {
 }
 
 export function AdminAuthProvider({ children }: AdminAuthProviderProps) {
+  // Initialize immediately with default values to avoid loading screen
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isPedestalMode, setIsPedestalMode] = useState(false);
   const [isSystemLocked, setIsSystemLocked] = useState(true);
-  const [isInitialized, setIsInitialized] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(true); // Start as true to skip loading
 
   // Check for existing pedestal mode and admin session on mount
   useEffect(() => {
-    const pedestalStatus = localStorage.getItem('Harper-pedestal-mode');
-    const adminSession = localStorage.getItem('Harper-admin-session');
-    
-    // Only restore pedestal mode if it was explicitly set
-    if (pedestalStatus === 'true') {
-      console.log('🔄 Restoring pedestal mode from localStorage');
-      setIsPedestalMode(true);
-      setIsSystemLocked(false);
-    } else {
-      console.log('🔒 No pedestal mode found - system remains locked');
-      setIsPedestalMode(false);
-      setIsSystemLocked(true);
-    }
-    
-    // Check for valid admin session (expires after 30 minutes)
-    if (adminSession) {
+    const initAuth = () => {
       try {
-        const sessionData = JSON.parse(adminSession);
-        const now = Date.now();
-        const sessionAge = now - sessionData.timestamp;
-        const thirtyMinutes = 30 * 60 * 1000; // 30 minutes in milliseconds
+        // Detect iOS for special handling
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
         
-        if (sessionAge < thirtyMinutes) {
-          console.log('🔄 Restoring admin session from localStorage');
-          setIsAuthenticated(true);
+        if (isIOS) {
+          console.log('🍎 iOS detected - using fast auth initialization');
+        }
+        
+        const pedestalStatus = localStorage.getItem('Harper-pedestal-mode');
+        const adminSession = localStorage.getItem('Harper-admin-session');
+        
+        // Only restore pedestal mode if it was explicitly set
+        if (pedestalStatus === 'true') {
+          console.log('🔄 Restoring pedestal mode from localStorage');
+          setIsPedestalMode(true);
+          setIsSystemLocked(false);
         } else {
-          console.log('⏰ Admin session expired, removing');
-          localStorage.removeItem('Harper-admin-session');
+          console.log('🔒 No pedestal mode found - system remains locked');
+          setIsPedestalMode(false);
+          setIsSystemLocked(true);
+        }
+        
+        // Check for valid admin session (expires after 30 minutes)
+        if (adminSession) {
+          try {
+            const sessionData = JSON.parse(adminSession);
+            const now = Date.now();
+            const sessionAge = now - sessionData.timestamp;
+            const thirtyMinutes = 30 * 60 * 1000; // 30 minutes in milliseconds
+            
+            if (sessionAge < thirtyMinutes) {
+              console.log('🔄 Restoring admin session from localStorage');
+              setIsAuthenticated(true);
+            } else {
+              console.log('⏰ Admin session expired, removing');
+              localStorage.removeItem('Harper-admin-session');
+              setIsAuthenticated(false);
+            }
+          } catch (error) {
+            console.log('❌ Invalid admin session data, removing');
+            localStorage.removeItem('Harper-admin-session');
+            setIsAuthenticated(false);
+          }
+        } else {
           setIsAuthenticated(false);
         }
+        
+        console.log('🏁 Auth context initialized', {
+          pedestalMode: pedestalStatus === 'true',
+          systemLocked: pedestalStatus !== 'true',
+          adminAuthenticated: !!adminSession
+        });
       } catch (error) {
-        console.log('❌ Invalid admin session data, removing');
-        localStorage.removeItem('Harper-admin-session');
-        setIsAuthenticated(false);
+        console.error('❌ Error during auth initialization:', error);
       }
-    } else {
-      setIsAuthenticated(false);
-    }
+    };
     
-    setIsInitialized(true);
+    // Initialize immediately
+    initAuth();
     
-    console.log('🏁 Auth context initialized', {
-      pedestalMode: pedestalStatus === 'true',
-      systemLocked: pedestalStatus !== 'true',
-      adminAuthenticated: !!adminSession
-    });
-  }, []);
+    // No need for timeout since we start initialized
+  }, []); // Empty dependency array - only run once on mount
 
   const login = (password: string): boolean => {
     const adminPassword = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'admin123';
@@ -118,14 +136,7 @@ export function AdminAuthProvider({ children }: AdminAuthProviderProps) {
 
   // Don't render children until initialized to prevent flash
   if (!isInitialized) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-8 h-8 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
-          <div className="text-white text-sm">Initializing system...</div>
-        </div>
-      </div>
-    );
+    return null; // Simply return null instead of showing loading screen
   }
 
   return (

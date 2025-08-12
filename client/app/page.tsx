@@ -13,7 +13,6 @@ import { MorphingText } from "@/components/MorphingText"
 // import { VoiceButton } from "@/components/VoiceButton" // Not needed anymore
 import { AdminButton } from "@/components/admin/ui/AdminButton"
 import { VoiceInput } from "@/features/voice"
-import VoiceInputWhisper from "@/features/voice/components/VoiceInputWhisper"
 import WakeWordDetector from "@/features/voice/components/WakeWordDetector"
 
 
@@ -276,12 +275,40 @@ export default function Home() {
   const handleVoiceInputToggle = useCallback(async () => {
     console.log("🎤 🔄 Voice input toggle called from VoiceOrb, current state:", isVoiceInputActive)
 
+    // Check for iOS and request permission first
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    
+    if (isIOS && !navigator.mediaDevices) {
+      alert('Please ensure you are using Safari browser on iOS for voice features.');
+      return;
+    }
+
     // If Harper is not activated yet, start/stop listening for "Hey Harper"
     if (!isHarperActivated) {
       console.log("🎤 Toggling Hey Harper detection from orb click")
       
       // For Apple devices, use Whisper wake word detector
       if (useWhisperWakeWord) {
+        // Request microphone permission first for iOS
+        if (isIOS && !isWakeWordListening) {
+          try {
+            console.log("🍎 Requesting microphone permission for iOS...");
+            await navigator.mediaDevices.getUserMedia({ audio: true })
+              .then(stream => {
+                // Stop the stream immediately, we just needed permission
+                stream.getTracks().forEach(track => track.stop());
+                console.log("✅ Microphone permission granted");
+              });
+          } catch (error: any) {
+            console.error("❌ Microphone permission denied:", error);
+            if (error.name === 'NotAllowedError') {
+              alert('Microphone access is required. Please allow microphone access in Settings > Safari > Microphone.');
+            }
+            return;
+          }
+        }
+        
         setIsWakeWordListening(!isWakeWordListening);
         console.log("🍎 Wake word listening state:", !isWakeWordListening);
       } else {
@@ -300,6 +327,25 @@ export default function Home() {
     if (isHarperSpeaking || isProcessing) {
       console.log("🎤 ❌ Harper is speaking/processing, not toggling voice input")
       return
+    }
+
+    // Request microphone permission for iOS before starting voice input
+    if (isIOS && !isVoiceInputActive) {
+      try {
+        console.log("🍎 Requesting microphone permission for iOS voice input...");
+        await navigator.mediaDevices.getUserMedia({ audio: true })
+          .then(stream => {
+            // Stop the stream immediately, we just needed permission
+            stream.getTracks().forEach(track => track.stop());
+            console.log("✅ Microphone permission granted for voice input");
+          });
+      } catch (error: any) {
+        console.error("❌ Microphone permission denied:", error);
+        if (error.name === 'NotAllowedError') {
+          alert('Microphone access is required. Please allow microphone access in Settings > Safari > Microphone.');
+        }
+        return;
+      }
     }
 
     const newState = !isVoiceInputActive
@@ -338,16 +384,35 @@ export default function Home() {
     }
   }, [isVoiceInputActive, isHarperActivated, speechState.listening, speechActions])
 
-  // Pre-cache intro message on page load
+  // Pre-cache intro message on page load (skip for iOS to avoid hanging)
   useEffect(() => {
     const initializeVoice = async () => {
+      // Detect iOS devices
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      
+      if (isIOS) {
+        console.log("🍎 iOS detected - skipping intro message pre-cache to avoid hanging");
+        return;
+      }
+      
       console.log("🔄 Initializing voice and pre-caching intro message...");
       try {
-        // Pre-cache the intro message for instant playback
-        await preCacheIntroMessage();
+        // Add timeout to prevent hanging
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Pre-cache timeout')), 5000)
+        );
+        
+        // Race between pre-cache and timeout
+        await Promise.race([
+          preCacheIntroMessage(),
+          timeoutPromise
+        ]);
+        
         console.log("✅ Intro message pre-cached successfully");
       } catch (error) {
-        console.error("❌ Error pre-caching intro message:", error);
+        console.error("❌ Error or timeout pre-caching intro message:", error);
+        // Continue anyway - don't block the app
       }
     };
 
@@ -389,8 +454,15 @@ export default function Home() {
   // Only start wake word detection when user manually clicks the voice button (before activation)
   // No auto-start of listening
 
+  // Only show speech recognition error on non-iOS devices (iOS uses Whisper instead)
   if (speechState.permissionError) {
-    return <ErrorBoundary error={speechState.permissionError} />
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    
+    if (!isIOS) {
+      return <ErrorBoundary error={speechState.permissionError} />
+    }
+    // On iOS, ignore the speech recognition error since we use Whisper
   }
 
   // Show locked screen if system is locked
@@ -529,7 +601,7 @@ export default function Home() {
 
       {/* Voice Input Component - Only active when Harper is activated */}
       {isHarperActivated && (
-        <VoiceInputWhisper
+        <VoiceInput
           onSpeechEnd={async (text) => {
             console.log("🎤 Voice input received:", text);
             // setVoiceTranscript("");

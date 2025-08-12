@@ -1,66 +1,86 @@
-// components/admin/AdminLoginModal.tsx
+// Simple inline login form for iOS compatibility
 "use client"
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import { useAdminAuth } from './AdminAuthContext';
 import { useRouter } from 'next/navigation';
-import { X, Lock, LogIn } from 'lucide-react';
+import { Lock, LogIn } from 'lucide-react';
 
-interface AdminLoginModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-}
-
-export function AdminLoginModal({ isOpen, onClose }: AdminLoginModalProps) {
+export function AdminLoginForm() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAdminAuth();
   const router = useRouter();
 
-  if (!isOpen) return null;
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    e.stopPropagation();
+    
+    console.log('Form submitted with password:', password.length > 0 ? 'yes' : 'no');
+    
+    if (!password.trim()) {
+      setError('Please enter a password');
+      return;
+    }
+    
     setIsLoading(true);
     setError('');
 
     try {
       const success = login(password);
+      console.log('Login result:', success);
       
       if (success) {
+        console.log('Login successful, redirecting to admin panel');
         setPassword('');
-        // Add small delay to ensure auth context updates
+        // Force a page reload to ensure auth state is updated
         setTimeout(() => {
-          onClose();
-          router.push('/admin');
-        }, 200);
+          window.location.href = '/admin';
+        }, 100);
       } else {
         setError('Invalid password. Please try again.');
+        setIsLoading(false);
       }
     } catch (err) {
+      console.error('Login error:', err);
       setError('An error occurred. Please try again.');
-    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  // Handle button click separately for iOS
+  const handleButtonClick = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (!password.trim()) {
+      setError('Please enter a password');
+      return;
+    }
+    
+    setIsLoading(true);
+    setError('');
+    
+    try {
+      const success = login(password.trim());
+      
+      if (success) {
+        setTimeout(() => {
+          window.location.replace('/admin');
+        }, 100);
+      } else {
+        setError('Invalid password');
+        setIsLoading(false);
+      }
+    } catch (error) {
+      setError('Login error occurred');
       setIsLoading(false);
     }
   };
 
-  const handleClose = () => {
-    setPassword('');
-    setError('');
-    onClose();
-  };
-
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
-      <div className="relative bg-black/90 border border-indigo-500/30 rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl shadow-indigo-500/10" style={{ maxWidth: '90%' }}>
-        {/* Close Button */}
-        <button
-          onClick={handleClose}
-          className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors"
-        >
-          <X className="h-5 w-5" />
-        </button>
-
+    <div className="min-h-screen bg-black flex items-center justify-center p-4">
+      <div className="bg-black/90 border border-indigo-500/30 rounded-2xl p-8 max-w-md w-full shadow-2xl shadow-indigo-500/10">
         {/* Header */}
         <div className="text-center mb-6">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-indigo-600/20 via-purple-600/20 to-blue-600/20 rounded-full mb-4">
@@ -74,8 +94,8 @@ export function AdminLoginModal({ isOpen, onClose }: AdminLoginModalProps) {
           </p>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
+        {/* No Form - Just Input and Button */}
+        <div className="space-y-4">
           <div>
             <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-2">
               Password
@@ -85,9 +105,16 @@ export function AdminLoginModal({ isOpen, onClose }: AdminLoginModalProps) {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleButtonClick(e as any);
+                }
+              }}
               placeholder="Enter admin password"
               className="w-full px-4 py-3 bg-gray-800/50 border border-indigo-500/30 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
               disabled={isLoading}
+              autoComplete="off"
               autoFocus
             />
           </div>
@@ -99,9 +126,12 @@ export function AdminLoginModal({ isOpen, onClose }: AdminLoginModalProps) {
           )}
 
           <button
-            type="submit"
+            type="button"
+            onClick={handleButtonClick}
+            onTouchEnd={handleButtonClick}
             disabled={!password.trim() || isLoading}
-            className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 via-purple-600 to-blue-500 text-white rounded-lg hover:from-indigo-700 hover:via-purple-700 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium"
+            className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-gradient-to-r from-indigo-600 via-purple-600 to-blue-500 text-white rounded-lg hover:from-indigo-700 hover:via-purple-700 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium touch-manipulation"
+            style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}
           >
             {isLoading ? (
               <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -110,7 +140,7 @@ export function AdminLoginModal({ isOpen, onClose }: AdminLoginModalProps) {
             )}
             {isLoading ? 'Signing In...' : 'Sign In'}
           </button>
-        </form>
+        </div>
 
         {/* Footer */}
         <div className="mt-6 text-center">
