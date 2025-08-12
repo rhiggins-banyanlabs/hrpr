@@ -14,6 +14,7 @@ import { MorphingText } from "@/components/MorphingText"
 import { AdminButton } from "@/components/admin/ui/AdminButton"
 import { VoiceInput } from "@/features/voice"
 import VoiceInputWhisper from "@/features/voice/components/VoiceInputWhisper"
+import WakeWordDetector from "@/features/voice/components/WakeWordDetector"
 
 
 export default function Home() {
@@ -23,6 +24,8 @@ export default function Home() {
   const [isHarperActivated, setIsHarperActivated] = useState(false) // Track if Harper has been activated
   const [isThinking, setIsThinking] = useState(false) // Track when AI is processing
   const [isTranscribing, setIsTranscribing] = useState(false) // Track when audio is being transcribed
+  const [useWhisperWakeWord, setUseWhisperWakeWord] = useState(false) // Use Whisper for wake word on iOS
+  const [isWakeWordListening, setIsWakeWordListening] = useState(false) // Track if wake word detection is active
 
   const { isSystemLocked } = useAdminAuth()
 
@@ -225,6 +228,7 @@ export default function Home() {
         
         // Stop wake word detection since we're now in active mode
         speechActions.stopListening()
+        setIsWakeWordListening(false) // Also stop Whisper wake word if active
         
         // Send intro message immediately (pre-cached)
         await sendIntroMessage(sessionId)
@@ -272,10 +276,23 @@ export default function Home() {
   const handleVoiceInputToggle = useCallback(async () => {
     console.log("🎤 🔄 Voice input toggle called from VoiceOrb, current state:", isVoiceInputActive)
 
-    // If Harper is not activated yet, start listening for "Hey Harper"
+    // If Harper is not activated yet, start/stop listening for "Hey Harper"
     if (!isHarperActivated) {
-      console.log("🎤 Starting Hey Harper detection from orb click")
-      speechActions.toggleListening()
+      console.log("🎤 Toggling Hey Harper detection from orb click")
+      
+      // For Apple devices, use Whisper wake word detector
+      if (useWhisperWakeWord) {
+        setIsWakeWordListening(!isWakeWordListening);
+        console.log("🍎 Wake word listening state:", !isWakeWordListening);
+      } else {
+        // For other devices, use native speech recognition
+        speechActions.toggleListening();
+      }
+      
+      // Unlock audio on user interaction
+      if (unlockAudio && !isWakeWordListening) {
+        await unlockAudio();
+      }
       return
     }
 
@@ -309,7 +326,7 @@ export default function Home() {
         await unlockAudio();
       }
     }
-  }, [isVoiceInputActive, isHarperSpeaking, isProcessing, isHarperActivated, currentSession?.id, startNewSession, unlockAudio])
+  }, [isVoiceInputActive, isHarperSpeaking, isProcessing, isHarperActivated, currentSession?.id, startNewSession, unlockAudio, useWhisperWakeWord, isWakeWordListening])
 
   // Disable main speech recognition when voice input is active OR when Harper is activated
   useEffect(() => {
@@ -338,6 +355,36 @@ export default function Home() {
     const timeout = setTimeout(initializeVoice, 500);
     return () => clearTimeout(timeout);
   }, [preCacheIntroMessage]);
+
+  // Detect if we're on an Apple device
+  useEffect(() => {
+    const userAgent = navigator.userAgent;
+    const isAppleDevice = /iPad|iPhone|iPod|Mac/i.test(userAgent) || 
+                          (navigator.platform === 'MacIntel');
+    
+    if (isAppleDevice) {
+      console.log("🍎 Apple device detected - will use Whisper for wake word");
+      setUseWhisperWakeWord(true);
+    }
+  }, []);
+
+  // Handle wake word listening state
+  useEffect(() => {
+    // Only listen for wake word if user clicked button and Harper isn't already activated
+    if (isWakeWordListening && !isHarperActivated && !useWhisperWakeWord) {
+      console.log("📱 Starting native wake word detection...");
+      speechActions.startListening();
+    } else if (!isWakeWordListening || isHarperActivated) {
+      console.log("📱 Stopping wake word detection...");
+      speechActions.stopListening();
+    }
+
+    return () => {
+      if (isWakeWordListening) {
+        speechActions.stopListening();
+      }
+    };
+  }, [isWakeWordListening, isHarperActivated, useWhisperWakeWord]);
 
   // Only start wake word detection when user manually clicks the voice button (before activation)
   // No auto-start of listening
@@ -421,7 +468,7 @@ export default function Home() {
 
             <div className="transition-all duration-700 scale-100">
               <VoiceOrb
-                listening={isHarperActivated ? isVoiceInputActive : speechState.listening}
+                listening={isHarperActivated ? isVoiceInputActive : (useWhisperWakeWord ? isWakeWordListening : speechState.listening)}
                 HarperDetected={speechState.HarperDetected}
                 isNavigating={speechState.isNavigating}
                 isVoiceInputActive={isVoiceInputActive}
@@ -468,6 +515,18 @@ export default function Home() {
         </div>
       </div>
       
+      {/* Wake Word Detector for iOS/Mac devices - only active when listening */}
+      {useWhisperWakeWord && isWakeWordListening && !isHarperActivated && (
+        <WakeWordDetector
+          isActive={isWakeWordListening && !isHarperActivated}
+          onWakeWordDetected={() => {
+            console.log("🎯 Wake word detected via Whisper!");
+            setIsWakeWordListening(false); // Stop listening after detection
+            handleHarperDetected("");
+          }}
+        />
+      )}
+
       {/* Voice Input Component - Only active when Harper is activated */}
       {isHarperActivated && (
         <VoiceInputWhisper

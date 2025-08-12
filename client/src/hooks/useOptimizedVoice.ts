@@ -234,13 +234,31 @@ export const useOptimizedVoice = () => {
     const introMessage = "Hi! I'm Harper, your conference assistant. How can I help? Feel free to share your name if you'd like a more personal experience!";
     
     try {
-      console.log('🔄 Pre-caching intro message...');
-      await speakWithOptimizedTTS(introMessage, selectedVoice, 1.00);
-      console.log('✅ Intro message pre-cached successfully');
+      console.log('🔄 Pre-caching intro message audio (not playing)...');
+      
+      // Generate TTS audio but don't play it - just cache it
+      const response = await fetch('/api/tts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text: introMessage,
+          voice: selectedVoice,
+          speed: 1.00
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to generate intro audio');
+      }
+      
+      // The audio is now cached by the browser and/or our caching layer
+      console.log('✅ Intro message audio pre-cached (not played)');
     } catch (error) {
       console.error('❌ Error pre-caching intro message:', error);
     }
-  }, [speakWithOptimizedTTS, selectedVoice]);
+  }, [selectedVoice]);
 
   /* ------------------------------------------------------------------ */
   /*  TEST VOICE                                                        */
