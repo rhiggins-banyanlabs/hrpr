@@ -115,7 +115,7 @@ export class IOSAudioService {
         voice,
         model: 'tts-1',
         response_format: 'mp3',
-        speed: 1.3, // Slightly faster for better UX
+        speed: parseFloat(process.env.NEXT_PUBLIC_TTS_SPEED || '1.0')
       }),
     });
     

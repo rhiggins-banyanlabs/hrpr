@@ -240,21 +240,27 @@ export default function Home() {
     }
 
     if (!isHarperActivated) {
-      // Initial activation - start listening for wake word
-      console.log('🎤 Initial Harper activation')
+      // Initial activation - request permission and start recording immediately
+      console.log('🎤 Initial Harper activation for iOS')
       setIsHarperActivated(true)
       
-      // Request permission and start listening
       try {
+        // For iOS, request permission and start recording in one go
+        console.log('🎤 Starting direct voice input for iOS')
+        setIsVoiceInputActive(true)
+        
+        // Request permission if needed
         if (isIOS && unifiedVoice.permissionStatus !== 'granted') {
           const hasPermission = await unifiedVoice.requestPermission()
           if (!hasPermission) {
             setIOSHelperType('microphone')
             setShowIOSHelper(true)
+            setIsVoiceInputActive(false)
             return
           }
         }
         
+        // Start recording immediately - no listening mode
         unifiedVoice.startListening()
         
         // Play intro message if first time
@@ -274,17 +280,14 @@ export default function Home() {
           }
         }
       } catch (error) {
-        console.error('🎤 Failed to start listening:', error)
+        console.error('🎤 Failed to start voice input:', error)
         handleVoiceError(error instanceof Error ? error.message : 'Failed to start voice input')
+        setIsVoiceInputActive(false)
       }
-    } else if (unifiedVoice.listening) {
-      // Currently listening - start manual input
-      console.log('🎤 Manual voice input activated')
-      setIsVoiceInputActive(true)
-      // The unified voice system will handle recording
     } else {
-      // Restart listening
-      console.log('🎤 Restarting voice listening')
+      // Already activated - start recording
+      console.log('🎤 Starting voice recording')
+      setIsVoiceInputActive(true)
       unifiedVoice.startListening()
     }
   }, [isIOS, isUnlocked, unlockAudio, isHarperActivated, unifiedVoice, currentSession, startNewSession, sendIntroMessage, handleVoiceError])
@@ -445,18 +448,14 @@ export default function Home() {
                 texts={['Thinking...', 'Analyzing...', 'Preparing response...']}
                 className="text-purple-300 text-lg"
               />
-            ) : unifiedVoice.listening ? (
-              isVoiceInputActive ? (
-                <p className="text-red-300 text-lg animate-pulse">🎤 Recording - Speak now</p>
-              ) : (
-                <p className="text-blue-300 text-lg">👂 Listening for "Hey Harper"</p>
-              )
+            ) : isVoiceInputActive ? (
+              <p className="text-red-300 text-lg animate-pulse">🎤 Recording - Speak now</p>
             ) : isHarperActivated ? (
-              <p className="text-gray-400 text-lg">Tap to reactivate voice</p>
+              <p className="text-blue-300 text-lg">Tap to speak to Harper</p>
             ) : (
               <div className="text-center">
                 <p className="text-gray-300 text-lg mb-2">
-                  {isIOS ? 'Tap to start voice chat' : 'Tap to activate Harper'}
+                  Tap to start voice chat with Harper
                 </p>
                 {isIOS && !isUnlocked && (
                   <p className="text-blue-300 text-sm">
@@ -534,10 +533,7 @@ export default function Home() {
           {/* Instructions */}
           <div className="mt-8 text-center max-w-2xl">
             <p className="text-gray-400 text-sm mb-4">
-              {isIOS 
-                ? 'Ask about speakers, sessions, locations, dining, and more. Harper uses advanced voice recognition optimized for iOS.'
-                : 'Say "Hey Harper" or tap the button to start. Ask about speakers, sessions, locations, and more!'
-              }
+              Tap the button to start. Ask about speakers, sessions, locations, dining, and more!
             </p>
             <div className="flex flex-wrap justify-center gap-2 text-xs">
               <span className="bg-gray-800 bg-opacity-50 px-3 py-1 rounded-full text-gray-400">

@@ -93,21 +93,11 @@ export const useIOSCompatibleVoice = ({ onTranscript, onError }: UseIOSCompatibl
   // Request microphone permission with iOS-specific handling
   const requestMicrophonePermission = useCallback(async (): Promise<boolean> => {
     try {
-      console.log('🎤 Requesting microphone permission...');
+      console.log('🎤 Requesting microphone permission for iOS...');
       
-      // Initialize iOS audio session first
-      if (isIOSDevice()) {
-        await initializeIOSAudioSession();
-      }
-      
-      // Request microphone access with iOS-optimized settings
+      // For iOS, use the simplest possible constraints
       const constraints = isIOSDevice() ? {
-        audio: {
-          echoCancellation: false,  // iOS handles this natively
-          noiseSuppression: false,  // iOS handles this natively
-          autoGainControl: false,   // iOS handles this natively
-          sampleRate: 48000,        // Higher sample rate for iOS
-        }
+        audio: true  // Simplest possible constraint for iOS
       } : {
         audio: {
           echoCancellation: true,
@@ -116,6 +106,7 @@ export const useIOSCompatibleVoice = ({ onTranscript, onError }: UseIOSCompatibl
         }
       };
       
+      console.log('🎤 Using constraints:', constraints);
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       
       // Store the stream for later use
@@ -133,14 +124,18 @@ export const useIOSCompatibleVoice = ({ onTranscript, onError }: UseIOSCompatibl
       if (error.name === 'NotAllowedError') {
         setPermissionStatus('denied');
         const message = isIOSDevice() 
-          ? 'Microphone access denied. Please go to Settings > Safari > Microphone and allow access for this website.'
+          ? 'Please allow microphone access when prompted by Safari. Check Settings > Safari > Camera & Microphone if needed.'
           : 'Microphone access denied. Please allow microphone access in your browser settings.';
         onError?.(message);
       } else if (error.name === 'NotFoundError') {
         onError?.('No microphone found. Please connect a microphone and try again.');
       } else if (error.name === 'NotReadableError') {
-        onError?.('Microphone is already in use by another application.');
+        onError?.('Microphone is already in use by another application. Please close other apps using the microphone.');
+      } else if (error.message.includes('not allowed by the user agent')) {
+        setPermissionStatus('denied');
+        onError?.('Microphone access blocked by browser. Please check Safari settings and try again.');
       } else {
+        console.error('🎤 Full error details:', error);
         onError?.(`Unable to access microphone: ${error.message}`);
       }
       

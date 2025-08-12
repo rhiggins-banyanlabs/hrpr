@@ -165,7 +165,7 @@ export const useEnhancedOptimizedVoice = () => {
               voice,
               model: 'tts-1',
               response_format: 'mp3',
-              speed: 1.3,
+              speed: parseFloat(process.env.NEXT_PUBLIC_TTS_SPEED || '1.0'),
             }),
           })
           .then(response => {
@@ -260,7 +260,7 @@ export const useEnhancedOptimizedVoice = () => {
           voice: 'nova',
           model: 'tts-1',
           response_format: 'mp3',
-          speed: 1.3,
+          speed: parseFloat(process.env.NEXT_PUBLIC_TTS_SPEED || '1.0'),
         }),
       });
       
