@@ -169,10 +169,8 @@ export default function Home() {
       if (!sessionId) {
         console.log("📝 Creating session for voice query");
         const newSession = await startNewSession({
-          startedAt: new Date().toISOString(),
-          isVoiceSession: true,
-          userAgent: navigator.userAgent,
-          platform: isIOS ? 'iOS' : 'other'
+          source: 'voice',
+          timestamp: new Date().toISOString()
         });
         
         if (!newSession) {
@@ -197,7 +195,7 @@ export default function Home() {
         await sendIntroMessage(sessionId);
       } else if (!isJustGreeting) {
         console.log("🎤 Processing voice query:", query);
-        await processVoiceQuery(query, sessionId);
+        await processVoiceQuery(query);
       }
     } catch (error) {
       console.error("❌ Error in handleHarperDetected:", error);
@@ -255,12 +253,10 @@ export default function Home() {
           let sessionId = currentSession?.id
           if (!sessionId) {
             const newSession = await startNewSession({
-              startedAt: new Date().toISOString(),
-              isVoiceSession: true,
-              userAgent: navigator.userAgent,
-              platform: isIOS ? 'iOS' : 'other'
+              source: 'voice',
+              timestamp: new Date().toISOString()
             })
-            sessionId = newSession?.id || null
+            sessionId = newSession?.id || undefined
           }
           
           if (sessionId) {

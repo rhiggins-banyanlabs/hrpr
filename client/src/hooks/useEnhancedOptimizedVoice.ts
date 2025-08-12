@@ -1,17 +1,38 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { iosAudioService } from '@/services/ios-audio.service';
 
-// Detect iOS devices
+// Detect iOS devices with enhanced debugging
 const isIOSDevice = (): boolean => {
-  if (typeof window === 'undefined') return false;
+  if (typeof window === 'undefined') {
+    console.log('🍎 iOS Detection: Window undefined (SSR)');
+    return false;
+  }
   
   const userAgent = navigator.userAgent;
   const platform = navigator.platform;
+  const maxTouchPoints = navigator.maxTouchPoints;
   
-  const isIOS = /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream;
-  const isIPadOS = platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+  console.log('🍎 iOS Detection Debug:', {
+    userAgent,
+    platform,
+    maxTouchPoints,
+    MSStream: !!(window as any).MSStream
+  });
   
-  return isIOS || isIPadOS;
+  const isIOS = /iPad|iPhone|iPod/.test(userAgent) && !(window as any).MSStream;
+  const isIPadOS = platform === 'MacIntel' && maxTouchPoints > 1;
+  const isSafari = /Safari/.test(userAgent) && !/Chrome/.test(userAgent);
+  
+  const result = isIOS || isIPadOS;
+  
+  console.log('🍎 iOS Detection Result:', {
+    isIOS,
+    isIPadOS,
+    isSafari,
+    finalResult: result
+  });
+  
+  return result;
 };
 
 export const useEnhancedOptimizedVoice = () => {

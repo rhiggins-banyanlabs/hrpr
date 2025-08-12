@@ -35,6 +35,14 @@ export default function Home() {
   // Enhanced voice hooks for iOS compatibility
   const { speakText, isSpeaking, unlockAudio, preCacheIntroMessage, isUnlocked, error: voiceError, isIOS } = useEnhancedOptimizedVoice()
   
+  // Debug iOS detection
+  useEffect(() => {
+    console.log('🍎 Main Page iOS Detection:', isIOS)
+    console.log('🍎 User Agent:', navigator.userAgent)
+    console.log('🍎 Platform:', navigator.platform)
+    console.log('🍎 Max Touch Points:', navigator.maxTouchPoints)
+  }, [isIOS])
+  
   // Sync the voice hook's speaking state with Harper speaking state
   useEffect(() => {
     console.log('🔊 Voice hook isSpeaking changed:', isSpeaking)
@@ -169,10 +177,8 @@ export default function Home() {
       if (!sessionId) {
         console.log("📝 Creating session for voice query");
         const newSession = await startNewSession({
-          startedAt: new Date().toISOString(),
-          isVoiceSession: true,
-          userAgent: navigator.userAgent,
-          platform: isIOS ? 'iOS' : 'other'
+          source: 'voice',
+          timestamp: new Date().toISOString()
         });
         
         if (!newSession) {
@@ -197,7 +203,7 @@ export default function Home() {
         await sendIntroMessage(sessionId);
       } else if (!isJustGreeting) {
         console.log("🎤 Processing voice query:", query);
-        await processVoiceQuery(query, sessionId);
+        await processVoiceQuery(query);
       }
     } catch (error) {
       console.error("❌ Error in handleHarperDetected:", error);
@@ -255,10 +261,8 @@ export default function Home() {
           let sessionId = currentSession?.id
           if (!sessionId) {
             const newSession = await startNewSession({
-              startedAt: new Date().toISOString(),
-              isVoiceSession: true,
-              userAgent: navigator.userAgent,
-              platform: isIOS ? 'iOS' : 'other'
+              source: 'voice',
+              timestamp: new Date().toISOString()
             })
             sessionId = newSession?.id || null
           }
