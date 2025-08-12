@@ -338,10 +338,16 @@ export default function Home() {
 
   if (isSystemLocked) {
     return (
-      <main className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+      <main className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center relative">
+        {/* Admin Button on locked screen */}
+        <div className="absolute top-6 right-6 z-10">
+          <AdminButton />
+        </div>
+        
         <div className="text-center text-white">
           <h1 className="text-2xl font-bold mb-4">System Locked</h1>
-          <p className="text-gray-300">The system is currently locked by an administrator.</p>
+          <p className="text-gray-300 mb-6">The system is currently locked by an administrator.</p>
+          <p className="text-sm text-gray-400">Administrators can unlock the system using the admin panel in the top-right corner.</p>
         </div>
       </main>
     )

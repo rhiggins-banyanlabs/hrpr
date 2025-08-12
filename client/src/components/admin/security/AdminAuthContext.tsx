@@ -40,9 +40,12 @@ export function AdminAuthProvider({ children }: AdminAuthProviderProps) {
         const pedestalStatus = localStorage.getItem('Harper-pedestal-mode');
         const adminSession = localStorage.getItem('Harper-admin-session');
         
-        // Only restore pedestal mode if it was explicitly set
-        if (pedestalStatus === 'true') {
-          console.log('🔄 Restoring pedestal mode from localStorage');
+        // Check if pedestal mode should be enabled by default (for development)
+        const defaultPedestalMode = process.env.NEXT_PUBLIC_PEDESTAL_MODE_ENABLED === 'true';
+        
+        // Only restore pedestal mode if it was explicitly set OR if default is enabled
+        if (pedestalStatus === 'true' || defaultPedestalMode) {
+          console.log('🔄 Enabling pedestal mode:', pedestalStatus === 'true' ? 'from localStorage' : 'from environment variable');
           setIsPedestalMode(true);
           setIsSystemLocked(false);
         } else {
