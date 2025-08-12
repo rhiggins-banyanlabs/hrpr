@@ -529,7 +529,7 @@ export default function Home() {
               <div>Voice Input: {isVoiceInputActive ? '✅' : '❌'}</div>
             </div>
             <div className="mt-2 text-xs text-gray-300">
-              Platform: {isIOS ? 'iOS' : 'Other'} | MediaRecorder: {typeof MediaRecorder !== 'undefined' ? '✅' : '❌'} | FFmpeg: {audioConverter.isReady() ? '✅' : '⏳'}
+              Platform: {isIOS ? 'iOS' : 'Other'} | Browser: {typeof window !== 'undefined' ? navigator.userAgent.includes('firefox') ? 'Firefox' : navigator.userAgent.includes('chrome') ? 'Chrome' : navigator.userAgent.includes('safari') ? 'Safari' : 'Other' : 'SSR'} | MediaRecorder: {typeof MediaRecorder !== 'undefined' ? '✅' : '❌'} | FFmpeg: {audioConverter.isReady() ? '✅' : '⏳'}
             </div>
             {isIOS && (
               <div className="mt-2 text-xs text-yellow-300">

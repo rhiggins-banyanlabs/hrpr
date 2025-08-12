@@ -197,19 +197,18 @@ export const useIOSCompatibleVoice = ({ onTranscript, onError }: UseIOSCompatibl
       let processedBlob = audioBlob;
       let fileName = 'audio.webm';
       
-      // Convert audio for iOS devices using FFmpeg
-      if (isIOSDevice()) {
-        try {
-          console.log('🎵 Converting audio for iOS compatibility...');
-          processedBlob = await audioConverter.convertToM4A(audioBlob, 'webm');
-          fileName = 'audio.m4a';
-          console.log('✅ Audio converted to m4a for iOS');
-        } catch (conversionError) {
-          console.warn('⚠️ Audio conversion failed, trying original format:', conversionError);
-          // Fall back to original format if conversion fails
-          processedBlob = audioBlob;
-          fileName = 'audio.webm';
-        }
+      // Convert audio for browser compatibility using FFmpeg
+      try {
+        console.log('🎵 Converting audio for browser compatibility...');
+        const converted = await audioConverter.convertForDevice(audioBlob, 'webm');
+        processedBlob = converted.blob;
+        fileName = converted.filename;
+        console.log(`✅ Audio converted: ${fileName}`);
+      } catch (conversionError) {
+        console.warn('⚠️ Audio conversion failed, trying original format:', conversionError);
+        // Fall back to original format if conversion fails
+        processedBlob = audioBlob;
+        fileName = 'audio.webm';
       }
       
       const formData = new FormData();
