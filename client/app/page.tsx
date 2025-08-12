@@ -245,8 +245,10 @@ export default function Home() {
       setIsHarperActivated(true)
       
       try {
-        // Request permission first
-        if (isIOS && unifiedVoice.permissionStatus !== 'granted') {
+        // Only request permission if we haven't already
+        // Don't request every time - iOS will remember the permission
+        if (isIOS && unifiedVoice.permissionStatus === 'prompt') {
+          console.log('🎤 Requesting permission (first time only)')
           const hasPermission = await unifiedVoice.requestPermission()
           if (!hasPermission) {
             setIOSHelperType('microphone')
@@ -463,7 +465,14 @@ export default function Home() {
                     onClick={() => {
                       console.log('🛑 Manual stop requested')
                       setIsVoiceInputActive(false)
-                      unifiedVoice.stopListening()
+                      // Force stop recording in unified voice
+                      if (unifiedVoice.listening) {
+                        unifiedVoice.stopListening()
+                      }
+                      // Also trigger manual stop on iOS voice
+                      if (typeof window !== 'undefined' && (window as any).iosVoiceInstance) {
+                        (window as any).iosVoiceInstance.stopRecording()
+                      }
                     }}
                     className="mt-2 px-4 py-2 bg-red-600 text-white rounded-lg text-sm"
                   >
@@ -558,13 +567,28 @@ export default function Home() {
               <button
                 onClick={async () => {
                   try {
-                    console.log('🧪 Testing FFmpeg conversion...')
-                    // Create a dummy audio blob to test conversion
+                    console.log('🧪 Testing FFmpeg...')
+                    console.log('🧪 Step 1: Check if FFmpeg is ready')
+                    const isReady = audioConverter.isReady()
+                    console.log('🧪 FFmpeg ready:', isReady)
+                    
+                    if (!isReady) {
+                      console.log('🧪 Step 2: Preload FFmpeg')
+                      await audioConverter.preload()
+                      console.log('🧪 FFmpeg preload complete')
+                    }
+                    
+                    console.log('🧪 Step 3: Create test blob')
                     const dummyBlob = new Blob(['test'], { type: 'audio/webm' })
+                    console.log('🧪 Test blob created:', dummyBlob.size, 'bytes')
+                    
+                    console.log('🧪 Step 4: Convert audio')
                     const result = await audioConverter.convertForDevice(dummyBlob, 'webm')
-                    console.log('🧪 FFmpeg test result:', result)
+                    console.log('🧪 FFmpeg test SUCCESS:', result)
+                    alert('FFmpeg test successful!')
                   } catch (e) {
-                    console.error('🧪 FFmpeg test failed:', e)
+                    console.error('🧪 FFmpeg test FAILED:', e)
+                    alert(`FFmpeg test failed: ${e}`)
                   }
                 }}
                 className="px-3 py-1 bg-purple-600 text-white rounded text-xs"

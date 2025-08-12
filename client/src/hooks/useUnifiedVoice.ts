@@ -107,6 +107,13 @@ export const useUnifiedVoice = ({ onHarperDetected, onError }: UseUnifiedVoicePr
     onError: handleIOSError,
   });
   
+  // Expose iOS voice instance globally for debugging
+  useEffect(() => {
+    if (typeof window !== 'undefined' && isIOS) {
+      (window as any).iosVoiceInstance = iosVoice;
+    }
+  }, [isIOS, iosVoice]);
+  
   // Standard Web Speech API implementation
   const [webSpeechState, webSpeechActions] = useSpeechRecognition(onHarperDetected);
   

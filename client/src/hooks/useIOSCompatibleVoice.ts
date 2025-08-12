@@ -93,7 +93,13 @@ export const useIOSCompatibleVoice = ({ onTranscript, onError }: UseIOSCompatibl
   // Request microphone permission with iOS-specific handling
   const requestMicrophonePermission = useCallback(async (): Promise<boolean> => {
     try {
-      console.log('🎤 Requesting microphone permission for iOS...');
+      console.log('🎤 Checking/requesting microphone permission...');
+      
+      // Check if we already have permission
+      if (permissionStatus === 'granted' && streamRef.current) {
+        console.log('🎤 Permission already granted, reusing stream');
+        return true;
+      }
       
       // For iOS, use the simplest possible constraints
       const constraints = isIOSDevice() ? {
@@ -106,14 +112,23 @@ export const useIOSCompatibleVoice = ({ onTranscript, onError }: UseIOSCompatibl
         }
       };
       
-      console.log('🎤 Using constraints:', constraints);
+      console.log('🎤 Requesting new permission with constraints:', constraints);
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       
-      // Store the stream for later use
+      // Store the stream for later use - DON'T STOP IT!
       streamRef.current = stream;
       
-      // Stop the stream immediately (we just needed permission)
-      stream.getTracks().forEach(track => track.stop());
+      // For iOS, keep the stream alive to avoid re-requesting permission
+      if (isIOSDevice()) {
+        console.log('🍎 Keeping stream alive for iOS to avoid re-permission');
+        // Mute all tracks instead of stopping them
+        stream.getTracks().forEach(track => {
+          track.enabled = false; // Mute but keep alive
+        });
+      } else {
+        // For non-iOS, we can stop the stream
+        stream.getTracks().forEach(track => track.stop());
+      }
       
       setPermissionStatus('granted');
       console.log('🎤 Microphone permission granted');
@@ -155,9 +170,9 @@ export const useIOSCompatibleVoice = ({ onTranscript, onError }: UseIOSCompatibl
     // Calculate average volume
     const average = dataArray.reduce((sum, value) => sum + value, 0) / bufferLength;
 
-    // iOS-adjusted thresholds
-    const VOICE_THRESHOLD = isIOSDevice() ? 12 : 15;
-    const SILENCE_THRESHOLD = isIOSDevice() ? 8 : 10;
+    // iOS-adjusted thresholds (higher = less sensitive)
+    const VOICE_THRESHOLD = isIOSDevice() ? 20 : 15;  // Increased for iOS
+    const SILENCE_THRESHOLD = isIOSDevice() ? 15 : 10;  // Increased for iOS
 
     if (average > VOICE_THRESHOLD) {
       // Voice detected
@@ -173,7 +188,7 @@ export const useIOSCompatibleVoice = ({ onTranscript, onError }: UseIOSCompatibl
       silenceCountRef.current++;
       
       // iOS needs more tolerance for processing delays
-      const silenceFrameThreshold = isIOSDevice() ? 90 : 60; // ~1.5s on iOS, ~1s on others
+      const silenceFrameThreshold = isIOSDevice() ? 150 : 60; // ~2.5s on iOS, ~1s on others
       
       if (silenceCountRef.current > silenceFrameThreshold) {
         console.log(`🎤 Silence detected (iOS: ${isIOSDevice()}), stopping recording`);
@@ -197,18 +212,33 @@ export const useIOSCompatibleVoice = ({ onTranscript, onError }: UseIOSCompatibl
       let processedBlob = audioBlob;
       let fileName = 'audio.webm';
       
-      // Convert audio for browser compatibility using FFmpeg
-      try {
-        console.log('🎵 Converting audio for browser compatibility...');
-        const converted = await audioConverter.convertForDevice(audioBlob, 'webm');
-        processedBlob = converted.blob;
-        fileName = converted.filename;
-        console.log(`✅ Audio converted: ${fileName}`);
-      } catch (conversionError) {
-        console.warn('⚠️ Audio conversion failed, trying original format:', conversionError);
-        // Fall back to original format if conversion fails
+      // For iOS, skip FFmpeg conversion and send raw audio
+      if (isIOSDevice()) {
+        console.log('🍎 iOS detected - skipping FFmpeg conversion, using raw audio');
         processedBlob = audioBlob;
-        fileName = 'audio.webm';
+        // Use the mime type that was actually recorded
+        if (currentMimeTypeRef.current.includes('mp4')) {
+          fileName = 'audio.mp4';
+        } else if (currentMimeTypeRef.current.includes('webm')) {
+          fileName = 'audio.webm';
+        } else {
+          fileName = 'audio.wav';
+        }
+        console.log(`🍎 iOS sending raw audio as: ${fileName}`);
+      } else {
+        // For non-iOS, try FFmpeg conversion
+        try {
+          console.log('🎵 Converting audio for browser compatibility...');
+          const converted = await audioConverter.convertForDevice(audioBlob, 'webm');
+          processedBlob = converted.blob;
+          fileName = converted.filename;
+          console.log(`✅ Audio converted: ${fileName}`);
+        } catch (conversionError) {
+          console.warn('⚠️ Audio conversion failed, trying original format:', conversionError);
+          // Fall back to original format if conversion fails
+          processedBlob = audioBlob;
+          fileName = 'audio.webm';
+        }
       }
       
       const formData = new FormData();
@@ -275,10 +305,19 @@ export const useIOSCompatibleVoice = ({ onTranscript, onError }: UseIOSCompatibl
       });
     }
     
-    // Stop all tracks
+    // For iOS, mute tracks instead of stopping to keep permission
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
+      if (isIOSDevice()) {
+        console.log('🍎 Muting iOS stream (keeping alive for permission)');
+        streamRef.current.getTracks().forEach(track => {
+          track.enabled = false; // Mute but keep alive
+        });
+        // Keep streamRef.current alive!
+      } else {
+        // For non-iOS, stop tracks normally
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
     }
     
     // Clean up audio context
@@ -347,24 +386,35 @@ export const useIOSCompatibleVoice = ({ onTranscript, onError }: UseIOSCompatibl
       setIsListening(true);
       setTranscript('');
       
-      // Get microphone stream with iOS-optimized settings
-      const constraints = isIOSDevice() ? {
-        audio: {
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false,
-          sampleRate: 48000,
-        }
-      } : {
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        }
-      };
+      // Get or reuse microphone stream
+      let stream = streamRef.current;
       
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      streamRef.current = stream;
+      if (isIOSDevice() && stream) {
+        // For iOS, reuse existing stream and re-enable tracks
+        console.log('🍎 Reusing existing iOS stream');
+        stream.getTracks().forEach(track => {
+          track.enabled = true; // Re-enable tracks
+        });
+      } else {
+        // For non-iOS or if no stream exists, get a new one
+        const constraints = isIOSDevice() ? {
+          audio: {
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false,
+            sampleRate: 48000,
+          }
+        } : {
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          }
+        };
+        
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+        streamRef.current = stream;
+      }
       
       // Set up audio context for silence detection
       audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
