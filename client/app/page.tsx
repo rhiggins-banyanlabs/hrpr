@@ -371,12 +371,21 @@ export default function Home() {
 
         {/* Main content */}
         <div className="relative z-10 flex flex-col items-center justify-center flex-1 px-4 text-center">
-          {/* iOS indicator */}
-          {isIOS && (
-            <div className="absolute top-4 left-4 bg-blue-500 text-white px-3 py-1 rounded-full text-xs">
-              🍎 iOS Mode
+          {/* iOS indicator and debug info */}
+          <div className="absolute top-4 left-4 bg-black bg-opacity-75 text-white p-2 rounded-lg text-xs max-w-xs">
+            <div className="mb-1">
+              🍎 iOS: {isIOS ? 'YES' : 'NO'}
             </div>
-          )}
+            <div className="mb-1">
+              Platform: {typeof window !== 'undefined' ? navigator.platform : 'SSR'}
+            </div>
+            <div className="mb-1">
+              Touch Points: {typeof window !== 'undefined' ? navigator.maxTouchPoints : 'SSR'}
+            </div>
+            <div className="text-green-300">
+              User Agent: {typeof window !== 'undefined' ? navigator.userAgent.substring(0, 50) + '...' : 'SSR'}
+            </div>
+          </div>
 
           {/* Harper logo/title */}
           <div className="mb-8">
@@ -461,14 +470,49 @@ export default function Home() {
             </div>
           )}
 
-          {/* Transcript display (for debugging) */}
-          {unifiedVoice.transcript && (
-            <div className="mt-4 p-3 bg-gray-800 bg-opacity-50 rounded-lg max-w-md">
-              <p className="text-gray-300 text-sm">
-                <strong>Heard:</strong> {unifiedVoice.transcript}
-              </p>
+          {/* Debug info for voice system */}
+          <div className="mt-4 p-3 bg-gray-900 bg-opacity-75 rounded-lg max-w-md text-xs text-white">
+            <div className="grid grid-cols-2 gap-2">
+              <div>Listening: {unifiedVoice.listening ? '✅' : '❌'}</div>
+              <div>Processing: {unifiedVoice.isProcessing ? '✅' : '❌'}</div>
+              <div>Harper Active: {isHarperActivated ? '✅' : '❌'}</div>
+              <div>Audio Unlocked: {isUnlocked ? '✅' : '❌'}</div>
+              <div>Permission: {unifiedVoice.permissionStatus || 'unknown'}</div>
+              <div>Voice Input: {isVoiceInputActive ? '✅' : '❌'}</div>
             </div>
-          )}
+            {unifiedVoice.transcript && (
+              <div className="mt-2 p-2 bg-blue-900 bg-opacity-50 rounded">
+                <strong>Heard:</strong> {unifiedVoice.transcript}
+              </div>
+            )}
+            {(permissionError || voiceError) && (
+              <div className="mt-2 p-2 bg-red-900 bg-opacity-50 rounded">
+                <strong>Error:</strong> {permissionError || voiceError}
+              </div>
+            )}
+            
+            {/* Test buttons */}
+            <div className="mt-3 flex gap-2">
+              <button
+                onClick={async () => {
+                  try {
+                    await speakText("Testing iOS audio playback")
+                  } catch (e) {
+                    console.error('TTS test failed:', e)
+                  }
+                }}
+                className="px-3 py-1 bg-green-600 text-white rounded text-xs"
+              >
+                Test Audio
+              </button>
+              <button
+                onClick={() => unifiedVoice.toggleListening()}
+                className="px-3 py-1 bg-blue-600 text-white rounded text-xs"
+              >
+                Test Mic
+              </button>
+            </div>
+          </div>
 
           {/* Instructions */}
           <div className="mt-8 text-center max-w-2xl">
