@@ -111,13 +111,20 @@ export const useEnhancedOptimizedVoice = () => {
       console.log(`🔊 Speaking text (iOS: ${isIOSRef.current}):`, text.substring(0, 100));
       setError(null);
       
-      // Check if audio is unlocked
-      if (!isUnlocked && !checkAudioUnlock()) {
-        if (isIOSRef.current) {
-          // Try to unlock audio
-          const unlocked = await unlockAudio();
-          if (!unlocked) {
-            throw new Error('Audio is locked. Please tap anywhere on the screen first.');
+      // For iOS, always ensure audio is unlocked before speaking
+      if (isIOSRef.current) {
+        console.log('🔓 Checking iOS audio unlock status:', isUnlocked);
+        if (!isUnlocked) {
+          // Try to unlock audio in current user interaction context
+          try {
+            const unlocked = await unlockAudio();
+            console.log('🔓 Audio unlock result:', unlocked);
+            if (!unlocked) {
+              throw new Error('Audio is locked. Please tap the voice button again to enable audio.');
+            }
+          } catch (unlockError) {
+            console.error('🔓 Audio unlock failed:', unlockError);
+            throw new Error('Could not unlock audio for playback. Please try tapping again.');
           }
         }
       }

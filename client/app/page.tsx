@@ -569,6 +569,22 @@ export default function Home() {
               >
                 Test Mic
               </button>
+              <button
+                onClick={async () => {
+                  try {
+                    console.log('🧪 Testing FFmpeg conversion...')
+                    // Create a dummy audio blob to test conversion
+                    const dummyBlob = new Blob(['test'], { type: 'audio/webm' })
+                    const result = await audioConverter.convertForDevice(dummyBlob, 'webm')
+                    console.log('🧪 FFmpeg test result:', result)
+                  } catch (e) {
+                    console.error('🧪 FFmpeg test failed:', e)
+                  }
+                }}
+                className="px-3 py-1 bg-purple-600 text-white rounded text-xs"
+              >
+                Test FFmpeg
+              </button>
             </div>
           </div>
 

@@ -217,13 +217,22 @@ export const useIOSCompatibleVoice = ({ onTranscript, onError }: UseIOSCompatibl
       formData.append('language', 'en');
       formData.append('response_format', 'json');
       
+      // Log what we're sending to the API
+      console.log('🎤 Sending to transcription API:', {
+        fileName,
+        blobSize: processedBlob.size,
+        blobType: processedBlob.type
+      });
+
       const response = await fetch('/api/stt', {
         method: 'POST',
         body: formData,
       });
       
       if (!response.ok) {
-        throw new Error(`Transcription failed: ${response.statusText}`);
+        const errorText = await response.text();
+        console.error('🎤 Transcription API error:', response.status, errorText);
+        throw new Error(`Transcription failed: ${response.statusText} - ${errorText}`);
       }
       
       const result = await response.json();
@@ -283,12 +292,33 @@ export const useIOSCompatibleVoice = ({ onTranscript, onError }: UseIOSCompatibl
     // Process the recorded audio if we have chunks
     if (audioChunksRef.current.length > 0 && hasSpokenRef.current) {
       const audioBlob = new Blob(audioChunksRef.current, { type: currentMimeTypeRef.current });
+      
+      // Debug the audio blob before processing
+      console.log('🎤 Audio blob for processing:', {
+        size: audioBlob.size,
+        type: audioBlob.type,
+        chunks: audioChunksRef.current.length,
+        hasSpoken: hasSpokenRef.current
+      });
+      
+      if (audioBlob.size === 0) {
+        console.error('🎤 Audio blob is empty - no audio was recorded');
+        onError?.('No audio was recorded. Please try speaking louder or closer to the microphone.');
+        return;
+      }
+      
       const transcribedText = await processAudioWithWhisper(audioBlob);
       
       if (transcribedText) {
         setTranscript(transcribedText);
         onTranscript(transcribedText);
       }
+    } else {
+      console.warn('🎤 No audio to process:', {
+        chunksLength: audioChunksRef.current.length,
+        hasSpoken: hasSpokenRef.current
+      });
+      onError?.('No speech detected. Please try speaking after tapping record.');
     }
     
     // Reset state
