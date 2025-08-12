@@ -30,23 +30,52 @@ const WakeWordDetector: React.FC<WakeWordDetectorProps> = ({
     try {
       console.log('👂 Starting wake word detection');
       
-      // Get microphone access
+      // Detect iOS devices for optimized settings
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      
+      console.log(`👂 iOS detection: ${isIOS}`);
+      
+      // Get microphone access with iOS-optimized settings
       const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
+        audio: isIOS ? {
+          // iOS-specific settings
+          echoCancellation: false,  // iOS handles this natively
+          noiseSuppression: false,  // iOS handles this natively
+          autoGainControl: false,   // iOS handles this natively
+          sampleRate: 48000,        // Higher sample rate for iOS
+        } : {
+          // Standard settings for other platforms
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
-        } 
+        }
       });
       streamRef.current = stream;
       setIsListening(true);
 
-      // Set up MediaRecorder
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
-        ? 'audio/webm;codecs=opus' 
-        : 'audio/webm';
+      // Set up MediaRecorder with iOS-compatible formats
+      let mimeType = 'audio/webm';
       
-      const mediaRecorder = new MediaRecorder(stream, { mimeType });
+      if (isIOS) {
+        // iOS Safari supports limited formats
+        if (MediaRecorder.isTypeSupported('audio/mp4')) {
+          mimeType = 'audio/mp4';
+        } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+          mimeType = 'audio/webm';
+        }
+        console.log('👂 iOS detected, using mimeType:', mimeType);
+      } else {
+        // Other browsers - use best available codec
+        if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+          mimeType = 'audio/webm;codecs=opus';
+        }
+      }
+      
+      const mediaRecorder = new MediaRecorder(stream, { 
+        mimeType,
+        audioBitsPerSecond: isIOS ? 128000 : undefined // Set bitrate for iOS
+      });
       mediaRecorderRef.current = mediaRecorder;
       isRecordingRef.current = true;
 
@@ -56,20 +85,34 @@ const WakeWordDetector: React.FC<WakeWordDetectorProps> = ({
         }
       };
 
-      // Start recording in chunks
-      mediaRecorder.start(1000); // Capture 1 second chunks
+      // Start recording in chunks with iOS-optimized timing
+      const timeslice = isIOS ? 2000 : 1000; // Larger chunks for iOS
+      mediaRecorder.start(timeslice);
       
-      // Check for wake word every 2 seconds
+      // Check for wake word - more frequently on iOS due to potential audio issues
+      const checkInterval = isIOS ? 3000 : 2000; // Check every 3 seconds on iOS
       checkIntervalRef.current = setInterval(() => {
         if (audioChunksRef.current.length > 0) {
           checkForWakeWord();
         }
-      }, 2000);
+      }, checkInterval);
+      
+      console.log(`👂 Recording started - timeslice: ${timeslice}ms, check interval: ${checkInterval}ms`);
 
       console.log('👂 Wake word detector active');
-    } catch (error) {
+    } catch (error: any) {
       console.error('👂 Error starting wake word detection:', error);
       setIsListening(false);
+      
+      // Handle specific iOS errors
+      if (error.name === 'NotAllowedError') {
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        if (isIOS) {
+          console.error('👂 iOS microphone permission denied');
+          // Could show a user-friendly message here
+        }
+      }
     }
   };
 
@@ -78,16 +121,30 @@ const WakeWordDetector: React.FC<WakeWordDetectorProps> = ({
     if (audioChunksRef.current.length === 0) return;
     
     try {
-      // Create audio blob from recent chunks (last 3 seconds)
-      const recentChunks = audioChunksRef.current.slice(-3);
-      const audioBlob = new Blob(recentChunks, { type: 'audio/webm' });
+      // Detect iOS for proper blob handling
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      
+      // Create audio blob from recent chunks
+      const recentChunks = audioChunksRef.current.slice(-2); // Use last 2 chunks for iOS compatibility
+      const blobType = isIOS && MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : 'audio/webm';
+      const audioBlob = new Blob(recentChunks, { type: blobType });
+      
+      // Skip if blob is too small (likely no audio)
+      if (audioBlob.size < 1000) {
+        console.log('👂 Audio chunk too small, skipping');
+        return;
+      }
       
       // Clear old chunks but keep last one for continuity
       audioChunksRef.current = audioChunksRef.current.slice(-1);
       
-      // Send to Whisper API
+      // Send to Whisper API with proper filename
+      const filename = isIOS ? 'wakeword.mp4' : 'wakeword.webm';
       const formData = new FormData();
-      formData.append('audio', audioBlob, 'wakeword.webm');
+      formData.append('audio', audioBlob, filename);
+      
+      console.log(`👂 Checking wake word - iOS: ${isIOS}, Type: ${blobType}, Size: ${audioBlob.size} bytes`);
 
       const response = await fetch('/api/transcribe', {
         method: 'POST',
@@ -100,18 +157,26 @@ const WakeWordDetector: React.FC<WakeWordDetectorProps> = ({
       const transcript = data.text?.toLowerCase().trim();
 
       if (transcript) {
-        console.log('👂 Heard:', transcript);
+        console.log('👂 Wake word check - Heard:', transcript);
         
         // Check if any wake word is in the transcript
-        const wakeWordDetected = WAKE_WORDS.some(word => 
-          transcript.includes(word.toLowerCase())
-        );
+        const wakeWordDetected = WAKE_WORDS.some(word => {
+          const detected = transcript.includes(word.toLowerCase());
+          if (detected) {
+            console.log(`👂 ✅ Wake word match found: "${word}" in "${transcript}"`);
+          }
+          return detected;
+        });
         
         if (wakeWordDetected) {
-          console.log('🎯 Wake word detected!');
+          console.log('🎯 Wake word detected! Stopping detector and activating Harper...');
           stopWakeWordDetection();
           onWakeWordDetected();
+        } else {
+          console.log('👂 No wake word found in:', transcript);
         }
+      } else {
+        console.log('👂 No transcript received from Whisper API');
       }
     } catch (error) {
       console.error('👂 Error checking for wake word:', error);
