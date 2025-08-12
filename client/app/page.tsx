@@ -485,6 +485,9 @@ export default function Home() {
               <div>Permission: {unifiedVoice.permissionStatus || 'unknown'}</div>
               <div>Voice Input: {isVoiceInputActive ? '✅' : '❌'}</div>
             </div>
+            <div className="mt-2 text-xs text-gray-300">
+              Platform: {isIOS ? 'iOS' : 'Other'} | MediaRecorder: {typeof MediaRecorder !== 'undefined' ? '✅' : '❌'}
+            </div>
             {unifiedVoice.transcript && (
               <div className="mt-2 p-2 bg-blue-900 bg-opacity-50 rounded">
                 <strong>Heard:</strong> {unifiedVoice.transcript}
