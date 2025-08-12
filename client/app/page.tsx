@@ -2,43 +2,38 @@
 
 import { VoiceOrb } from "@/features/voice"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
-import { useSpeechRecognition } from "@/hooks/useSpeechRecognition"
+import { useUnifiedVoice } from "@/hooks/useUnifiedVoice"
 import { useChatStorage } from "@/hooks/useChatStorage"
 import { useAdminAuth } from "@/components/admin/security/AdminAuthContext"
 import { useVoiceChat } from "@/hooks/useVoiceChat"
-import { useOptimizedVoice } from "@/hooks/useOptimizedVoice"
+import { useEnhancedOptimizedVoice } from "@/hooks/useEnhancedOptimizedVoice"
+import IOSPermissionHelper from "@/components/IOSPermissionHelper"
 import Waves from "@/components/waves"
 import { useState, useRef, useCallback, useEffect } from "react"
 import { MorphingText } from "@/components/MorphingText"
-// import { VoiceButton } from "@/components/VoiceButton" // Not needed anymore
 import { AdminButton } from "@/components/admin/ui/AdminButton"
-import { VoiceInput } from "@/features/voice"
-import WakeWordDetector from "@/features/voice/components/WakeWordDetector"
-
 
 export default function Home() {
   const [isVoiceInputActive, setIsVoiceInputActive] = useState(false)
   const [isHarperSpeaking, setIsHarperSpeaking] = useState(false)
-  // const [voiceTranscript, setVoiceTranscript] = useState("") // Not currently used
-  const [isHarperActivated, setIsHarperActivated] = useState(false) // Track if Harper has been activated
-  const [isThinking, setIsThinking] = useState(false) // Track when AI is processing
-  const [isTranscribing, setIsTranscribing] = useState(false) // Track when audio is being transcribed
-  const [useWhisperWakeWord, setUseWhisperWakeWord] = useState(false) // Use Whisper for wake word on iOS
-  const [isWakeWordListening, setIsWakeWordListening] = useState(false) // Track if wake word detection is active
+  const [isHarperActivated, setIsHarperActivated] = useState(false)
+  const [isThinking, setIsThinking] = useState(false)
+  const [showIOSHelper, setShowIOSHelper] = useState(false)
+  const [iosHelperType, setIOSHelperType] = useState<'microphone' | 'audio' | 'both'>('both')
+  const [permissionError, setPermissionError] = useState<string | null>(null)
 
   const { isSystemLocked } = useAdminAuth()
 
   // Refs for state management
   const hasPlayedIntroRef = useRef(false)
   const isProcessingVoiceQueryRef = useRef(false)
-  // const initializationAttemptedRef = useRef(false) // Not currently used
   const hasSessionRef = useRef(false)
 
   // Chat storage hook
   const { currentSession, startNewSession, endSession } = useChatStorage()
   
-  // Voice hooks
-  const { speakText, isSpeaking, unlockAudio, preCacheIntroMessage } = useOptimizedVoice()
+  // Enhanced voice hooks for iOS compatibility
+  const { speakText, isSpeaking, unlockAudio, preCacheIntroMessage, isUnlocked, error: voiceError, isIOS } = useEnhancedOptimizedVoice()
   
   // Sync the voice hook's speaking state with Harper speaking state
   useEffect(() => {
@@ -49,41 +44,53 @@ export default function Home() {
     if (isSpeaking && isVoiceInputActive) {
       console.log('🔊 Harper started speaking, stopping voice input')
       setIsVoiceInputActive(false)
-      // setVoiceTranscript("")
     }
   }, [isSpeaking, isVoiceInputActive])
   
-  // Stable callback for speaking state changes (kept for useVoiceChat compatibility)
+  // Stable callback for speaking state changes
   const handleSpeakingChange = useCallback((isSpeaking: boolean) => {
-    // This is now redundant since we're using the voice hook's state directly
-    // But keeping it for compatibility with useVoiceChat
     console.log('🔊 handleSpeakingChange called:', isSpeaking)
   }, [])
+
+  // Error handler for unified voice
+  const handleVoiceError = useCallback((error: string) => {
+    console.error('🎤 Voice error:', error)
+    setPermissionError(error)
+    
+    // Show iOS helper if it's a permission or iOS-specific error
+    if (isIOS && (error.includes('microphone') || error.includes('permission') || error.includes('denied'))) {
+      setIOSHelperType('microphone')
+      setShowIOSHelper(true)
+    } else if (isIOS && (error.includes('audio') || error.includes('locked') || error.includes('unlock'))) {
+      setIOSHelperType('audio')
+      setShowIOSHelper(true)
+    }
+  }, [isIOS])
 
   // Create a ref to store the callback
   const handleHarperDetectedRef = useRef<(query: string) => Promise<void>>(() => Promise.resolve())
 
   // Speech recognition callback wrapper
   const speechRecognitionCallback = useCallback(async (query: string) => {
-    console.log('🎤 Speech recognition callback called with:', query)
-    console.log('🎤 Callback reference status:', !!handleHarperDetectedRef.current)
+    console.log('🎤 Unified voice callback called with:', query)
     if (handleHarperDetectedRef.current) {
       await handleHarperDetectedRef.current(query)
-    } else {
-      console.log('🎤 No callback reference available!')
     }
   }, [])
 
-  // Initialize speech recognition
-  const [speechState, speechActions] = useSpeechRecognition(speechRecognitionCallback)
+  // Initialize unified voice system
+  const unifiedVoice = useUnifiedVoice({
+    onHarperDetected: speechRecognitionCallback,
+    onError: handleVoiceError,
+  })
 
   // Separate function to perform the actual session reset
   const performSessionReset = useCallback(() => {
     console.log('🔄 Performing actual session reset')
     
     // Stop all voice activities first
-    speechActions.stopListening()
-    speechActions.resetStates()
+    unifiedVoice.stopListening()
+    unifiedVoice.resetStates()
     
     // Force stop voice input if it's still active
     if (isVoiceInputActive) {
@@ -94,7 +101,6 @@ export default function Home() {
     // Reset to initial state
     setIsHarperActivated(false)
     setIsVoiceInputActive(false)
-    // setVoiceTranscript("")
     setIsThinking(false)
     
     // Reset refs
@@ -107,31 +113,21 @@ export default function Home() {
       endSession()
     }
     
-    // After reset, don't auto-start wake word detection
-    // User must click the button to activate Harper
-    console.log('🔄 Session reset - waiting for user to click button')
-    console.log('🔄 Callback reference available:', !!handleHarperDetectedRef.current)
-    console.log('🔄 Speech actions available:', !!speechActions.toggleListening)
-    
     console.log('✅ Session reset complete - ready for new user')
-  }, [currentSession, endSession, speechActions, isVoiceInputActive])
+  }, [currentSession, endSession, unifiedVoice, isVoiceInputActive])
 
   // Session reset callback for feedback timeout
   const handleSessionReset = useCallback(() => {
     console.log('🔄 Resetting session to initial state')
-    console.log('🔄 Harper speaking state:', isHarperSpeaking)
     
     // If Harper is still speaking, delay the UI reset
     if (isHarperSpeaking) {
       console.log('🔄 Harper is still speaking - delaying UI reset')
       
-      // Set up a listener to reset UI when Harper finishes speaking
       const checkSpeakingInterval = setInterval(() => {
         if (!isSpeaking) {
           console.log('🔄 Harper finished speaking - now resetting UI')
           clearInterval(checkSpeakingInterval)
-          
-          // Perform the actual reset
           performSessionReset()
         }
       }, 100)
@@ -157,31 +153,6 @@ export default function Home() {
     onSessionReset: handleSessionReset
   })
 
-  // Clean up session when page unloads or component unmounts
-  useEffect(() => {
-    const handleBeforeUnload = () => {
-      if (currentSession?.id) {
-        console.log('🔚 Page unloading, ending session:', currentSession.id)
-        // Use sendBeacon for reliable cleanup on page unload
-        const url = `/api/end-session`
-        const data = JSON.stringify({ sessionId: currentSession.id })
-        navigator.sendBeacon(url, data)
-      }
-    }
-
-    // Add event listener for page unload
-    window.addEventListener('beforeunload', handleBeforeUnload)
-
-    // Cleanup on component unmount
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload)
-      if (currentSession?.id) {
-        console.log('🔚 Component unmounting, ending session:', currentSession.id)
-        endSession()
-      }
-    }
-  }, [currentSession, endSession])
-
   // Forward declaration for speech recognition
   const handleHarperDetected = useCallback(async (query: string) => {
     console.log("🏠 HOME: handleHarperDetected called with query:", query || "no query")
@@ -198,446 +169,325 @@ export default function Home() {
       if (!sessionId) {
         console.log("📝 Creating session for voice query");
         const newSession = await startNewSession({
-          source: "voice_activation",
-          initial_query: query,
-          timestamp: new Date().toISOString(),
+          startedAt: new Date().toISOString(),
+          isVoiceSession: true,
+          userAgent: navigator.userAgent,
+          platform: isIOS ? 'iOS' : 'other'
         });
-        sessionId = newSession?.id;
-        console.log("✅ Session created successfully:", sessionId);
-      } else {
-        console.log("✅ Using existing session:", sessionId);
+        
+        if (!newSession) {
+          console.error("❌ Failed to create session for voice query");
+          return;
+        }
+        
+        sessionId = newSession.id;
+        hasSessionRef.current = true;
       }
 
-      if (!sessionId) {
-        console.error("❌ Failed to create or get session ID");
-        return;
-      }
-
-      // Process voice query directly
-      isProcessingVoiceQueryRef.current = true
-      console.log("🎯 Starting voice processing...");
+      // Set Harper as activated
+      setIsHarperActivated(true);
+      isProcessingVoiceQueryRef.current = true;
       
-      // Send intro message if this is the first interaction
-      if (!hasPlayedIntroRef.current) {
-        console.log("🎯 Sending intro message...");
-        hasPlayedIntroRef.current = true
-        
-        // Activate Harper mode - switch to microphone interface
-        setIsHarperActivated(true)
-        
-        // Stop wake word detection since we're now in active mode
-        speechActions.stopListening()
-        setIsWakeWordListening(false) // Also stop Whisper wake word if active
-        
-        // Send intro message immediately (pre-cached)
-        await sendIntroMessage(sessionId)
-        console.log("✅ Intro message sent");
-        
-        // Don't auto-start listening - wait for user to click the button
-        console.log("⏳ Waiting for user to click the voice button to start recording");
-      }
-      
-      // Only process actual queries, not greetings
+      // If this is just a greeting, play intro instead of processing query
       const isJustGreeting = /^(hey|hi|hello)?\s*(harper|conny|coni|koni|honey)\s*$/i.test(query.trim());
       
-      if (!isJustGreeting && query.trim()) {
-        console.log("🎯 Processing query:", query);
-        setIsThinking(true);
-        try {
-          await processVoiceQuery(query)
-          console.log("✅ Query processed successfully");
-        } finally {
-          setIsThinking(false);
-        }
-      } else {
-        console.log("👋 Just a greeting detected, skipping query processing");
+      if (isJustGreeting && !hasPlayedIntroRef.current) {
+        console.log("👋 Just a greeting - playing intro message");
+        hasPlayedIntroRef.current = true;
+        await sendIntroMessage(sessionId);
+      } else if (!isJustGreeting) {
+        console.log("🎤 Processing voice query:", query);
+        await processVoiceQuery(query, sessionId);
       }
-      
-      // Reset speech recognition states after processing
-      speechActions.resetStates();
-      
     } catch (error) {
       console.error("❌ Error in handleHarperDetected:", error);
     } finally {
-      isProcessingVoiceQueryRef.current = false
-      console.log("🏁 handleHarperDetected completed");
+      isProcessingVoiceQueryRef.current = false;
     }
-  }, [currentSession, startNewSession, sendIntroMessage, processVoiceQuery, setIsThinking, setIsHarperActivated])
+  }, [currentSession, startNewSession, processVoiceQuery, sendIntroMessage, isIOS])
 
-  // Set the callback reference
+  // Update the ref with the callback
   useEffect(() => {
-    console.log('🔄 Updating handleHarperDetected callback reference')
     handleHarperDetectedRef.current = handleHarperDetected
   }, [handleHarperDetected])
 
-
-  // Handle voice input toggle for the unified orb
-  const handleVoiceInputToggle = useCallback(async () => {
-    console.log("🎤 🔄 Voice input toggle called from VoiceOrb, current state:", isVoiceInputActive)
-
-    // Check for iOS and request permission first
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
-                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  // Handle VoiceOrb interaction
+  const handleVoiceOrbInteraction = useCallback(async () => {
+    console.log('🎤 VoiceOrb interaction (iOS):', isIOS)
     
-    if (isIOS && !navigator.mediaDevices) {
-      alert('Please ensure you are using Safari browser on iOS for voice features.');
-      return;
+    // For iOS, we need to unlock audio first
+    if (isIOS && !isUnlocked) {
+      console.log('🔓 Unlocking audio for iOS...')
+      try {
+        const unlocked = await unlockAudio()
+        if (!unlocked) {
+          setIOSHelperType('audio')
+          setShowIOSHelper(true)
+          return
+        }
+      } catch (error) {
+        console.error('🔓 Failed to unlock audio:', error)
+        handleVoiceError('Failed to unlock audio. Please try again.')
+        return
+      }
     }
 
-    // If Harper is not activated yet, start/stop listening for "Hey Harper"
     if (!isHarperActivated) {
-      console.log("🎤 Toggling Hey Harper detection from orb click")
+      // Initial activation - start listening for wake word
+      console.log('🎤 Initial Harper activation')
+      setIsHarperActivated(true)
       
-      // For Apple devices, use Whisper wake word detector
-      if (useWhisperWakeWord) {
-        // Request microphone permission first for iOS
-        if (isIOS && !isWakeWordListening) {
-          try {
-            console.log("🍎 Requesting microphone permission for iOS...");
-            await navigator.mediaDevices.getUserMedia({ audio: true })
-              .then(stream => {
-                // Stop the stream immediately, we just needed permission
-                stream.getTracks().forEach(track => track.stop());
-                console.log("✅ Microphone permission granted");
-              });
-          } catch (error: any) {
-            console.error("❌ Microphone permission denied:", error);
-            if (error.name === 'NotAllowedError') {
-              alert('Microphone access is required. Please allow microphone access in Settings > Safari > Microphone.');
-            }
-            return;
+      // Request permission and start listening
+      try {
+        if (isIOS && unifiedVoice.permissionStatus !== 'granted') {
+          const hasPermission = await unifiedVoice.requestPermission()
+          if (!hasPermission) {
+            setIOSHelperType('microphone')
+            setShowIOSHelper(true)
+            return
           }
         }
         
-        setIsWakeWordListening(!isWakeWordListening);
-        console.log("🍎 Wake word listening state:", !isWakeWordListening);
-      } else {
-        // For other devices, use native speech recognition
-        speechActions.toggleListening();
-      }
-      
-      // Unlock audio on user interaction
-      if (unlockAudio && !isWakeWordListening) {
-        await unlockAudio();
-      }
-      return
-    }
-
-    // Don't allow voice input while Harper is speaking or processing
-    if (isHarperSpeaking || isProcessing) {
-      console.log("🎤 ❌ Harper is speaking/processing, not toggling voice input")
-      return
-    }
-
-    // Request microphone permission for iOS before starting voice input
-    if (isIOS && !isVoiceInputActive) {
-      try {
-        console.log("🍎 Requesting microphone permission for iOS voice input...");
-        await navigator.mediaDevices.getUserMedia({ audio: true })
-          .then(stream => {
-            // Stop the stream immediately, we just needed permission
-            stream.getTracks().forEach(track => track.stop());
-            console.log("✅ Microphone permission granted for voice input");
-          });
-      } catch (error: any) {
-        console.error("❌ Microphone permission denied:", error);
-        if (error.name === 'NotAllowedError') {
-          alert('Microphone access is required. Please allow microphone access in Settings > Safari > Microphone.');
+        unifiedVoice.startListening()
+        
+        // Play intro message if first time
+        if (!hasPlayedIntroRef.current) {
+          let sessionId = currentSession?.id
+          if (!sessionId) {
+            const newSession = await startNewSession({
+              startedAt: new Date().toISOString(),
+              isVoiceSession: true,
+              userAgent: navigator.userAgent,
+              platform: isIOS ? 'iOS' : 'other'
+            })
+            sessionId = newSession?.id || null
+          }
+          
+          if (sessionId) {
+            hasPlayedIntroRef.current = true
+            await sendIntroMessage(sessionId)
+          }
         }
-        return;
-      }
-    }
-
-    const newState = !isVoiceInputActive
-    setIsVoiceInputActive(newState)
-    
-    if (!newState) {
-      console.log("🎤 Stopping voice input from VoiceOrb")
-      // setVoiceTranscript("")
-    } else {
-      console.log("🎤 Starting voice input from VoiceOrb")
-      
-      // Create session if needed (for activated mode)
-      if (isHarperActivated && !currentSession?.id) {
-        console.log("📝 Creating session for voice input");
-        await startNewSession({
-          source: "voice_orb_click",
-          initial_query: null,
-          timestamp: new Date().toISOString(),
-        });
-      }
-      
-      // Unlock audio on user interaction
-      if (unlockAudio) {
-        await unlockAudio();
-      }
-    }
-  }, [isVoiceInputActive, isHarperSpeaking, isProcessing, isHarperActivated, currentSession?.id, startNewSession, unlockAudio, useWhisperWakeWord, isWakeWordListening])
-
-  // Disable main speech recognition when voice input is active OR when Harper is activated
-  useEffect(() => {
-    if (isVoiceInputActive || isHarperActivated) {
-      console.log("🔇 Voice input active or Harper activated, ensuring main speech recognition is disabled")
-      if (speechState.listening) {
-        speechActions.stopListening()
-      }
-    }
-  }, [isVoiceInputActive, isHarperActivated, speechState.listening, speechActions])
-
-  // Pre-cache intro message on page load (skip for iOS to avoid hanging)
-  useEffect(() => {
-    const initializeVoice = async () => {
-      // Detect iOS devices
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
-                    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-      
-      if (isIOS) {
-        console.log("🍎 iOS detected - skipping intro message pre-cache to avoid hanging");
-        return;
-      }
-      
-      console.log("🔄 Initializing voice and pre-caching intro message...");
-      try {
-        // Add timeout to prevent hanging
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Pre-cache timeout')), 5000)
-        );
-        
-        // Race between pre-cache and timeout
-        await Promise.race([
-          preCacheIntroMessage(),
-          timeoutPromise
-        ]);
-        
-        console.log("✅ Intro message pre-cached successfully");
       } catch (error) {
-        console.error("❌ Error or timeout pre-caching intro message:", error);
-        // Continue anyway - don't block the app
+        console.error('🎤 Failed to start listening:', error)
+        handleVoiceError(error instanceof Error ? error.message : 'Failed to start voice input')
       }
-    };
+    } else if (unifiedVoice.listening) {
+      // Currently listening - start manual input
+      console.log('🎤 Manual voice input activated')
+      setIsVoiceInputActive(true)
+      // The unified voice system will handle recording
+    } else {
+      // Restart listening
+      console.log('🎤 Restarting voice listening')
+      unifiedVoice.startListening()
+    }
+  }, [isIOS, isUnlocked, unlockAudio, isHarperActivated, unifiedVoice, currentSession, startNewSession, sendIntroMessage, handleVoiceError])
 
-    // Initialize voice after a short delay
-    const timeout = setTimeout(initializeVoice, 500);
-    return () => clearTimeout(timeout);
-  }, [preCacheIntroMessage]);
+  // Handle iOS permission helper
+  const handleIOSHelperClose = useCallback(() => {
+    setShowIOSHelper(false)
+    setPermissionError(null)
+  }, [])
 
-  // Detect if we're on an Apple device
-  useEffect(() => {
-    const userAgent = navigator.userAgent;
-    const isAppleDevice = /iPad|iPhone|iPod|Mac/i.test(userAgent) || 
-                          (navigator.platform === 'MacIntel');
+  const handleIOSHelperRetry = useCallback(async () => {
+    console.log('🔄 Retrying iOS setup...')
+    setPermissionError(null)
     
-    if (isAppleDevice) {
-      console.log("🍎 Apple device detected - will use Whisper for wake word");
-      setUseWhisperWakeWord(true);
+    try {
+      // Try to unlock audio and request permissions
+      await unlockAudio()
+      await unifiedVoice.requestPermission()
+      setShowIOSHelper(false)
+    } catch (error) {
+      console.error('🔄 Retry failed:', error)
+      setPermissionError(error instanceof Error ? error.message : 'Setup failed')
     }
-  }, []);
+  }, [unlockAudio, unifiedVoice])
 
-  // Handle wake word listening state
+  // Clean up session when page unloads
   useEffect(() => {
-    // Only listen for wake word if user clicked button and Harper isn't already activated
-    if (isWakeWordListening && !isHarperActivated && !useWhisperWakeWord) {
-      console.log("📱 Starting native wake word detection...");
-      speechActions.startListening();
-    } else if (!isWakeWordListening || isHarperActivated) {
-      console.log("📱 Stopping wake word detection...");
-      speechActions.stopListening();
+    const handleBeforeUnload = () => {
+      if (currentSession?.id) {
+        console.log('🔚 Page unloading, ending session:', currentSession.id)
+        const url = `/api/end-session`
+        const data = JSON.stringify({ sessionId: currentSession.id })
+        navigator.sendBeacon(url, data)
+      }
     }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
 
     return () => {
-      if (isWakeWordListening) {
-        speechActions.stopListening();
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      if (currentSession?.id) {
+        console.log('🔚 Component unmounting, ending session:', currentSession.id)
+        endSession()
       }
-    };
-  }, [isWakeWordListening, isHarperActivated, useWhisperWakeWord]);
-
-  // Only start wake word detection when user manually clicks the voice button (before activation)
-  // No auto-start of listening
-
-  // Only show speech recognition error on non-iOS devices (iOS uses Whisper instead)
-  if (speechState.permissionError) {
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
-                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    
-    if (!isIOS) {
-      return <ErrorBoundary error={speechState.permissionError} />
     }
-    // On iOS, ignore the speech recognition error since we use Whisper
-  }
+  }, [currentSession, endSession])
 
-  // Show locked screen if system is locked
+  // Pre-cache intro message on mount
+  useEffect(() => {
+    preCacheIntroMessage()
+  }, [preCacheIntroMessage])
+
   if (isSystemLocked) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-gray-900 rounded-2xl shadow-xl p-8 text-center border-2 border-red-500">
-          <div className="mb-6">
-            <div className="w-20 h-20 bg-red-900 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-10 h-10 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m0 0v2m0-2h2m-2 0H10m4-6V9a4 4 0 00-8 0v2m0 0H8a2 2 0 00-2 2v6a2 2 0 002 2h8a2 2 0 002-2v-6a2 2 0 00-2-2h-2z" />
-              </svg>
-            </div>
-            <h1 className="text-2xl font-bold text-white mb-2">System Locked</h1>
-            <p className="text-gray-300 mb-6">
-              Harper is currently offline. Please wait for a conference administrator to enable the system.
-            </p>
-            <div className="bg-yellow-900 border border-yellow-600 rounded-lg p-4 mb-6">
-              <p className="text-sm text-yellow-200">
-                <strong>For Conference Staff:</strong><br />
-                Sign in to the admin panel to enable pedestal mode and activate Harper for attendees.
-              </p>
-            </div>
-          </div>
-          
-          {/* Admin button for unlocking */}
-          <AdminButton />
+      <main className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+        <div className="text-center text-white">
+          <h1 className="text-2xl font-bold mb-4">System Locked</h1>
+          <p className="text-gray-300">The system is currently locked by an administrator.</p>
         </div>
-      </div>
-    );
+      </main>
+    )
   }
 
-  // Normal Mode UI - Voice Only
   return (
-    <div className="relative min-h-screen w-screen overflow-x-hidden bg-black">
-      <AdminButton />
+    <ErrorBoundary>
+      <main className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex flex-col items-center justify-center relative overflow-hidden">
+        {/* Background waves */}
+        <div className="absolute inset-0 pointer-events-none">
+          <Waves />
+        </div>
 
-      <Waves
-        lineColor="rgba(79, 70, 229, 0.6)"
-        backgroundColor="black"
-        waveSpeedX={0.02}
-        waveSpeedY={0.01}
-        waveAmpX={40}
-        waveAmpY={20}
-        friction={0.9}
-        tension={0.01}
-        maxCursorMove={120}
-        xGap={12}
-        yGap={36}
-      />
+        {/* iOS Permission Helper */}
+        <IOSPermissionHelper
+          isVisible={showIOSHelper}
+          onClose={handleIOSHelperClose}
+          onRetry={handleIOSHelperRetry}
+          permissionType={iosHelperType}
+          error={permissionError}
+        />
 
-      {/* Main Content Container */}
-      <div className="relative z-10 flex flex-col h-full min-h-screen">
-        {/* Main Content */}
-        <div className="flex-1 flex flex-col items-center justify-center transition-all duration-700 ease-in-out px-4 py-2">
-          <div className="flex flex-col items-center justify-center gap-4">
-            <div className="text-center">
-              <h1
-                className="font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-500 to-blue-400 transition-all duration-700 text-6xl sm:text-7xl md:text-8xl animate-pulse"
-                style={{
-                  fontFamily: "var(--font-orbitron)",
-                  letterSpacing: "0.15em",
-                  textShadow: "0 0 30px rgba(99, 102, 241, 0.5), 0 0 60px rgba(139, 92, 246, 0.3)",
-                  filter: "drop-shadow(0 0 20px rgba(139, 92, 246, 0.4))"
-                }}
-              >
-                HRPR
-              </h1>
-              <p
-                className="mt-2 text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 via-purple-300 to-blue-300 transition-all duration-700 text-lg sm:text-xl"
-              >
-                Your AI Event Assistant
+        {/* Admin Button */}
+        <div className="absolute top-6 right-6 z-10">
+          <AdminButton />
+        </div>
+
+        {/* Main content */}
+        <div className="relative z-10 flex flex-col items-center justify-center flex-1 px-4 text-center">
+          {/* iOS indicator */}
+          {isIOS && (
+            <div className="absolute top-4 left-4 bg-blue-500 text-white px-3 py-1 rounded-full text-xs">
+              🍎 iOS Mode
+            </div>
+          )}
+
+          {/* Harper logo/title */}
+          <div className="mb-8">
+            <h1 className="text-6xl md:text-7xl lg:text-8xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500 mb-4">
+              Harper
+            </h1>
+            <p className="text-xl md:text-2xl text-gray-300 mb-2">
+              Your AI Conference Assistant
+            </p>
+            {isIOS && (
+              <p className="text-sm text-blue-300">
+                Optimized for iOS devices
               </p>
-            </div>
+            )}
+          </div>
 
-            <div className="transition-all duration-700 scale-100">
-              <VoiceOrb
-                listening={isHarperActivated ? isVoiceInputActive : (useWhisperWakeWord ? isWakeWordListening : speechState.listening)}
-                HarperDetected={speechState.HarperDetected}
-                isNavigating={speechState.isNavigating}
-                isVoiceInputActive={isVoiceInputActive}
-                onVoiceInputToggle={handleVoiceInputToggle}
-                isChatOpen={false}
-                isHarperSpeaking={isHarperSpeaking}
-                isHarperActivated={isHarperActivated}
-                isThinking={isThinking || isTranscribing}
+          {/* Voice Orb */}
+          <div className="relative mb-8">
+            <VoiceOrb
+              listening={unifiedVoice.listening}
+              HarperDetected={unifiedVoice.HarperDetected}
+              isNavigating={unifiedVoice.isNavigating || isProcessing}
+              isVoiceInputActive={isVoiceInputActive}
+              onVoiceInputToggle={handleVoiceOrbInteraction}
+              isChatOpen={false}
+              isHarperSpeaking={isHarperSpeaking}
+              isHarperActivated={isHarperActivated}
+              isThinking={isThinking}
+            />
+          </div>
+
+          {/* Status text */}
+          <div className="min-h-[3rem] flex items-center justify-center">
+            {unifiedVoice.isProcessing ? (
+              <MorphingText
+                phrases={['Processing...', 'Transcribing...', 'Understanding...']}
+                className="text-blue-300 text-lg"
               />
-            </div>
-
-            {(
-              <div className="transition-all duration-700">
-                <MorphingText
-                  texts={[
-                    "What workshops offer CE credits on Friday?",
-                    "When is the Health Care Committee meeting?",
-                    "Are there facility tours this weekend?",
-                    "What's happening at the AI Tech Expo Saturday?",
-                    "Show me substance abuse workshops with CME credits",
-                    "Where can I get lunch near the convention center?",
-                    "Which exhibitors are in the 200-300 booth range?",
-                    "What time does registration open Thursday?",
-                    "Are there any juvenile corrections workshops?",
-                    "When is the Adult Corrections Committee meeting?",
-                    "What continuing education sessions offer CEU credits?",
-                    "Tell me about the correctional facility tours",
-                  ]}
-                  className="-my-3 w-screen"
-                />
-                
-                {/* Descriptive text immediately below morphing text */}
-                {!isHarperActivated && (
-                  <div className="text-center mt-2 animate-fade-in">
-                    <p className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 via-purple-300 to-blue-300 text-2xl sm:text-3xl md:text-4xl">
-                      Press the button and say{" "}
-                      <span className="font-semibold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-500 to-blue-400">&quot;Hey Harper&quot;</span>
-                    </p>
-                  </div>
+            ) : isHarperSpeaking ? (
+              <p className="text-green-300 text-lg animate-pulse">Harper is speaking...</p>
+            ) : isProcessing ? (
+              <MorphingText
+                phrases={['Thinking...', 'Analyzing...', 'Preparing response...']}
+                className="text-purple-300 text-lg"
+              />
+            ) : unifiedVoice.listening ? (
+              isVoiceInputActive ? (
+                <p className="text-red-300 text-lg animate-pulse">🎤 Recording - Speak now</p>
+              ) : (
+                <p className="text-blue-300 text-lg">👂 Listening for "Hey Harper"</p>
+              )
+            ) : isHarperActivated ? (
+              <p className="text-gray-400 text-lg">Tap to reactivate voice</p>
+            ) : (
+              <div className="text-center">
+                <p className="text-gray-300 text-lg mb-2">
+                  {isIOS ? 'Tap to start voice chat' : 'Tap to activate Harper'}
+                </p>
+                {isIOS && !isUnlocked && (
+                  <p className="text-blue-300 text-sm">
+                    First tap will unlock audio
+                  </p>
                 )}
               </div>
             )}
           </div>
-        </div>
-      </div>
-      
-      {/* Wake Word Detector for iOS/Mac devices - only active when listening */}
-      {useWhisperWakeWord && isWakeWordListening && !isHarperActivated && (
-        <WakeWordDetector
-          isActive={isWakeWordListening && !isHarperActivated}
-          onWakeWordDetected={() => {
-            console.log("🎯 Wake word detected via Whisper!");
-            setIsWakeWordListening(false); // Stop listening after detection
-            handleHarperDetected("");
-          }}
-        />
-      )}
 
-      {/* Voice Input Component - Only active when Harper is activated */}
-      {isHarperActivated && (
-        <VoiceInput
-          onSpeechEnd={async (text) => {
-            console.log("🎤 Voice input received:", text);
-            // setVoiceTranscript("");
-            setIsVoiceInputActive(false);
-            
-            if (text.trim()) {
-              setIsThinking(true);
-              try {
-                // Use the feedback wrapper instead of direct processVoiceQuery
-                console.log('🎤 VoiceInput calling processVoiceQuery with:', text);
-                await processVoiceQuery(text);
-              } finally {
-                setIsThinking(false);
+          {/* Error display */}
+          {(permissionError || voiceError) && (
+            <div className="mt-4 p-4 bg-red-500 bg-opacity-20 border border-red-500 rounded-lg max-w-md">
+              <p className="text-red-300 text-sm">
+                {permissionError || voiceError}
+              </p>
+              {isIOS && (
+                <button
+                  onClick={() => setShowIOSHelper(true)}
+                  className="mt-2 text-blue-300 underline text-sm"
+                >
+                  Need help? Tap here
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Transcript display (for debugging) */}
+          {unifiedVoice.transcript && (
+            <div className="mt-4 p-3 bg-gray-800 bg-opacity-50 rounded-lg max-w-md">
+              <p className="text-gray-300 text-sm">
+                <strong>Heard:</strong> {unifiedVoice.transcript}
+              </p>
+            </div>
+          )}
+
+          {/* Instructions */}
+          <div className="mt-8 text-center max-w-2xl">
+            <p className="text-gray-400 text-sm mb-4">
+              {isIOS 
+                ? 'Ask about speakers, sessions, locations, dining, and more. Harper uses advanced voice recognition optimized for iOS.'
+                : 'Say "Hey Harper" or tap the button to start. Ask about speakers, sessions, locations, and more!'
               }
-            }
-          }}
-          onTranscriptUpdate={(transcript, isInterim) => {
-            console.log("🎤 Voice transcript update:", transcript, "isInterim:", isInterim);
-            // Show processing state when transcribing
-            if (transcript === 'Processing...' && isInterim) {
-              setIsTranscribing(true);
-            } else {
-              setIsTranscribing(false);
-            }
-            // setVoiceTranscript(transcript);
-          }}
-          isListening={isVoiceInputActive}
-          onListeningChange={(listening) => {
-            console.log("🎤 Listening state changed:", listening);
-            if (!listening && isVoiceInputActive) {
-              setIsVoiceInputActive(false);
-              // setVoiceTranscript("");
-            }
-          }}
-        />
-      )}
-    </div>
+            </p>
+            <div className="flex flex-wrap justify-center gap-2 text-xs">
+              <span className="bg-gray-800 bg-opacity-50 px-3 py-1 rounded-full text-gray-400">
+                "Who's speaking today?"
+              </span>
+              <span className="bg-gray-800 bg-opacity-50 px-3 py-1 rounded-full text-gray-400">
+                "Where is the lunch?"
+              </span>
+              <span className="bg-gray-800 bg-opacity-50 px-3 py-1 rounded-full text-gray-400">
+                "What's the WiFi password?"
+              </span>
+            </div>
+          </div>
+        </div>
+      </main>
+    </ErrorBoundary>
   )
 }
