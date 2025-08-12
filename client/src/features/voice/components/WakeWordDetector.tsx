@@ -14,6 +14,7 @@ const WakeWordDetector: React.FC<WakeWordDetectorProps> = ({
   const streamRef = useRef<MediaStream | null>(null);
   const isRecordingRef = useRef(false);
   const checkIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const startupSkipChecksRef = useRef<number>(0); // Skip initial checks to avoid immediate false triggers
   const [isListening, setIsListening] = useState(false);
 
   const WAKE_WORDS = [
@@ -53,6 +54,9 @@ const WakeWordDetector: React.FC<WakeWordDetectorProps> = ({
       });
       streamRef.current = stream;
       setIsListening(true);
+      // Skip the very first few check cycles to avoid false positives right after activation
+      // This prevents triggering the intro immediately upon button click
+      startupSkipChecksRef.current = 1; // number of intervals to skip
 
       // Set up MediaRecorder with iOS-compatible formats
       let mimeType = 'audio/webm';
@@ -92,6 +96,12 @@ const WakeWordDetector: React.FC<WakeWordDetectorProps> = ({
       // Check for wake word - more frequently on iOS due to potential audio issues
       const checkInterval = isIOS ? 3000 : 2000; // Check every 3 seconds on iOS
       checkIntervalRef.current = setInterval(() => {
+        if (startupSkipChecksRef.current > 0) {
+          startupSkipChecksRef.current -= 1;
+          // Clear old chunks during the warm-up period
+          audioChunksRef.current = [];
+          return;
+        }
         if (audioChunksRef.current.length > 0) {
           checkForWakeWord();
         }
