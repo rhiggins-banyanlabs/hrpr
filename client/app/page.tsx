@@ -240,30 +240,12 @@ export default function Home() {
     }
 
     if (!isHarperActivated) {
-      // Initial activation - request permission and start recording immediately
-      console.log('🎤 Initial Harper activation for iOS')
+      // Initial activation - play intro first, then start recording
+      console.log('🎤 Initial Harper activation')
       setIsHarperActivated(true)
       
       try {
-        // For iOS, request permission and start recording in one go
-        console.log('🎤 Starting direct voice input for iOS')
-        setIsVoiceInputActive(true)
-        
-        // Request permission if needed
-        if (isIOS && unifiedVoice.permissionStatus !== 'granted') {
-          const hasPermission = await unifiedVoice.requestPermission()
-          if (!hasPermission) {
-            setIOSHelperType('microphone')
-            setShowIOSHelper(true)
-            setIsVoiceInputActive(false)
-            return
-          }
-        }
-        
-        // Start recording immediately - no listening mode
-        unifiedVoice.startListening()
-        
-        // Play intro message if first time
+        // Play intro message FIRST while we have user interaction context
         if (!hasPlayedIntroRef.current) {
           let sessionId = currentSession?.id
           if (!sessionId) {
@@ -275,12 +257,31 @@ export default function Home() {
           }
           
           if (sessionId) {
+            console.log('👋 Playing intro message first (user interaction context)')
             hasPlayedIntroRef.current = true
             await sendIntroMessage(sessionId)
           }
         }
+        
+        // Then request permission and start recording
+        if (isIOS && unifiedVoice.permissionStatus !== 'granted') {
+          const hasPermission = await unifiedVoice.requestPermission()
+          if (!hasPermission) {
+            setIOSHelperType('microphone')
+            setShowIOSHelper(true)
+            return
+          }
+        }
+        
+        // Small delay to ensure intro starts playing, then start recording
+        setTimeout(() => {
+          console.log('🎤 Starting voice recording after intro delay')
+          setIsVoiceInputActive(true)
+          unifiedVoice.startListening()
+        }, 1000) // 1 second delay
+        
       } catch (error) {
-        console.error('🎤 Failed to start voice input:', error)
+        console.error('🎤 Failed during activation:', error)
         handleVoiceError(error instanceof Error ? error.message : 'Failed to start voice input')
         setIsVoiceInputActive(false)
       }
@@ -444,6 +445,9 @@ export default function Home() {
             ) : isHarperSpeaking ? (
               <div className="text-center">
                 <p className="text-green-300 text-lg animate-pulse">Harper is speaking...</p>
+                {!hasPlayedIntroRef.current && (
+                  <p className="text-blue-300 text-sm mt-1">Playing introduction</p>
+                )}
                 {isIOS && (
                   <button
                     onClick={() => {
