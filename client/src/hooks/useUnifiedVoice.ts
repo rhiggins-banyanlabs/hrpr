@@ -70,14 +70,15 @@ export const useUnifiedVoice = ({ onHarperDetected, onError }: UseUnifiedVoicePr
     console.log('🍎 iOS transcript received:', transcript);
     setUnifiedTranscript(transcript);
     
-    // Check for Harper wake word
-    if (detectHarperInTranscript(transcript) && !isProcessingRef.current) {
-      console.log('🍎 Harper detected in iOS transcript!');
+    // For tap-to-activate mode, process ANY transcript (no wake word needed)
+    if (transcript.trim() && !isProcessingRef.current) {
+      console.log('🍎 Processing iOS transcript directly (tap-to-activate mode)');
       isProcessingRef.current = true;
       setHarperDetected(true);
       setIsNavigating(true);
       
-      const query = extractQueryFromTranscript(transcript);
+      // Use the full transcript as the query
+      const query = transcript.trim();
       
       // Trigger the callback
       setTimeout(() => {

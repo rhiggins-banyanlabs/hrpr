@@ -125,6 +125,14 @@ export const useEnhancedOptimizedVoice = () => {
       if (isIOSRef.current) {
         // Use iOS-compatible audio service
         return new Promise<void>((resolve, reject) => {
+          // Set a timeout to prevent getting stuck in speaking state
+          const timeoutId = setTimeout(() => {
+            console.warn('🔊 iOS TTS timeout - forcing stop');
+            setIsSpeaking(false);
+            iosAudioService.stopSpeaking();
+            reject(new Error('TTS timeout'));
+          }, 30000); // 30 second timeout
+          
           iosAudioService.speakText(text, {
             voice,
             onStart: () => {
@@ -133,11 +141,13 @@ export const useEnhancedOptimizedVoice = () => {
             },
             onEnd: () => {
               console.log('🔊 iOS TTS ended');
+              clearTimeout(timeoutId);
               setIsSpeaking(false);
               resolve();
             },
             onError: (error) => {
               console.error('🔊 iOS TTS error:', error);
+              clearTimeout(timeoutId);
               setIsSpeaking(false);
               setError(error.message);
               reject(error);

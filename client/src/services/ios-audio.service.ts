@@ -219,13 +219,17 @@ export class IOSAudioService {
       // For iOS, we need to play immediately after creating the audio element
       // to ensure it's within the user interaction context
       if (this.isIOSDevice()) {
-        // Small delay to ensure audio is ready
-        setTimeout(() => {
-          audio.play().catch(error => {
-            console.error('🔊 iOS audio play failed:', error);
-            onError?.(error);
-          });
-        }, 100);
+        // Try to play immediately - if it fails, clean up properly
+        try {
+          await audio.play();
+        } catch (playError) {
+          console.error('🔊 iOS audio play failed:', playError);
+          this.isSpeaking = false;
+          this.currentAudio = null;
+          URL.revokeObjectURL(audio.src);
+          onError?.(playError instanceof Error ? playError : new Error('Audio playback failed'));
+          return;
+        }
       } else {
         // For other platforms, play immediately
         await audio.play();

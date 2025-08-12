@@ -442,14 +442,49 @@ export default function Home() {
                 className="text-blue-300 text-lg"
               />
             ) : isHarperSpeaking ? (
-              <p className="text-green-300 text-lg animate-pulse">Harper is speaking...</p>
+              <div className="text-center">
+                <p className="text-green-300 text-lg animate-pulse">Harper is speaking...</p>
+                {isIOS && (
+                  <button
+                    onClick={() => {
+                      console.log('🛑 Force stop speaking')
+                      setIsHarperSpeaking(false)
+                      // Force stop any audio
+                      if (typeof window !== 'undefined') {
+                        const audios = document.querySelectorAll('audio')
+                        audios.forEach(audio => {
+                          audio.pause()
+                          audio.currentTime = 0
+                        })
+                      }
+                    }}
+                    className="mt-2 px-4 py-2 bg-red-600 text-white rounded-lg text-sm"
+                  >
+                    Stop Speaking
+                  </button>
+                )}
+              </div>
             ) : isProcessing ? (
               <MorphingText
                 texts={['Thinking...', 'Analyzing...', 'Preparing response...']}
                 className="text-purple-300 text-lg"
               />
             ) : isVoiceInputActive ? (
-              <p className="text-red-300 text-lg animate-pulse">🎤 Recording - Speak now</p>
+              <div className="text-center">
+                <p className="text-red-300 text-lg animate-pulse">🎤 Recording - Speak now</p>
+                {isIOS && (
+                  <button
+                    onClick={() => {
+                      console.log('🛑 Manual stop requested')
+                      setIsVoiceInputActive(false)
+                      unifiedVoice.stopListening()
+                    }}
+                    className="mt-2 px-4 py-2 bg-red-600 text-white rounded-lg text-sm"
+                  >
+                    Stop Recording
+                  </button>
+                )}
+              </div>
             ) : isHarperActivated ? (
               <p className="text-blue-300 text-lg">Tap to speak to Harper</p>
             ) : (
@@ -496,6 +531,13 @@ export default function Home() {
             <div className="mt-2 text-xs text-gray-300">
               Platform: {isIOS ? 'iOS' : 'Other'} | MediaRecorder: {typeof MediaRecorder !== 'undefined' ? '✅' : '❌'} | FFmpeg: {audioConverter.isReady() ? '✅' : '⏳'}
             </div>
+            {isIOS && (
+              <div className="mt-2 text-xs text-yellow-300">
+                Recording Debug: {unifiedVoice.listening ? '🎤 Active' : '⏸️ Stopped'} | 
+                Processing: {unifiedVoice.isProcessing ? '⚙️ Yes' : '❌ No'} |
+                Transcript: {unifiedVoice.transcript ? '📝 Ready' : '❌ None'}
+              </div>
+            )}
             {unifiedVoice.transcript && (
               <div className="mt-2 p-2 bg-blue-900 bg-opacity-50 rounded">
                 <strong>Heard:</strong> {unifiedVoice.transcript}
