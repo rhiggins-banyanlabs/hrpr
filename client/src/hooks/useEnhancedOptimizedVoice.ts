@@ -63,13 +63,14 @@ export const useEnhancedOptimizedVoice = () => {
     try {
       if (isIOSRef.current) {
         const success = await iosAudioService.manualUnlock();
+        console.log('🔓 iOS audio unlock result:', success);
         setIsUnlocked(success);
         
         if (success) {
-          console.log('🔓 Audio unlocked successfully');
+          console.log('🔓 Audio unlocked successfully - ready for playback');
           setError(null);
         } else {
-          console.error('🔓 Failed to unlock audio');
+          console.error('🔓 Failed to unlock audio - playback will fail');
           setError('Failed to unlock audio. Please try tapping the screen.');
         }
         

@@ -60,26 +60,36 @@ export class IOSAudioService {
   // Unlock audio context for iOS
   private async unlockAudioContext(): Promise<void> {
     try {
+      console.log('🔓 Attempting to unlock iOS audio context...');
+      
       if (!this.audioContext) {
         this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        console.log('🔓 Created new audio context, state:', this.audioContext.state);
       }
       
-      // Create a silent buffer
+      // Resume context if suspended (iOS often starts suspended)
+      if (this.audioContext.state === 'suspended') {
+        console.log('🔓 Audio context is suspended, resuming...');
+        await this.audioContext.resume();
+        console.log('🔓 Audio context resumed, new state:', this.audioContext.state);
+      }
+      
+      // Create and play a silent buffer to fully unlock
       const buffer = this.audioContext.createBuffer(1, 1, 22050);
       const source = this.audioContext.createBufferSource();
       source.buffer = buffer;
       source.connect(this.audioContext.destination);
-      source.start();
+      source.start(0);
       
-      // Resume context if suspended
-      if (this.audioContext.state === 'suspended') {
-        await this.audioContext.resume();
-      }
+      // Wait a moment to ensure it's fully unlocked
+      await new Promise(resolve => setTimeout(resolve, 100));
       
       this.isUnlocked = true;
-      console.log('🔓 iOS audio context unlocked successfully');
+      console.log('🔓 iOS audio context unlocked successfully, final state:', this.audioContext.state);
     } catch (error) {
       console.error('🔓 Failed to unlock iOS audio context:', error);
+      this.isUnlocked = false;
+      throw error;
     }
   }
   

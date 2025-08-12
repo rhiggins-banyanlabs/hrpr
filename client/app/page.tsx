@@ -232,14 +232,28 @@ export default function Home() {
     }
 
     if (!isHarperActivated) {
-      // Initial activation - request permission and play intro
+      // Initial activation - unlock audio, request permission and play intro
       console.log('🎤 Initial Harper activation')
       setIsHarperActivated(true)
       
       try {
-        // Request permission first (only if needed)
+        // FIRST: Unlock audio for iOS (must be in user interaction context)
+        if (isIOS && !isUnlocked) {
+          console.log('🔓 Unlocking audio for iOS first...')
+          const audioUnlocked = await unlockAudio()
+          if (!audioUnlocked) {
+            console.error('🔓 Failed to unlock audio')
+            setIOSHelperType('audio')
+            setShowIOSHelper(true)
+            setIsHarperActivated(false)
+            return
+          }
+          console.log('🔓 Audio unlocked successfully')
+        }
+        
+        // SECOND: Request microphone permission (only if needed)
         if (isIOS && unifiedVoice.permissionStatus === 'prompt') {
-          console.log('🎤 Requesting permission (first time only)')
+          console.log('🎤 Requesting microphone permission...')
           const hasPermission = await unifiedVoice.requestPermission()
           if (!hasPermission) {
             setIOSHelperType('microphone')
@@ -247,11 +261,12 @@ export default function Home() {
             setIsHarperActivated(false)
             return
           }
+          console.log('🎤 Microphone permission granted')
         }
         
-        // After permission granted, play intro message immediately
+        // THIRD: Play intro message (audio should be unlocked now)
         if (!hasPlayedIntroRef.current) {
-          console.log('👋 Playing Harper introduction after permission granted')
+          console.log('👋 Playing Harper introduction (audio unlocked)')
           
           // Create session for intro
           let sessionId = currentSession?.id
@@ -266,7 +281,21 @@ export default function Home() {
           if (sessionId) {
             hasPlayedIntroRef.current = true
             hasSessionRef.current = true
-            await sendIntroMessage(sessionId)
+            
+            // Try to play intro with error handling
+            try {
+              await sendIntroMessage(sessionId)
+              console.log('✅ Intro message played successfully')
+            } catch (introError) {
+              console.error('❌ Intro playback failed:', introError)
+              // Try to unlock audio again and retry
+              if (isIOS) {
+                console.log('🔓 Retrying audio unlock...')
+                await unlockAudio()
+                // Try once more
+                await sendIntroMessage(sessionId)
+              }
+            }
           }
         }
         
