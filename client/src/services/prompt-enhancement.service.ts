@@ -114,6 +114,17 @@ export class PromptEnhancementService {
       const keywordIntent = semanticIntentDetector.detectIntentByKeywords(queryToProcess);
       intent = keywordIntent;
     }
+
+    // Secondary detection: explicitly check for exhibitor/booth phrases
+    // and force exhibitor handling if detected, to avoid missing strict grounding
+    try {
+      const exhibitorDetection = this.exhibitorService.detectExhibitorQuery(originalPrompt);
+      if (exhibitorDetection.isExhibitorQuery && intent.primaryIntent !== 'exhibitor') {
+        console.log('🔒 Overriding intent to exhibitor based on keyword/booth detection');
+        (intent as any).primaryIntent = 'exhibitor';
+        (intent as any).isExhibitorQuery = true;
+      }
+    } catch {}
     
     // STEP 3: Update context for next query
     const entities = conversationContext.extractEntities(queryToProcess);
@@ -197,6 +208,7 @@ export class PromptEnhancementService {
     
     // Exhibitor data for exhibitor queries
     let exhibitorPromise = null;
+    let exhibitorSectionAdded = false;
     if (intent.primaryIntent === 'exhibitor' && !isAITechExpoQuery(originalPrompt)) {
       exhibitorPromise = this.exhibitorService.processExhibitorQuery(originalPrompt).then(exhibitorQuery => {
         if (exhibitorQuery.found && exhibitorQuery.data.length > 0) {
@@ -309,7 +321,9 @@ export class PromptEnhancementService {
         if (exhibitorPromise) {
           const exhibitorData = results[resultIndex++];
           if (exhibitorData && typeof exhibitorData === 'object' && 'context' in exhibitorData && 'data' in exhibitorData) {
-            enhancedPrompt += `\n\n${exhibitorData.context}\n${exhibitorData.data}`;
+            // Provide a STRICT data section for the model to ground its answer on
+            enhancedPrompt += `\n\nEXHIBITOR DATA (STRICT):\n${exhibitorData.data}`;
+            exhibitorSectionAdded = true;
           }
         }
         
@@ -339,6 +353,11 @@ export class PromptEnhancementService {
       } catch (error) {
         console.log('⚠️ Parallel lookup operations failed:', error);
       }
+    }
+
+    // If this was an exhibitor query but no strict exhibitor data was added, add an explicit empty strict section
+    if (intent.primaryIntent === 'exhibitor' && !exhibitorSectionAdded && !isAITechExpoQuery(originalPrompt)) {
+      enhancedPrompt += `\n\nEXHIBITOR DATA (STRICT):\n[No exhibitor data available for this query]`;
     }
     
     // STEP 5: Location/venue data (most expensive, do last)

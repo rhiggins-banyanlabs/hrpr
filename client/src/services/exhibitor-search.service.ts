@@ -40,6 +40,74 @@ export class ExhibitorSearchService {
     return ExhibitorSearchService.instance;
   }
 
+  private readonly leetMap: Record<string, string> = {
+    a: '4',
+    e: '3',
+    i: '1',
+    o: '0',
+    s: '5'
+  };
+
+  private readonly reverseLeetMap: Record<string, string> = {
+    '4': 'a',
+    '3': 'e',
+    '1': 'i',
+    '0': 'o',
+    '5': 's'
+  };
+
+  /**
+   * Generate limited, useful l33t variations including single-position replacements.
+   */
+  private generateLeetVariations(text: string): string[] {
+    const variations = new Set<string>();
+    const original = text;
+    variations.add(original);
+
+    const lower = original.toLowerCase();
+
+    // Global single-char replacements (letters -> numbers, one letter at a time)
+    Object.entries(this.leetMap).forEach(([letter, digit]) => {
+      if (lower.includes(letter)) {
+        variations.add(original.replace(new RegExp(letter, 'ig'), digit));
+      }
+    });
+
+    // Global single-char replacements (numbers -> letters, one digit at a time)
+    Object.entries(this.reverseLeetMap).forEach(([digit, letter]) => {
+      if (original.includes(digit)) {
+        variations.add(original.replace(new RegExp(`\\${digit}`, 'g'), letter));
+      }
+    });
+
+    // Single-position replacements for better partial matching
+    for (let i = 0; i < original.length; i++) {
+      const char = lower[i];
+      // letter -> number at position i
+      if (this.leetMap[char]) {
+        const digit = this.leetMap[char];
+        const arr = original.split('');
+        arr[i] = /[A-Z]/.test(original[i]) ? digit.toUpperCase() : digit;
+        variations.add(arr.join(''));
+      }
+      // number -> letter at position i
+      const rev = this.reverseLeetMap[original[i]];
+      if (rev) {
+        const arr = original.split('');
+        arr[i] = rev;
+        variations.add(arr.join(''));
+      }
+    }
+
+    // Special-case common brand spellings
+    if (lower.includes('vantage') || lower.includes('vant4ge')) {
+      variations.add(original.replace(/vant4ge/gi, 'vantage'));
+      variations.add(original.replace(/vantage/gi, 'vant4ge'));
+    }
+
+    return Array.from(variations).slice(0, 25);
+  }
+
   // Detect if the query is asking about exhibitors
   detectExhibitorQuery(query: string): {
     isExhibitorQuery: boolean;
@@ -125,14 +193,26 @@ export class ExhibitorSearchService {
 
   async searchByQuery(query: string, limit: number = 5): Promise<ExhibitorResult[]> {
     try {
-      const queryEmbedding = await embeddingService.generateEmbedding(query);
+      // Expand query to include leet/brand variations to improve embedding recall
+      const variationSet = new Set<string>([query]);
+      this.generateLeetVariations(query).forEach(v => variationSet.add(v));
+      // Special-case known brand aliasing
+      if (/vant4ge/i.test(query) || /vantage/i.test(query)) {
+        variationSet.add(query.replace(/vant4ge/gi, 'vantage'));
+        variationSet.add(query.replace(/vantage/gi, 'vant4ge'));
+        variationSet.add('Vant4ge');
+        variationSet.add('Vantage');
+      }
+      const expandedQuery = Array.from(variationSet).join(' | ');
+
+      const queryEmbedding = await embeddingService.generateEmbedding(expandedQuery);
       const lowerQuery = query.toLowerCase();
 
       const { data, error } = await supabase
         .rpc('search_exhibitors', {
           query_embedding: queryEmbedding,
-          match_count: limit * 2,  // Get more results to filter
-          similarity_threshold: 0.6  // Higher threshold for more relevant results
+          match_count: limit * 3,  // Get more results to filter down strictly
+          similarity_threshold: 0.75  // Strict threshold to avoid loose matches
         });
 
       if (error) {
@@ -140,7 +220,11 @@ export class ExhibitorSearchService {
         return [];
       }
 
-      let results = data || [];
+      let results = (data || []).filter((exhibitor: ExhibitorResult) => {
+        // Enforce strict similarity if value present
+        const sim = typeof exhibitor.similarity === 'number' ? exhibitor.similarity : undefined;
+        return sim === undefined || sim >= 0.75;
+      });
       
       // If query explicitly asks for tech companies, filter out non-tech
       if (lowerQuery.includes('tech') || lowerQuery.includes('technology')) {
@@ -153,6 +237,20 @@ export class ExhibitorSearchService {
         });
       }
 
+      // Additionally require that at least one significant word from the query
+      // appears in company_name, bio, or industry when similarity isn't provided
+      const words = query
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .filter(w => w.length >= 3);
+
+      if (words.length > 0) {
+        results = results.filter((exhibitor: ExhibitorResult) => {
+          const haystack = `${exhibitor.company_name} ${exhibitor.industry_category || ''} ${exhibitor.company_bio || ''}`.toLowerCase();
+          return words.some(w => haystack.includes(w));
+        });
+      }
+
       return results.slice(0, limit);
     } catch (error) {
       console.error('Failed to search exhibitors:', error);
@@ -162,17 +260,36 @@ export class ExhibitorSearchService {
 
   async searchByBoothNumber(boothNumber: string): Promise<ExhibitorResult | null> {
     try {
-      const { data, error } = await supabase
+      const normalized = boothNumber.trim();
+      // First, try exact match
+      let { data, error } = await supabase
         .from('exhibitors')
         .select('*')
-        .eq('booth_number', boothNumber)
-        .single();
+        .eq('booth_number', normalized)
+        .maybeSingle();
 
-      if (error || !data) {
+      if (!error && data) {
+        return data as ExhibitorResult;
+      }
+
+      // Fallback: handle composite booth fields like "532 | 1033" by doing a contains match
+      const { data: list, error: likeError } = await supabase
+        .from('exhibitors')
+        .select('*')
+        .ilike('booth_number', `%${normalized}%`)
+        .limit(10);
+
+      if (likeError || !list || list.length === 0) {
         return null;
       }
 
-      return data;
+      // Filter results to only those where the booth number appears as a full token between non-digits
+      const tokenRegex = new RegExp(`(?:^|[^0-9])${normalized}(?:[^0-9]|$)`);
+      const exactToken = list.find((e: any) => typeof e.booth_number === 'string' && tokenRegex.test(e.booth_number));
+      if (exactToken) return exactToken as ExhibitorResult;
+
+      // Otherwise return the first candidate
+      return list[0] as ExhibitorResult;
     } catch (error) {
       console.error('Failed to find exhibitor by booth:', error);
       return null;
@@ -181,15 +298,8 @@ export class ExhibitorSearchService {
 
   async searchByCompanyName(companyName: string): Promise<ExhibitorResult[]> {
     try {
-      // Common letter-to-number substitutions in company names
-      const variations = [companyName];
-      
-      // Add common substitutions
-      variations.push(companyName.replace(/a/gi, '4')); // a -> 4
-      variations.push(companyName.replace(/e/gi, '3')); // e -> 3
-      variations.push(companyName.replace(/i/gi, '1')); // i -> 1
-      variations.push(companyName.replace(/o/gi, '0')); // o -> 0
-      variations.push(companyName.replace(/s/gi, '5')); // s -> 5
+      // Generate robust l33t variations (limited)
+      const variations = this.generateLeetVariations(companyName);
       
       // Try each variation
       let allResults: ExhibitorResult[] = [];
@@ -334,11 +444,26 @@ export class ExhibitorSearchService {
     };
   }
 
+  private formatBoothNumbers(booth: string | undefined): string {
+    if (!booth) return '';
+    const tokens = booth
+      .split(/[^0-9]+/)
+      .map(t => t.trim())
+      .filter(Boolean);
+    if (tokens.length === 0) return '';
+    if (tokens.length === 1) return `booth ${tokens[0]}`;
+    if (tokens.length === 2) return `booths ${tokens[0]} and ${tokens[1]}`;
+    return `booths ${tokens.slice(0, -1).join(', ')}, and ${tokens[tokens.length - 1]}`;
+  }
+
   formatExhibitorInfo(exhibitor: ExhibitorResult): string {
     let info = `${exhibitor.company_name}`;
     
     if (exhibitor.booth_number) {
-      info += ` at booth ${exhibitor.booth_number}`;
+      const boothText = this.formatBoothNumbers(exhibitor.booth_number);
+      if (boothText) {
+        info += ` at ${boothText}`;
+      }
     }
     
     if (exhibitor.company_bio && exhibitor.company_bio.length < 100) {
@@ -360,7 +485,10 @@ export class ExhibitorSearchService {
     
     // Build a clear list of what was found
     const exhibitorList = topExhibitors
-      .map(e => `• ${e.company_name}${e.booth_number ? ` (Booth ${e.booth_number})` : ''}`)
+      .map(e => {
+        const boothText = this.formatBoothNumbers(e.booth_number);
+        return `• ${e.company_name}${boothText ? ` (${boothText})` : ''}`;
+      })
       .join('\n');
     
     return `Found ${exhibitors.length} exhibitor${exhibitors.length > 1 ? 's' : ''}:\n${exhibitorList}`;
