@@ -195,15 +195,7 @@ export default function Home() {
       setIsHarperActivated(true);
       isProcessingVoiceQueryRef.current = true;
       
-      // Play intro message if this is the first interaction
-      if (!hasPlayedIntroRef.current) {
-        console.log("👋 First interaction - playing intro message");
-        hasPlayedIntroRef.current = true;
-        await sendIntroMessage(sessionId);
-        // Don't return - continue to process the query after intro
-      }
-      
-      // Process the voice query
+      // Process the voice query directly (intro already played on first tap)
       console.log("🎤 Processing voice query:", query);
       await processVoiceQuery(query);
     } catch (error) {
@@ -240,13 +232,12 @@ export default function Home() {
     }
 
     if (!isHarperActivated) {
-      // Initial activation - simple flow
+      // Initial activation - request permission and play intro
       console.log('🎤 Initial Harper activation')
       setIsHarperActivated(true)
       
       try {
-        // Only request permission if we haven't already
-        // Don't request every time - iOS will remember the permission
+        // Request permission first (only if needed)
         if (isIOS && unifiedVoice.permissionStatus === 'prompt') {
           console.log('🎤 Requesting permission (first time only)')
           const hasPermission = await unifiedVoice.requestPermission()
@@ -258,20 +249,38 @@ export default function Home() {
           }
         }
         
-        // Start recording immediately
-        console.log('🎤 Starting voice recording')
-        setIsVoiceInputActive(true)
-        unifiedVoice.startListening()
+        // After permission granted, play intro message immediately
+        if (!hasPlayedIntroRef.current) {
+          console.log('👋 Playing Harper introduction after permission granted')
+          
+          // Create session for intro
+          let sessionId = currentSession?.id
+          if (!sessionId) {
+            const newSession = await startNewSession({
+              source: 'voice',
+              timestamp: new Date().toISOString()
+            })
+            sessionId = newSession?.id || undefined
+          }
+          
+          if (sessionId) {
+            hasPlayedIntroRef.current = true
+            hasSessionRef.current = true
+            await sendIntroMessage(sessionId)
+          }
+        }
+        
+        // Don't start recording on first tap - just play intro
+        console.log('🎤 Intro complete, ready for questions')
         
       } catch (error) {
-        console.error('🎤 Failed to start voice input:', error)
-        handleVoiceError(error instanceof Error ? error.message : 'Failed to start voice input')
-        setIsVoiceInputActive(false)
+        console.error('🎤 Failed during activation:', error)
+        handleVoiceError(error instanceof Error ? error.message : 'Failed to activate Harper')
         setIsHarperActivated(false)
       }
     } else {
-      // Already activated - start recording
-      console.log('🎤 Starting voice recording')
+      // Already activated - start recording for questions
+      console.log('🎤 Starting voice recording for question')
       setIsVoiceInputActive(true)
       unifiedVoice.startListening()
     }
@@ -481,11 +490,11 @@ export default function Home() {
                 )}
               </div>
             ) : isHarperActivated ? (
-              <p className="text-blue-300 text-lg">Tap to speak to Harper</p>
+              <p className="text-blue-300 text-lg">Tap to ask Harper a question</p>
             ) : (
               <div className="text-center">
                 <p className="text-gray-300 text-lg mb-2">
-                  Tap to start voice chat with Harper
+                  Tap to meet Harper
                 </p>
                 {isIOS && !isUnlocked && (
                   <p className="text-blue-300 text-sm">
