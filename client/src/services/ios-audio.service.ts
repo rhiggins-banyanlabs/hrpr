@@ -1,4 +1,6 @@
 // iOS-compatible audio service that handles autoplay restrictions
+import { chunkedOpenAITTS } from './chunked-openai-tts.service';
+
 export class IOSAudioService {
   private static instance: IOSAudioService | null = null;
   private audioContext: AudioContext | null = null;
@@ -845,7 +847,7 @@ export class IOSAudioService {
     return this.wakeLock !== null && !this.wakeLock.released;
   }
   
-  // Speak text with iOS compatibility - SPEED OPTIMIZED
+  // Speak text with CHUNKED OpenAI TTS - iOS workaround implementation
   public async speakText(
     text: string,
     options: {
@@ -860,244 +862,45 @@ export class IOSAudioService {
     const startTime = performance.now();
     
     try {
-      console.log(`🔊 [SPEED] Starting TTS for: "${text.substring(0, 50)}..."`);
-      console.log(`🔊 [SPEED] iOS device: ${this.isIOSDevice()}, waiting for API: ${isWaitingForAPI}`);
+      console.log(`🔊 [CHUNKED-TTS] Starting CHUNKED OpenAI TTS for: "${text.substring(0, 50)}..."`);
+      console.log(`🔊 [CHUNKED-TTS] iOS device: ${this.isIOSDevice()}, text length: ${text.length}`);
       
-      if (this.isIOSDevice()) {
-        console.log('🗣️ [iOS SOLUTION] Using native iOS TTS to eliminate audio timeout/blocking issues');
-        console.log('🗣️ [iOS SOLUTION] Native TTS starts instantly and is never blocked by iOS audio restrictions');
-      }
-      
-      // Prevent concurrent TTS calls that could cause issues
+      // Prevent concurrent TTS calls
       if (this.isPreparingAudio) {
-        console.log('🔊 [SPEED] Already preparing audio, stopping current...');
+        console.log('🔊 [CHUNKED-TTS] Already preparing audio, stopping current...');
+        this.stopSpeaking();
       }
       this.isPreparingAudio = true;
       
       // Stop current speech if playing
       this.stopSpeaking();
       
-      // FOR iOS: ALWAYS use native speech synthesis (instant, never blocked, better reliability)
-      if (this.isIOSDevice() && this.speechSynthesis) {
-        console.log('🗣️ [NATIVE] Using iOS native speech synthesis for ALL responses (filler, main, feedback)');
-        console.log('🗣️ [NATIVE] This ensures instant playback without audio blocking issues');
-        
-        try {
-          await this.speakWithNativeSynthesis(text, {
-            onStart,
-            onEnd: () => {
-              this.isPreparingAudio = false;
-              onEnd?.();
-            },
-            onError: (error) => {
-              console.error('🗣️ [NATIVE] Native synthesis failed:', error);
-              // For iOS, we'll still try to fall back to OpenAI TTS if native fails
-              // But native should virtually never fail on iOS devices
-            }
-          });
-          
-          // If we get here, native synthesis succeeded
-          console.log('🗣️ [NATIVE] Native synthesis completed successfully - no audio blocking!');
-          return;
-          
-        } catch (nativeError) {
-          console.warn('🗣️ [NATIVE] Native synthesis failed (rare), falling back to OpenAI TTS:', nativeError);
-          // Continue to OpenAI TTS fallback below (this should be very rare)
+      // Use the new CHUNKED OpenAI TTS approach (iOS workaround)
+      console.log('🔊 [CHUNKED-TTS] Using new chunked OpenAI TTS implementation');
+      
+      await chunkedOpenAITTS.playText(
+        text,
+        voice,
+        () => {
+          console.log('🔊 [CHUNKED-TTS] Playback started');
+          this.isSpeaking = true;
+          onStart?.();
+        },
+        () => {
+          console.log('🔊 [CHUNKED-TTS] Playback completed');
+          this.isSpeaking = false;
+          this.isPreparingAudio = false;
+          onEnd?.();
+        },
+        (error) => {
+          console.error('🔊 [CHUNKED-TTS] Playback failed:', error);
+          this.isSpeaking = false;
+          this.isPreparingAudio = false;
+          onError?.(error);
         }
-      }
+      );
       
-      // Stop keep-alive if it's running (we're about to play real audio)
-      // UNLESS we're waiting for API (filler response)
-      if (!isWaitingForAPI) {
-        console.log('🔊 Not waiting for API, stopping keep-alive before playback');
-        this.stopKeepAlive();
-      } else {
-        console.log('🔊 Waiting for API, keeping keep-alive running during filler audio');
-      }
-      
-      // Start TTS API call immediately - don't wait for context prep
-      console.log('🚀 Starting TTS API call immediately for speed');
-      const ttsPromise = this.getTTSAudio(text, voice);
-      
-      // Do context prep in parallel with TTS API call
-      const contextPromise = this.isIOSDevice() ? (async () => {
-        console.log('🔓 Preparing audio context in parallel...');
-        
-        // Quick context check/creation
-        if (!this.audioContext || this.audioContext.state === 'closed') {
-          this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-        }
-        
-        // Only resume if needed
-        if (this.audioContext.state === 'suspended') {
-          await this.audioContext.resume();
-        }
-        
-        this.isUnlocked = true;
-        console.log('🔓 Context ready:', this.audioContext.state);
-      })() : Promise.resolve();
-      
-      // Wait for both TTS and context prep to complete
-      const [audioBuffer] = await Promise.all([ttsPromise, contextPromise]);
-      const ttsCompleteTime = performance.now();
-      console.log(`🔊 [SPEED] TTS API completed in ${(ttsCompleteTime - startTime).toFixed(0)}ms`);
-      
-      // Try to reuse gesture audio element if it's recent enough (within 30 seconds)
-      const gestureAge = Date.now() - this.lastUserGesture;
-      let audio: HTMLAudioElement;
-      
-      if (this.gestureAudio && gestureAge < 30000 && this.isIOSDevice()) {
-        console.log(`🔓 [GESTURE] Reusing gesture audio (${gestureAge}ms old)`);
-        // Replace the audio source with our TTS data
-        const audioBlob = new Blob([audioBuffer], { type: 'audio/mpeg' });
-        const audioUrl = URL.createObjectURL(audioBlob);
-        
-        // Clean up old URL if exists
-        if (this.gestureAudio.src) {
-          URL.revokeObjectURL(this.gestureAudio.src);
-        }
-        
-        this.gestureAudio.src = audioUrl;
-        this.gestureAudio.load();
-        this.gestureAudio.volume = 1.0; // Full volume for actual content
-        audio = this.gestureAudio;
-        
-        // Don't null gestureAudio yet - keep it for next use
-      } else {
-        // Create new audio element
-        console.log(`🔊 Creating new audio element (gesture age: ${gestureAge}ms)`);
-        audio = await this.createAudioElement(audioBuffer);
-      }
-      
-      this.currentAudio = audio;
-      this.isSpeaking = true;
-      
-      const audioCreatedTime = performance.now();
-      console.log(`🔊 [SPEED] Audio element created in ${(audioCreatedTime - ttsCompleteTime).toFixed(0)}ms`);
-      
-      // Set up event listeners
-      audio.onloadstart = () => {
-        console.log('🔊 Audio loading started');
-      };
-      
-      audio.oncanplay = () => {
-        console.log('🔊 Audio can play');
-      };
-      
-      audio.onplay = () => {
-        const playStartTime = performance.now();
-        console.log(`🔊 [SPEED] Audio playback started - total time: ${(playStartTime - startTime).toFixed(0)}ms`);
-        onStart?.();
-      };
-      
-      audio.onended = () => {
-        const endTime = performance.now();
-        console.log(`🔊 [SPEED] Audio playback ended - total time: ${(endTime - startTime).toFixed(0)}ms`);
-        this.isSpeaking = false;
-        this.currentAudio = null;
-        this.isPreparingAudio = false;
-        URL.revokeObjectURL(audio.src);
-        onEnd?.();
-      };
-      
-      audio.onerror = (event) => {
-        console.error('🔊 Audio playback error:', event);
-        this.isSpeaking = false;
-        this.currentAudio = null;
-        this.isPreparingAudio = false;
-        URL.revokeObjectURL(audio.src);
-        onError?.(new Error('Audio playback failed'));
-      };
-      
-      // Try to play the audio IMMEDIATELY with retry logic
-      try {
-        console.log('🔊 [PLAY] Attempting immediate playback...');
-        const playPromise = audio.play();
-        
-        if (playPromise !== undefined) {
-          await playPromise;
-        }
-        console.log('🔊 [PLAY] Playback started successfully');
-      } catch (playError: any) {
-        console.error('🔊 [PLAY] First attempt failed:', playError.message);
-        
-        // EMERGENCY RETRY LOGIC for iOS
-        if (this.isIOSDevice() && playError.name === 'NotAllowedError') {
-          console.log('🔊 [RETRY] Attempting emergency retry with fresh gesture audio...');
-          
-          try {
-            // Force create a new gesture audio and try again
-            console.log('🔊 [RETRY] Creating emergency gesture audio...');
-            const gestureAudio = new Audio(this.createSilentAudioDataURL('short'));
-            gestureAudio.volume = 0.001;
-            gestureAudio.preload = 'auto';
-            
-            // Play it immediately to establish the gesture connection
-            await gestureAudio.play();
-            gestureAudio.pause(); // Pause the silent audio
-            
-            // Now load our actual TTS content
-            const audioBlob = new Blob([audioBuffer], { type: 'audio/mpeg' });
-            const audioUrl = URL.createObjectURL(audioBlob);
-            gestureAudio.src = audioUrl;
-            gestureAudio.load();
-            gestureAudio.volume = 1.0;
-            
-            // Try to play the TTS
-            const retryPromise = gestureAudio.play();
-            if (retryPromise) {
-              await retryPromise;
-              console.log('🔊 [RETRY] Emergency retry successful!');
-              
-              // Update current audio reference and gesture audio
-              this.currentAudio = gestureAudio;
-              this.gestureAudio = gestureAudio;
-              return; // Success!
-            }
-          } catch (retryError) {
-            console.error('🔊 [RETRY] Emergency retry also failed:', retryError);
-          }
-        }
-        
-        // If we get here, both attempts failed
-        console.error('🔊 All playback attempts failed:', playError);
-        console.error('🔊 Error details:', {
-          name: playError.name,
-          message: playError.message,
-          audioSrc: audio.src ? 'exists' : 'missing',
-          audioState: this.audioContext?.state,
-          isUnlocked: this.isUnlocked
-        });
-        
-        // Special handling for NotAllowedError
-        if (playError.name === 'NotAllowedError') {
-          console.error('🔊 NotAllowedError: User interaction required or autoplay blocked');
-          console.error('🔊 This usually means audio context needs user interaction');
-          
-          // Force reset audio unlock status
-          this.isUnlocked = false;
-          this.audioContext = null;
-          
-          const errorMessage = 'Audio playback blocked. Please tap the voice button again to enable audio.';
-          onError?.(new Error(errorMessage));
-          return;
-        }
-        
-        // Clean up
-        this.isSpeaking = false;
-        this.currentAudio = null;
-        this.isPreparingAudio = false;
-        URL.revokeObjectURL(audio.src);
-        
-        // Try to reset audio context for next attempt
-        if (this.isIOSDevice()) {
-          console.log('🔊 Resetting iOS audio for next attempt...');
-          this.isUnlocked = false;
-        }
-        
-        onError?.(playError instanceof Error ? playError : new Error('Audio playback failed'));
-        return;
-      }
+      return; // Exit early - chunked TTS handles everything
       
     } catch (error) {
       console.error('🔊 TTS error:', error);
@@ -1110,14 +913,19 @@ export class IOSAudioService {
   
   // Stop current speech
   public stopSpeaking(): void {
-    // Stop native iOS speech synthesis if active
+    console.log('🔊 [STOP] Stopping all TTS playback');
+    
+    // Stop chunked TTS if active
+    chunkedOpenAITTS.stopPlayback();
+    
+    // Stop native iOS speech synthesis if active (legacy)
     if (this.currentUtterance && this.speechSynthesis) {
       console.log('🔊 Stopping native iOS speech synthesis');
       this.speechSynthesis.cancel();
       this.currentUtterance = null;
     }
     
-    // Stop OpenAI TTS audio if active
+    // Stop OpenAI TTS audio if active (legacy)
     if (this.currentAudio) {
       console.log('🔊 Stopping current audio');
       this.currentAudio.pause();
