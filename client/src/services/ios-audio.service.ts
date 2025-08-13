@@ -847,7 +847,7 @@ export class IOSAudioService {
     return this.wakeLock !== null && !this.wakeLock.released;
   }
   
-  // Speak text with CHUNKED OpenAI TTS - iOS workaround implementation
+  // Speak text with enhanced iOS audio handling
   public async speakText(
     text: string,
     options: {
@@ -856,18 +856,19 @@ export class IOSAudioService {
       onEnd?: () => void;
       onError?: (error: Error) => void;
       isWaitingForAPI?: boolean;
+      isStreamingChunk?: boolean; // NEW: Indicates this is from streaming
     } = {}
   ): Promise<void> {
-    const { voice = 'nova', onStart, onEnd, onError, isWaitingForAPI = false } = options;
+    const { voice = 'nova', onStart, onEnd, onError, isWaitingForAPI = false, isStreamingChunk = false } = options;
     const startTime = performance.now();
     
     try {
-      console.log(`🔊 [CHUNKED-TTS] Starting CHUNKED OpenAI TTS for: "${text.substring(0, 50)}..."`);
-      console.log(`🔊 [CHUNKED-TTS] iOS device: ${this.isIOSDevice()}, text length: ${text.length}`);
+      console.log(`🔊 [TTS] Starting TTS for: "${text.substring(0, 50)}..."`);
+      console.log(`🔊 [TTS] iOS device: ${this.isIOSDevice()}, text length: ${text.length}, streaming: ${isStreamingChunk}`);
       
       // Prevent concurrent TTS calls
       if (this.isPreparingAudio) {
-        console.log('🔊 [CHUNKED-TTS] Already preparing audio, stopping current...');
+        console.log('🔊 [TTS] Already preparing audio, stopping current...');
         this.stopSpeaking();
       }
       this.isPreparingAudio = true;
@@ -875,32 +876,47 @@ export class IOSAudioService {
       // Stop current speech if playing
       this.stopSpeaking();
       
-      // Use the new CHUNKED OpenAI TTS approach (iOS workaround)
-      console.log('🔊 [CHUNKED-TTS] Using new chunked OpenAI TTS implementation');
+      // FOR STREAMING: Use fast single requests (no chunking to avoid overlap)
+      if (isStreamingChunk) {
+        console.log('🔊 [STREAMING-TTS] Using fast single request for streaming chunk');
+        return await this.playStreamingChunk(text, voice, onStart, onEnd, onError);
+      }
       
-      await chunkedOpenAITTS.playText(
-        text,
-        voice,
-        () => {
-          console.log('🔊 [CHUNKED-TTS] Playback started');
-          this.isSpeaking = true;
-          onStart?.();
-        },
-        () => {
-          console.log('🔊 [CHUNKED-TTS] Playback completed');
-          this.isSpeaking = false;
-          this.isPreparingAudio = false;
-          onEnd?.();
-        },
-        (error) => {
-          console.error('🔊 [CHUNKED-TTS] Playback failed:', error);
-          this.isSpeaking = false;
-          this.isPreparingAudio = false;
-          onError?.(error);
-        }
-      );
+      // FOR NON-STREAMING: Use chunked TTS only for very long responses
+      if (this.isIOSDevice() && text.length > 300 && !isStreamingChunk) {
+        console.log('🔊 [CHUNKED-TTS] Long non-streaming text - using chunked approach');
+        
+        // CRITICAL: Inject this iOS service into chunked TTS for context management
+        chunkedOpenAITTS.setIOSAudioService(this);
+        
+        await chunkedOpenAITTS.playText(
+          text,
+          voice,
+          () => {
+            console.log('🔊 [CHUNKED-TTS] Playback started');
+            this.isSpeaking = true;
+            onStart?.();
+          },
+          () => {
+            console.log('🔊 [CHUNKED-TTS] Playback completed');
+            this.isSpeaking = false;
+            this.isPreparingAudio = false;
+            onEnd?.();
+          },
+          (error) => {
+            console.error('🔊 [CHUNKED-TTS] Playback failed:', error);
+            this.isSpeaking = false;
+            this.isPreparingAudio = false;
+            onError?.(error);
+          }
+        );
+        
+        return; // Exit early - chunked TTS handles everything
+      }
       
-      return; // Exit early - chunked TTS handles everything
+      // FOR EVERYTHING ELSE: Use fast single request
+      console.log('🔊 [SINGLE-TTS] Using single request approach');
+      return await this.playStreamingChunk(text, voice, onStart, onEnd, onError);
       
     } catch (error) {
       console.error('🔊 TTS error:', error);
@@ -908,6 +924,151 @@ export class IOSAudioService {
       this.currentAudio = null;
       this.isPreparingAudio = false;
       onError?.(error instanceof Error ? error : new Error('Unknown TTS error'));
+    }
+  }
+  
+  // Fast single request for streaming chunks - optimized for speed
+  private async playStreamingChunk(
+    text: string, 
+    voice: string, 
+    onStart?: () => void, 
+    onEnd?: () => void, 
+    onError?: (error: Error) => void
+  ): Promise<void> {
+    try {
+      console.log('🔊 [STREAMING-TTS] Making fast TTS request for streaming chunk');
+      
+      // Ensure iOS context is active
+      if (this.isIOSDevice()) {
+        // Quick context prep without blocking
+        if (!this.audioContext || this.audioContext.state === 'closed') {
+          this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        }
+        if (this.audioContext.state === 'suspended') {
+          this.audioContext.resume().catch(e => console.log('Context resume failed:', e));
+        }
+        this.isUnlocked = true;
+      }
+      
+      const response = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: text,
+          voice: voice,
+          model: 'tts-1',
+          response_format: 'mp3',
+          speed: 1.3
+        }),
+        signal: AbortSignal.timeout(8000) // Fast timeout for streaming
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`TTS API failed: ${response.status} - ${errorText}`);
+      }
+      
+      const audioBuffer = await response.arrayBuffer();
+      
+      if (audioBuffer.byteLength === 0) {
+        throw new Error('Received empty audio from TTS API');
+      }
+      
+      // Try to reuse gesture audio if available and recent
+      const gestureAge = Date.now() - this.lastUserGesture;
+      let audio: HTMLAudioElement;
+      
+      if (this.gestureAudio && gestureAge < 30000 && this.isIOSDevice()) {
+        console.log('🔊 [STREAMING-TTS] Reusing gesture audio');
+        audio = this.gestureAudio;
+        
+        // Clean up old URL
+        if (audio.src) {
+          URL.revokeObjectURL(audio.src);
+        }
+        
+        // Set new audio
+        const audioBlob = new Blob([audioBuffer], { type: 'audio/mpeg' });
+        const audioUrl = URL.createObjectURL(audioBlob);
+        audio.src = audioUrl;
+        audio.load();
+        audio.volume = 1.0;
+      } else {
+        // Create new audio element
+        console.log('🔊 [STREAMING-TTS] Creating new audio element');
+        const audioBlob = new Blob([audioBuffer], { type: 'audio/mpeg' });
+        const audioUrl = URL.createObjectURL(audioBlob);
+        audio = new Audio(audioUrl);
+        
+        if (this.isIOSDevice()) {
+          audio.preload = 'auto';
+          audio.controls = false;
+          audio.autoplay = false;
+          audio.load();
+        }
+      }
+      
+      this.currentAudio = audio;
+      this.isSpeaking = true;
+      
+      // Set up event listeners
+      return new Promise<void>((resolve, reject) => {
+        const timeoutId = setTimeout(() => {
+          console.error('🔊 [STREAMING-TTS] Playback timeout');
+          this.isSpeaking = false;
+          this.currentAudio = null;
+          this.isPreparingAudio = false;
+          if (audio.src) URL.revokeObjectURL(audio.src);
+          reject(new Error('Streaming TTS timeout'));
+        }, 10000);
+        
+        audio.onplay = () => {
+          console.log('🔊 [STREAMING-TTS] Audio started');
+          onStart?.();
+        };
+        
+        audio.onended = () => {
+          console.log('🔊 [STREAMING-TTS] Audio ended');
+          clearTimeout(timeoutId);
+          this.isSpeaking = false;
+          this.currentAudio = null;
+          this.isPreparingAudio = false;
+          if (audio.src) URL.revokeObjectURL(audio.src);
+          onEnd?.();
+          resolve();
+        };
+        
+        audio.onerror = (event) => {
+          console.error('🔊 [STREAMING-TTS] Audio error:', event);
+          clearTimeout(timeoutId);
+          this.isSpeaking = false;
+          this.currentAudio = null;
+          this.isPreparingAudio = false;
+          if (audio.src) URL.revokeObjectURL(audio.src);
+          const error = new Error('Streaming TTS playback failed');
+          onError?.(error);
+          reject(error);
+        };
+        
+        // Try to play immediately
+        audio.play().catch(playError => {
+          console.error('🔊 [STREAMING-TTS] Play failed:', playError);
+          clearTimeout(timeoutId);
+          this.isSpeaking = false;
+          this.currentAudio = null;
+          this.isPreparingAudio = false;
+          if (audio.src) URL.revokeObjectURL(audio.src);
+          onError?.(playError);
+          reject(playError);
+        });
+      });
+      
+    } catch (error) {
+      console.error('🔊 [STREAMING-TTS] Failed:', error);
+      this.isSpeaking = false;
+      this.currentAudio = null;
+      this.isPreparingAudio = false;
+      throw error;
     }
   }
   

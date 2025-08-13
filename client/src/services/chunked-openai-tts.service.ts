@@ -5,10 +5,17 @@ export class ChunkedOpenAITTSService {
   private currentAudio: HTMLAudioElement | null = null;
   private readonly MAX_CHUNK_LENGTH = 100; // Characters per TTS request
   private readonly isiOS: boolean;
+  private iosAudioService: any = null; // Will be injected
   
   constructor() {
     this.isiOS = this.detectiOS();
     console.log('🔊 [CHUNKED-TTS] Initialized for', this.isiOS ? 'iOS' : 'non-iOS');
+  }
+  
+  // Inject iOS audio service for context management
+  setIOSAudioService(service: any) {
+    this.iosAudioService = service;
+    console.log('🔊 [CHUNKED-TTS] iOS audio service injected');
   }
   
   private detectiOS(): boolean {
@@ -27,6 +34,26 @@ export class ChunkedOpenAITTSService {
     try {
       console.log('🔊 [CHUNKED-TTS] Starting chunked playback for:', text.substring(0, 50));
       console.log('🔊 [CHUNKED-TTS] Text length:', text.length, 'iOS:', this.isiOS);
+      
+      // CRITICAL: Ensure iOS audio context is maintained
+      if (this.isiOS && this.iosAudioService) {
+        console.log('🔊 [CHUNKED-TTS] Ensuring iOS audio context is active...');
+        
+        // Start keep-alive to prevent iOS audio blocking
+        this.iosAudioService.startKeepAlive(true);
+        
+        // Ensure wake lock is active
+        await this.iosAudioService.requestWakeLock();
+        
+        // Check if audio is unlocked
+        if (!this.iosAudioService.isAudioUnlocked()) {
+          console.warn('🔊 [CHUNKED-TTS] Audio not unlocked, attempting unlock...');
+          const unlocked = await this.iosAudioService.manualUnlock();
+          if (!unlocked) {
+            throw new Error('iOS audio context not unlocked - user interaction required');
+          }
+        }
+      }
       
       // Stop any current playback
       this.stopPlayback();
@@ -50,6 +77,13 @@ export class ChunkedOpenAITTSService {
       onEnd?.();
     } catch (error) {
       console.error('🔊 [CHUNKED-TTS] All playback methods failed:', error);
+      
+      // Clean up iOS audio state on error
+      if (this.isiOS && this.iosAudioService) {
+        console.log('🔊 [CHUNKED-TTS] Cleaning up iOS audio state after error');
+        this.iosAudioService.stopKeepAlive();
+      }
+      
       onError?.(error instanceof Error ? error : new Error('TTS playback failed'));
       throw error;
     }
@@ -148,7 +182,23 @@ export class ChunkedOpenAITTSService {
       }
       
       const audioUrl = URL.createObjectURL(blob);
-      const audio = new Audio(audioUrl);
+      
+      // Use iOS audio service's gesture audio if available
+      let audio: HTMLAudioElement;
+      if (this.isiOS && this.iosAudioService?.gestureAudio) {
+        console.log('🔊 [CHUNKED-TTS] Reusing iOS gesture audio for single request');
+        audio = this.iosAudioService.gestureAudio;
+        // Clean up old URL if exists
+        if (audio.src) {
+          URL.revokeObjectURL(audio.src);
+        }
+        audio.src = audioUrl;
+        audio.load();
+        audio.volume = 1.0;
+      } else {
+        console.log('🔊 [CHUNKED-TTS] Creating new audio element for single request');
+        audio = new Audio(audioUrl);
+      }
       
       // Apply iOS timeout prevention
       if (this.isiOS) {
@@ -258,6 +308,8 @@ export class ChunkedOpenAITTSService {
       console.log(`🔊 [CHUNKED-TTS] Got chunk audio blob, size: ${blob.size} bytes`);
       
       const audioUrl = URL.createObjectURL(blob);
+      
+      // Create audio element - prefer new elements for chunks to avoid conflicts
       const audio = new Audio(audioUrl);
       
       // Preload the audio
@@ -267,6 +319,11 @@ export class ChunkedOpenAITTSService {
       // Apply iOS fixes
       if (this.isiOS) {
         this.addTimeoutPrevention(audio);
+        
+        // Ensure audio context stays active during chunk creation
+        if (this.iosAudioService) {
+          this.iosAudioService.startKeepAlive(true);
+        }
       }
       
       // Add to queue

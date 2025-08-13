@@ -334,9 +334,18 @@ export const useChat = ({
                   // 🚀 INSTANTLY send sentence to TTS (this is the magic!)
                   if (speakText && sentence.trim()) {
                     console.log('🎯 [STREAMING] 🚀 INSTANT TTS for sentence:', sentence);
-                    speakText(sentence.trim()).catch(error => {
-                      console.error('🎯 [STREAMING] TTS error for sentence:', error);
-                    });
+                    // Mark this as a streaming chunk to prevent chunked TTS overlap
+                    if (typeof speakText === 'function') {
+                      // Enhanced voice hook - pass streaming flag
+                      (speakText as any)(sentence.trim(), { isStreamingChunk: true }).catch((error: any) => {
+                        console.error('🎯 [STREAMING] TTS error for sentence:', error);
+                      });
+                    } else {
+                      // Fallback for other voice hooks
+                      speakText(sentence.trim()).catch(error => {
+                        console.error('🎯 [STREAMING] TTS error for sentence:', error);
+                      });
+                    }
                   }
                   
                 } else if (parsed.type === 'complete') {

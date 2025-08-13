@@ -110,10 +110,11 @@ export const useEnhancedOptimizedVoice = () => {
   }, []);
   
   // Speak text with platform-specific handling
-  const speakText = useCallback(async (text: string, voiceOrOptions?: string | { voice?: string; isWaitingForAPI?: boolean }): Promise<void> => {
+  const speakText = useCallback(async (text: string, voiceOrOptions?: string | { voice?: string; isWaitingForAPI?: boolean; isStreamingChunk?: boolean }): Promise<void> => {
     // Handle both old signature (voice as string) and new signature (options object)
     const voice = typeof voiceOrOptions === 'string' ? voiceOrOptions : (voiceOrOptions?.voice || selectedVoice);
     const isWaitingForAPI = typeof voiceOrOptions === 'object' ? voiceOrOptions.isWaitingForAPI : false;
+    const isStreamingChunk = typeof voiceOrOptions === 'object' ? voiceOrOptions.isStreamingChunk : false;
     try {
       console.log(`🔊 Speaking text with OpenAI TTS (iOS: ${isIOSRef.current}):`, text.substring(0, 100));
       console.log('🔊 Using OpenAI TTS for all devices:', {
@@ -160,6 +161,7 @@ export const useEnhancedOptimizedVoice = () => {
           iosAudioService.speakText(text, {
             voice,
             isWaitingForAPI,
+            isStreamingChunk, // Pass streaming flag to iOS service
             onStart: () => {
               console.log('🔊 OpenAI TTS started');
               setIsSpeaking(true);
