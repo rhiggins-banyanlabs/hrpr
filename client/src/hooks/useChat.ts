@@ -232,8 +232,8 @@ export const useChat = ({
         // Silently fail
       }
 
-      // Start keep-alive FIRST for iOS to maintain audio context
-      console.log('🎯 [CHAT] Starting keep-alive before filler/API call');
+      // Ensure keep-alive is running (should already be from unlock, but double-check)
+      console.log('🎯 [CHAT] Ensuring keep-alive is active for API call');
       iosAudioService.startKeepAlive();
 
       // Get and play filler response immediately for better UX
