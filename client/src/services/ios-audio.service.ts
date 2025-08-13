@@ -555,6 +555,40 @@ export class IOSAudioService {
     return audio;
   }
   
+  // Debug function to list all available iOS voices with their properties
+  public listAvailableVoices(): void {
+    if (!this.speechSynthesis) {
+      console.log('🗣️ [DEBUG] Speech synthesis not available');
+      return;
+    }
+    
+    const voices = this.speechSynthesis.getVoices();
+    console.log('🗣️ [DEBUG] ===== ALL AVAILABLE iOS VOICES =====');
+    
+    voices.forEach(voice => {
+      if (voice.lang.startsWith('en')) {
+        console.log(`🗣️ [DEBUG] ${voice.name}`);
+        console.log(`   - Language: ${voice.lang}`);
+        console.log(`   - Local: ${voice.localService}`);
+        console.log(`   - Default: ${voice.default}`);
+        console.log(`   - URI: ${voice.voiceURI}`);
+        console.log('   ---');
+      }
+    });
+    
+    // Specifically look for the most reliable voices
+    const reliable = voices.filter(v => 
+      v.lang.startsWith('en') && 
+      v.localService !== false &&
+      (v.name === 'Samantha' || v.name === 'Alex' || v.name === 'Victoria')
+    );
+    
+    console.log('🗣️ [DEBUG] ===== MOST RELIABLE VOICES =====');
+    reliable.forEach(voice => {
+      console.log(`✅ ${voice.name} (${voice.lang}) - Local: ${voice.localService}`);
+    });
+  }
+
   // Preprocess text for more natural speech
   private preprocessTextForNaturalSpeech(text: string): string {
     let processedText = text;
@@ -748,30 +782,59 @@ export class IOSAudioService {
       if (this.speechSynthesis) {
         const voices = this.speechSynthesis.getVoices();
         
-        // Priority order: Enhanced voices > Premium voices > Standard voices
+        // iOS Native Voices - prioritize guaranteed local voices that never cause delays
         const preferredVoiceNames = [
-          'Samantha (Enhanced)', 'Samantha', // Female, very natural
-          'Alex (Enhanced)', 'Alex',         // Male, natural
-          'Victoria (Enhanced)', 'Victoria', // Female, professional
-          'Daniel (Enhanced)', 'Daniel',     // Male, British
-          'Karen (Enhanced)', 'Karen',       // Female, Australian
-          'Moira (Enhanced)', 'Moira',       // Female, Irish
+          // Tier 1: Core iOS voices (always local, never download)
+          'Samantha',     // Female US - most natural iOS voice
+          'Alex',         // Male US - classic iOS voice, very reliable
+          'Victoria',     // Female US - professional, clear
+          
+          // Tier 2: Standard iOS voices (local, reliable)
+          'Allison',      // Female US - warm, natural
+          'Ava',          // Female US - modern, clear
+          'Susan',        // Female US - classic
+          'Vicki',        // Female US - friendly
+          'Bruce',        // Male US - deep, clear
+          'Fred',         // Male US - standard
+          
+          // Tier 3: International but usually local
+          'Daniel',       // Male UK - British accent
+          'Kate',         // Female UK - British
+          'Karen',        // Female AU - Australian
+          'Moira',        // Female IE - Irish
         ];
         
         let selectedVoice = null;
         
-        // Try to find enhanced/premium voices first
+        // Filter to only LOCAL voices (no download required) for guaranteed speed
+        const localVoices = voices.filter(voice => 
+          voice.lang.startsWith('en') && 
+          voice.localService !== false // Ensure it's local
+        );
+        
+        console.log('🗣️ [NATURAL] Local voices available:', localVoices.map(v => `${v.name} (local: ${v.localService})`));
+        
+        // Try to find the best LOCAL voice from our preferred list
         for (const voiceName of preferredVoiceNames) {
-          selectedVoice = voices.find(voice => 
-            voice.lang.startsWith('en') && 
-            voice.name.includes(voiceName.split(' ')[0])
+          selectedVoice = localVoices.find(voice => 
+            voice.name === voiceName || voice.name.includes(voiceName)
           );
-          if (selectedVoice) break;
+          if (selectedVoice) {
+            console.log('🗣️ [NATURAL] Found preferred LOCAL voice:', selectedVoice.name);
+            break;
+          }
         }
         
-        // Fallback to any English voice
+        // Fallback to any local English voice
+        if (!selectedVoice && localVoices.length > 0) {
+          selectedVoice = localVoices[0]; // Use first available local voice
+          console.log('🗣️ [NATURAL] Using fallback LOCAL voice:', selectedVoice.name);
+        }
+        
+        // Last resort: any English voice (might not be local)
         if (!selectedVoice) {
           selectedVoice = voices.find(voice => voice.lang.startsWith('en'));
+          console.log('🗣️ [NATURAL] Using last resort voice (may not be local):', selectedVoice?.name || 'default');
         }
         
         if (selectedVoice) {

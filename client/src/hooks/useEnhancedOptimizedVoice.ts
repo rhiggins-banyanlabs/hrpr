@@ -150,6 +150,14 @@ export const useEnhancedOptimizedVoice = () => {
         console.log('🍎 Trying iOS NATIVE speech synthesis first');
         console.log('🍎 speechSynthesis available:', 'speechSynthesis' in window);
         
+        // Debug: List all available voices (only on first call)
+        if (typeof window !== 'undefined' && !(window as any).hasLoggedVoices) {
+          setTimeout(() => {
+            iosAudioService.listAvailableVoices();
+            (window as any).hasLoggedVoices = true;
+          }, 1000); // Delay to ensure voices are loaded
+        }
+        
         return new Promise<void>((resolve, reject) => {
           // Use the native speech synthesis method directly
           iosAudioService.speakWithNativeSynthesis(text, {
