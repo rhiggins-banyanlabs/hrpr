@@ -22,6 +22,8 @@ export default function Home() {
   const [showIOSHelper, setShowIOSHelper] = useState(false)
   const [iosHelperType, setIOSHelperType] = useState<'microphone' | 'audio' | 'both'>('both')
   const [permissionError, setPermissionError] = useState<string | null>(null)
+  const [debugLogs, setDebugLogs] = useState<string[]>([])
+  const [showDebugLogs, setShowDebugLogs] = useState(false)
 
   const { isSystemLocked } = useAdminAuth()
 
@@ -30,8 +32,57 @@ export default function Home() {
   const isProcessingVoiceQueryRef = useRef(false)
   const hasSessionRef = useRef(false)
 
+  // Add debug log function
+  const addDebugLog = useCallback((message: string) => {
+    const timestamp = new Date().toLocaleTimeString()
+    const logEntry = `${timestamp}: ${message}`
+    setDebugLogs(prev => [...prev.slice(-9), logEntry]) // Keep last 10 logs
+  }, [])
+
   // Chat storage hook
   const { currentSession, startNewSession, endSession } = useChatStorage()
+
+  // Add initial debug log
+  useEffect(() => {
+    addDebugLog(`🏠 App loaded - iOS: ${isIOS}, Platform: ${navigator.platform}`)
+  }, [isIOS, addDebugLog])
+
+  // Capture TTS-related console logs for debugging
+  useEffect(() => {
+    const originalLog = console.log
+    const originalError = console.error
+    const originalWarn = console.warn
+
+    console.log = (...args) => {
+      const message = args.join(' ')
+      if (message.includes('🔊') || message.includes('TTS') || message.includes('audio') || message.includes('🎵')) {
+        addDebugLog(`LOG: ${message}`)
+      }
+      originalLog(...args)
+    }
+
+    console.error = (...args) => {
+      const message = args.join(' ')
+      if (message.includes('🔊') || message.includes('TTS') || message.includes('audio') || message.includes('playback')) {
+        addDebugLog(`ERROR: ${message}`)
+      }
+      originalError(...args)
+    }
+
+    console.warn = (...args) => {
+      const message = args.join(' ')
+      if (message.includes('🔊') || message.includes('TTS') || message.includes('audio')) {
+        addDebugLog(`WARN: ${message}`)
+      }
+      originalWarn(...args)
+    }
+
+    return () => {
+      console.log = originalLog
+      console.error = originalError
+      console.warn = originalWarn
+    }
+  }, [addDebugLog])
   
   // Enhanced voice hooks for iOS compatibility
   const { speakText, isSpeaking, unlockAudio, preCacheIntroMessage, isUnlocked, error: voiceError, isIOS } = useEnhancedOptimizedVoice()
@@ -606,8 +657,11 @@ export default function Home() {
               <button
                 onClick={async () => {
                   try {
+                    addDebugLog('🧪 Starting TTS test...')
                     await speakText("Testing iOS audio playback")
+                    addDebugLog('✅ TTS test completed successfully')
                   } catch (e) {
+                    addDebugLog(`❌ TTS test failed: ${e}`)
                     console.error('TTS test failed:', e)
                   }
                 }}
@@ -652,8 +706,51 @@ export default function Home() {
               >
                 Test FFmpeg
               </button>
+              <button
+                onClick={() => setShowDebugLogs(!showDebugLogs)}
+                className="px-3 py-1 bg-yellow-600 text-white rounded text-xs"
+              >
+                {showDebugLogs ? 'Hide' : 'Show'} Debug
+              </button>
             </div>
           </div>
+
+          {/* Debug Log Panel */}
+          {showDebugLogs && (
+            <div className="mt-6 bg-black bg-opacity-80 border border-yellow-500 rounded-lg p-4 max-w-4xl">
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="text-yellow-300 font-bold text-sm">TTS Debug Logs</h3>
+                <button
+                  onClick={() => {
+                    setDebugLogs([])
+                    addDebugLog('Debug logs cleared')
+                  }}
+                  className="text-red-300 text-xs underline"
+                >
+                  Clear
+                </button>
+              </div>
+              <div className="text-xs text-white font-mono space-y-1 max-h-60 overflow-y-auto">
+                {debugLogs.length === 0 ? (
+                  <div className="text-gray-400">No logs yet. Try asking Harper a question or testing audio.</div>
+                ) : (
+                  debugLogs.map((log, index) => (
+                    <div 
+                      key={index} 
+                      className={`${
+                        log.includes('ERROR') ? 'text-red-300' : 
+                        log.includes('WARN') ? 'text-yellow-300' : 
+                        log.includes('🔊') || log.includes('TTS') ? 'text-green-300' : 
+                        'text-white'
+                      }`}
+                    >
+                      {log}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Instructions */}
           <div className="mt-8 text-center max-w-2xl">
