@@ -41,6 +41,9 @@ export default function Home() {
 
   // Chat storage hook
   const { currentSession, startNewSession, endSession } = useChatStorage()
+  
+  // Enhanced voice hooks for iOS compatibility
+  const { speakText, isSpeaking, unlockAudio, preCacheIntroMessage, isUnlocked, error: voiceError, isIOS } = useEnhancedOptimizedVoice()
 
   // Add initial debug log
   useEffect(() => {
@@ -83,9 +86,6 @@ export default function Home() {
       console.warn = originalWarn
     }
   }, [addDebugLog])
-  
-  // Enhanced voice hooks for iOS compatibility
-  const { speakText, isSpeaking, unlockAudio, preCacheIntroMessage, isUnlocked, error: voiceError, isIOS } = useEnhancedOptimizedVoice()
   
   // Debug iOS detection
   useEffect(() => {
