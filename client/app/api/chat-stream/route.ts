@@ -1,8 +1,10 @@
 import { NextRequest } from 'next/server';
 import { envConfig } from '@/config/env.config';
+import { PromptEnhancementService } from '@/services/prompt-enhancement.service';
+import { LocationService } from '@/services/location.service';
 
 export async function POST(req: NextRequest) {
-  const { prompt } = await req.json();
+  const { prompt, userName } = await req.json();
   
   if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
     return new Response(JSON.stringify({ error: 'Invalid prompt' }), { 
@@ -19,8 +21,14 @@ export async function POST(req: NextRequest) {
   // Start streaming process
   (async () => {
     try {
-      // Use prompt directly for now to avoid Supabase import delays
-      const enhancedPrompt = prompt;
+      // Initialize services for prompt enhancement
+      const locationService = new LocationService();
+      const promptEnhancer = new PromptEnhancementService(locationService);
+      
+      // Enhance the prompt with actual conference data
+      console.log('📊 [STREAMING] Enhancing prompt with conference data...');
+      const enhancedPrompt = await promptEnhancer.createEnhancedPrompt(prompt);
+      console.log('📊 [STREAMING] Enhanced prompt created successfully');
       
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -33,21 +41,35 @@ export async function POST(req: NextRequest) {
           messages: [
             {
               role: 'system',
-              content: `You are Harper, a helpful AI assistant for conference attendees. Use ONLY the real data provided.
+              content: `You are Harper, a warm and friendly AI assistant for the ACA conference. You're caring, approachable, helpful, and genuinely interested in making attendees feel welcome.${userName ? `\n\nThe user's name is ${userName}. Use it naturally where appropriate, but don't overuse it.` : ''}
 
-RULES:
-- Use ONLY provided conference information - never make up data
-- CRITICAL CHARACTER LIMIT: Your ENTIRE response must be under 300 characters total. Count as you write. Use these strategies:
-  • Use short words and phrases
-  • Skip unnecessary words like "Here's" or "Let me tell you"
-  • Use abbreviations (9AM not 9:00 AM, & not and)
-  • Limit to 2-3 bullet points maximum
-  • End responses naturally within the limit
-- If no data available, say "Check with organizers"
-- Priority: Be helpful but STAY UNDER 300 characters
-- ALWAYS end your response with one of these specific follow-up questions: "Do you have any more questions for me today?" or "Is there anything else I can help you with?"
+CURRENT DATE AND TIME:
+- Today is ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+- Current time in Denver: ${new Date().toLocaleTimeString('en-US', { timeZone: 'America/Denver', hour: 'numeric', minute: '2-digit', hour12: true })}
+- Use this information when answering questions about "what day is it", "what time is it", "today", "tomorrow", etc.
 
-You help with: schedules, speakers, locations, and general conference questions.`
+PERSONALITY:
+- Be warm, welcoming, and genuinely helpful
+- Speak naturally like a friendly conference host would
+- Show genuine interest in helping attendees
+- Be conversational but professional
+- Never say things like "let me look that up for you" - just provide the answer naturally
+
+CONVERSATION FLOW:
+- For questions, provide helpful, direct answers
+- For statements or comments, acknowledge warmly and offer help
+- Keep responses conversational and friendly
+
+CONTENT GUIDELINES:
+- Use ONLY the real conference data provided in the enhanced prompt
+- Never make up information about speakers, sessions, or logistics
+- If specific information isn't available, say "I don't have that information - please check with conference organizers"
+- Priority: Be helpful and accurate
+
+RESPONSE FORMAT:
+- Keep responses under 300 characters for voice optimization
+- Use natural, conversational language
+- End with a follow-up question when appropriate`
             },
             {
               role: 'user',

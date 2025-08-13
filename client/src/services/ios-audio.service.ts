@@ -35,14 +35,10 @@ export class IOSAudioService {
     }
   }
   
-  // Set up iOS native speech synthesis
+  // DISABLED: Set up iOS native speech synthesis (using OpenAI TTS exclusively)
   private setupSpeechSynthesis(): void {
-    if ('speechSynthesis' in window) {
-      this.speechSynthesis = window.speechSynthesis;
-      console.log('🗣️ iOS Speech Synthesis available');
-    } else {
-      console.log('🗣️ Speech Synthesis not available');
-    }
+    console.log('🗣️ [DISABLED] Native speech synthesis disabled - using OpenAI TTS exclusively');
+    this.speechSynthesis = null; // Force null to prevent any native synthesis calls
   }
   
   // Detect iOS devices
@@ -556,75 +552,19 @@ export class IOSAudioService {
     return audio;
   }
   
-  // Debug function to list all available iOS voices with their properties
+  // DISABLED: Debug function to list all available iOS voices (now using OpenAI TTS exclusively)
   public listAvailableVoices(): void {
-    if (!this.speechSynthesis) {
-      console.log('🗣️ [DEBUG] Speech synthesis not available');
-      return;
-    }
-    
-    const voices = this.speechSynthesis.getVoices();
-    console.log('🗣️ [DEBUG] ===== ALL AVAILABLE iOS VOICES =====');
-    console.log(`🗣️ [DEBUG] Total voices found: ${voices.length}`);
-    
-    voices.forEach((voice, index) => {
-      if (voice.lang.startsWith('en')) {
-        console.log(`🗣️ [DEBUG] [${index}] "${voice.name}"`);
-        console.log(`   - Language: ${voice.lang}`);
-        console.log(`   - Local: ${voice.localService}`);
-        console.log(`   - Default: ${voice.default}`);
-        console.log(`   - URI: ${voice.voiceURI}`);
-        console.log('   ---');
-      }
-    });
-    
-    // Look specifically for Enhanced/Premium voices
-    const enhancedVoices = voices.filter(v => 
-      v.name.includes('Enhanced') ||
-      v.name.includes('(Enhanced)') ||
-      v.name.toLowerCase().includes('premium') ||
-      v.voiceURI.toLowerCase().includes('enhanced') ||
-      v.voiceURI.toLowerCase().includes('premium')
-    );
-    
-    console.log('🗣️ [DEBUG] ===== ENHANCED/PREMIUM VOICES SEARCH =====');
-    if (enhancedVoices.length > 0) {
-      console.log(`🎯 Found ${enhancedVoices.length} Enhanced/Premium voice(s):`);
-      enhancedVoices.forEach(voice => {
-        console.log(`🎤 ENHANCED: "${voice.name}" - URI: ${voice.voiceURI} - Local: ${voice.localService}`);
-      });
-    } else {
-      console.log('❌ No Enhanced voices found in available voices');
-      console.log('🔍 Searching for voices containing "Ava", "Premium", "neural":');
-      
-      const alternativeVoices = voices.filter(v =>
-        v.name.includes('Ava') ||
-        v.name.includes('Samantha') ||
-        v.name.toLowerCase().includes('neural') ||
-        v.name.toLowerCase().includes('premium') ||
-        v.voiceURI.toLowerCase().includes('neural') ||
-        v.voiceURI.toLowerCase().includes('premium')
-      );
-      
-      alternativeVoices.forEach(voice => {
-        console.log(`🔍 ALTERNATIVE: "${voice.name}" - URI: ${voice.voiceURI}`);
-      });
-    }
-    
-    // Show the most reliable fallback voices
-    const reliable = voices.filter(v => 
-      v.lang.startsWith('en') && 
-      v.localService !== false &&
-      (v.name === 'Samantha' || v.name === 'Alex' || v.name === 'Victoria')
-    );
-    
-    console.log('🗣️ [DEBUG] ===== MOST RELIABLE FALLBACK VOICES =====');
-    reliable.forEach(voice => {
-      console.log(`✅ ${voice.name} (${voice.lang}) - Local: ${voice.localService}`);
-    });
+    console.log('🗣️ [DISABLED] Voice listing disabled - using OpenAI TTS voices exclusively');
+    return;
+  }
+  
+  // DISABLED: Text preprocessing for natural speech (only used by native synthesis)
+  private preprocessTextForSynthesis(text: string): string {
+    console.log('🗣️ [DISABLED] Text preprocessing disabled - using OpenAI TTS exclusively');
+    return text; // Return text as-is since we're using OpenAI TTS
   }
 
-  // Preprocess text for more natural speech (keep all punctuation, just improve flow)
+  // DISABLED: Preprocess text for more natural speech (only used by native synthesis)
   private preprocessTextForNaturalSpeech(text: string): string {
     let processedText = text;
     

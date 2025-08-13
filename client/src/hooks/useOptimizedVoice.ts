@@ -1,6 +1,7 @@
-// hooks/useOptimizedVoice.ts  – leak-proof version
+// hooks/useOptimizedVoice.ts  – leak-proof version with iOS enhancement
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { OpenAIVoice } from '@/features/voice/types/voice.types';
+import { iosAudioService } from '@/services/ios-audio.service';
 
 export const useOptimizedVoice = () => {
   /* ------------------------------------------------------------------ */
@@ -16,20 +17,51 @@ export const useOptimizedVoice = () => {
   // 🔑 every time we cancel speech we bump this number
   const speakGenRef = useRef(0);
 
+  // iOS detection
+  const isIOSDevice = useCallback(() => {
+    if (typeof window === 'undefined') return false;
+    const userAgent = navigator.userAgent;
+    const platform = navigator.platform;
+    const maxTouchPoints = navigator.maxTouchPoints;
+    
+    const isIOS = /iPad|iPhone|iPod/.test(userAgent) && !(window as any).MSStream;
+    const isIPadOS = platform === 'MacIntel' && maxTouchPoints > 1;
+    return isIOS || isIPadOS;
+  }, []);
+
   /* ------------------------------------------------------------------ */
   /*  HELPER: unlock audio (needed on iOS / Android)                    */
   /* ------------------------------------------------------------------ */
   const unlockAudio = useCallback(async () => {
     if (audioUnlockedRef.current) return;
-    try {
-      // Audio unlock is not critical - it's mainly for mobile browsers
-      console.log('🔒 Audio unlock not needed on desktop');
-      audioUnlockedRef.current = true; // Mark as unlocked anyway
-    } catch (err) {
-      console.log('🔒 Audio unlock not supported (this is normal)');
-      audioUnlockedRef.current = true; // Mark as unlocked anyway
+    
+    if (isIOSDevice()) {
+      console.log('🔒 [iOS] Using enhanced iOS audio unlock...');
+      try {
+        const success = await iosAudioService.manualUnlock();
+        audioUnlockedRef.current = success;
+        console.log('🔒 [iOS] Enhanced unlock result:', success);
+        
+        if (success) {
+          // Request wake lock and start keep-alive for iOS
+          await iosAudioService.requestWakeLock();
+          iosAudioService.startKeepAlive(true);
+        }
+      } catch (err) {
+        console.error('🔒 [iOS] Enhanced unlock failed:', err);
+        audioUnlockedRef.current = false;
+      }
+    } else {
+      // Non-iOS devices
+      try {
+        console.log('🔒 Audio unlock for non-iOS device');
+        audioUnlockedRef.current = true;
+      } catch (err) {
+        console.log('🔒 Audio unlock not supported (this is normal)');
+        audioUnlockedRef.current = true;
+      }
     }
-  }, []);
+  }, [isIOSDevice]);
 
   /* ------------------------------------------------------------------ */
   /*  STOP CURRENT SPEECH                                               */
@@ -38,6 +70,15 @@ export const useOptimizedVoice = () => {
     console.log('🔊 stopSpeaking called', { gentle })
     speakGenRef.current += 1; // invalidate in-flight speakText calls
     
+    // Stop iOS audio service if on iOS
+    if (isIOSDevice()) {
+      console.log('🔊 [iOS] Stopping iOS audio service');
+      iosAudioService.stopSpeaking();
+      setIsSpeaking(false);
+      return;
+    }
+    
+    // Non-iOS: Original audio element handling
     if (currentAudioRef.current) {
       if (gentle) {
         // Gentle stop: fade out audio over 200ms to prevent abrupt cutoff
@@ -70,7 +111,7 @@ export const useOptimizedVoice = () => {
     } else {
       setIsSpeaking(false);
     }
-  }, []);
+  }, [isIOSDevice]);
 
   /* ------------------------------------------------------------------ */
   /*  (FAST) DURATION ESTIMATE                                          */
@@ -138,9 +179,44 @@ export const useOptimizedVoice = () => {
       text: string,
       voice?: OpenAIVoice,
       speed?: number
-    ): Promise<{ audio: HTMLAudioElement; duration: number }> => {
-      if (!text.trim()) throw new Error('No text provided for TTS');
+    ): Promise<void> => {  // Changed return type to void for consistency
+      if (!text.trim()) {
+        console.log('🔊 No text provided for TTS');
+        return;
+      }
 
+      console.log('🔊 [OPTIMIZED] Starting TTS for text:', text.substring(0, 50));
+      
+      // Use iOS audio service for iOS devices
+      if (isIOSDevice()) {
+        console.log('🔊 [iOS] Using iOS audio service for TTS');
+        await unlockAudio(); // Ensure audio is unlocked first
+        
+        try {
+          await iosAudioService.speakText(text, {
+            voice: voice || selectedVoice,
+            onStart: () => {
+              console.log('🔊 [iOS] TTS started');
+              setIsSpeaking(true);
+            },
+            onEnd: () => {
+              console.log('🔊 [iOS] TTS ended');
+              setIsSpeaking(false);
+            },
+            onError: (error) => {
+              console.error('🔊 [iOS] TTS error:', error);
+              setIsSpeaking(false);
+            },
+          });
+        } catch (error) {
+          console.error('🔊 [iOS] TTS failed:', error);
+          setIsSpeaking(false);
+          throw error;
+        }
+        return;
+      }
+
+      // Non-iOS: Use original optimized approach
       await unlockAudio();
       stopSpeaking(true);                     // gentle stop to prevent cutoff
       
@@ -158,7 +234,7 @@ export const useOptimizedVoice = () => {
       /* ❌ Someone called stopSpeaking() meanwhile → abort */
       if (myGen !== speakGenRef.current) {
         URL.revokeObjectURL(audio.src);       // tidy up
-        return { audio, duration };
+        return;
       }
 
       currentAudioRef.current = audio;
@@ -222,9 +298,10 @@ export const useOptimizedVoice = () => {
         throw new Error(`Failed to play audio: ${playError instanceof Error ? playError.message : 'Unknown error'}`);
       }
       
-      return { audio, duration };
+      // Non-iOS audio playback completed
+      console.log('🔊 [Non-iOS] Audio playback initiated successfully');
     },
-    [unlockAudio, stopSpeaking, speakWithOptimizedTTS]
+    [unlockAudio, stopSpeaking, speakWithOptimizedTTS, selectedVoice, isIOSDevice]
   );
 
   /* ------------------------------------------------------------------ */
