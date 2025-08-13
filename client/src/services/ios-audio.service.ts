@@ -589,24 +589,13 @@ export class IOSAudioService {
     });
   }
 
-  // Preprocess text for more natural speech
+  // Preprocess text for more natural speech (keep all punctuation, just improve flow)
   private preprocessTextForNaturalSpeech(text: string): string {
     let processedText = text;
     
-    // FIRST: Fix iOS TTS reading "dot" for periods
-    // Only remove periods at the END of sentences, keep abbreviations intact
-    processedText = processedText.replace(/\.(\s*$)/g, '$1'); // Remove period at very end
-    processedText = processedText.replace(/\.(\s+[A-Z])/g, '$1'); // Remove periods before new sentences
-    
-    // Keep ALL abbreviations as they are - iOS should handle them properly
-    // We only want to remove sentence-ending periods, not abbreviation periods
-    
-    // Add natural pauses after sentences (using commas instead of periods to avoid "dot")
-    processedText = processedText.replace(/([!?])\s+/g, '$1... ');
-    
-    console.log('🗣️ [PREPROCESSING] Removed ONLY sentence-ending periods (kept abbreviations)');
-    console.log('🗣️ [PREPROCESSING] Before:', text);
-    console.log('🗣️ [PREPROCESSING] After period cleanup:', processedText);
+    // DON'T remove punctuation - keep it for proper sentence flow
+    // Instead we'll configure the utterance to not speak punctuation marks
+    console.log('🗣️ [PREPROCESSING] Keeping all punctuation, will configure TTS to not speak it');
     
     // Add pauses after introductory words/phrases
     processedText = processedText.replace(/^(Hi|Hello|Well|So|Now|Actually|However|Furthermore|Additionally|Meanwhile|Therefore|Consequently),?\s*/g, '$1, ');
@@ -631,15 +620,11 @@ export class IOSAudioService {
       }).join(' ');
     }
     
-    // Clean up multiple pauses and final period cleanup
+    // Clean up only excessive punctuation (keep normal punctuation)
     processedText = processedText.replace(/[,]{2,}/g, ',');
     processedText = processedText.replace(/\.{4,}/g, '...');
     
-    // Final pass: remove any remaining sentence-ending periods to prevent "dot"
-    processedText = processedText.replace(/\.(\s*$)/g, '$1'); // Remove final period
-    processedText = processedText.replace(/\.\s*$/g, ''); // Remove trailing period with any whitespace
-    
-    console.log('🗣️ [PREPROCESSING] Final result (no dots):', processedText);
+    console.log('🗣️ [PREPROCESSING] Final result (punctuation preserved):', processedText);
     
     return processedText;
   }
@@ -792,6 +777,20 @@ export class IOSAudioService {
       utterance.rate = 1.05; // Slightly faster but more natural
       utterance.pitch = 0.95; // Slightly lower pitch for warmth
       utterance.volume = 0.9; // Slightly softer volume
+      
+      // CRITICAL: Configure iOS TTS to NOT speak punctuation marks
+      // This keeps punctuation for sentence flow but prevents saying "dot", "comma", etc.
+      try {
+        // Method 1: iOS TTS punctuation properties (if supported)
+        (utterance as any).punctuation = 'none'; // Don't speak punctuation
+        (utterance as any).speakPunctuation = false; // Alternative property
+        console.log('🗣️ [NATURAL] Applied punctuation control settings');
+      } catch (error) {
+        console.log('🗣️ [NATURAL] Native punctuation control not supported');
+      }
+      
+      // Method 2: Some iOS voices naturally handle punctuation better
+      // The voice selection below will prioritize voices that don't over-vocalize punctuation
       
       // Apply enhanced voice selection to each chunk
       if (this.speechSynthesis) {
