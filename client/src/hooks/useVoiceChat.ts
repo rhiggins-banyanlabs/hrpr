@@ -212,11 +212,14 @@ export const useVoiceChat = ({
       // Create new abort controller for this request
       abortControllerRef.current = new AbortController();
 
-      // Get AI response from API route with latency tracking
-      console.log('🤖 Getting AI response...');
+      // 🚀 USE STREAMING for instant TTS instead of waiting for full response
+      console.log('🤖 Starting STREAMING AI response...');
       const apiStartTime = performance.now();
       
-      const response = await fetch('/api/chat', {
+      // Request wake lock for iOS
+      await iosAudioService.requestWakeLock();
+      
+      const response = await fetch('/api/chat-stream', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -233,133 +236,87 @@ export const useVoiceChat = ({
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const aiResponse = await response.json();
-      const apiEndTime = performance.now();
+      // Process streaming response
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('No response body for streaming');
       
-      // Track API response time
-      latencyTracker.trackApiResponse(apiStartTime, apiEndTime);
+      let fullResponse = '';
+      let isFirstChunk = true;
       
-      if (!aiResponse.success || !aiResponse.response) {
-        throw new Error(aiResponse.error || 'No response from AI');
-      }
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-      console.log('🤖 AI Response received:', aiResponse.response.substring(0, 50) + '...');
+          const chunk = new TextDecoder().decode(value);
+          const lines = chunk.split('\n');
 
-      // Generate TTS audio and save to database
-      if (speakText) {
-        console.log('🔊 Starting TTS generation...');
-        
-        // Audio overlap prevention is now handled by useOptimizedVoice.speakText()
-        // Speaking state is managed by useOptimizedVoice when audio actually plays
-        
-        try {
-          // Wait for filler response to complete if it's still playing
-          if (fillerAudioPromise) {
-            console.log('🔊 Waiting for filler response to complete...');
-            try {
-              const fillerResult = await fillerAudioPromise;
-            
-              // If filler has audio playing, wait for it to complete
-              if (fillerResult && fillerResult.audio) {
-                await new Promise<void>((resolve) => {
-                  const checkAudioComplete = () => {
-                    if (fillerResult.audio.ended || fillerResult.audio.paused) {
-                      console.log('🔊 Filler response completed');
-                      resolve();
-                    } else {
-                      // Check again in 100ms
-                      setTimeout(checkAudioComplete, 100);
-                    }
-                  };
-                  
-                  // Start checking immediately
-                  checkAudioComplete();
-                  
-                  // Fallback timeout after 5 seconds
-                  setTimeout(() => {
-                    console.log('🔊 Filler response timeout - continuing');
-                    resolve();
-                  }, 5000);
-                });
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6);
+              
+              try {
+                const parsed = JSON.parse(data);
                 
-                // Add small pause between filler and main response
-                await new Promise(resolve => setTimeout(resolve, 300));
+                if (parsed.type === 'sentence') {
+                  const sentence = parsed.content;
+                  fullResponse += sentence + ' ';
+                  
+                  console.log('🤖 [STREAMING] Got sentence:', sentence);
+                  
+                  // Wait for filler on first chunk
+                  if (isFirstChunk && fillerAudioPromise) {
+                    console.log('🔊 [STREAMING] Waiting for filler...');
+                    await fillerAudioPromise;
+                    isFirstChunk = false;
+                  }
+                  
+                  // 🚀 INSTANT TTS for each sentence!
+                  if (speakText && sentence.trim()) {
+                    console.log('🔊 [STREAMING] Instant TTS for:', sentence);
+                    speakText(sentence.trim()).catch(error => {
+                      console.error('🔊 [STREAMING] TTS error:', error);
+                    });
+                  }
+                  
+                } else if (parsed.type === 'complete') {
+                  fullResponse = parsed.fullText;
+                  console.log('🤖 [STREAMING] Complete:', fullResponse);
+                } else if (parsed.type === 'error') {
+                  throw new Error(parsed.error);
+                }
+              } catch (parseError) {
+                console.error('🤖 [STREAMING] Parse error:', parseError);
               }
-            } catch (fillerError) {
-              console.log('🔊 Filler response failed, continuing with main response:', fillerError);
             }
           }
-          
-          // Now play the main AI response with latency tracking
-          const ttsStartTime = performance.now();
-          const audioResult = await speakText(aiResponse.response);
-          const ttsEndTime = performance.now();
-          
-          // Track TTS generation time
-          latencyTracker.trackTTSGeneration(ttsStartTime, ttsEndTime);
-          
-          // Track the current audio to prevent overlaps
-          if (audioResult && audioResult.audio) {
-            currentAudioRef.current = audioResult.audio;
-            
-            // Wait for audio to actually complete and track playback time
-            const audioStartTime = performance.now();
-            await new Promise<void>((resolve) => {
-              const audio = audioResult.audio;
-              
-              const handleEnded = () => {
-                const audioEndTime = performance.now();
-                console.log('🔊 Speech completed');
-                
-                // Track audio playback time
-                latencyTracker.trackAudioPlayback(audioStartTime, audioEndTime);
-                
-                // Track complete interaction
-                latencyTracker.trackCompleteInteraction(
-                  apiEndTime - apiStartTime,
-                  ttsEndTime - ttsStartTime,
-                  audioEndTime - audioStartTime
-                );
-                
-                audio.removeEventListener('ended', handleEnded);
-                currentAudioRef.current = null;
-                
-                resolve();
-              };
-              
-              audio.addEventListener('ended', handleEnded);
-              
-              // Fallback timeout
-              setTimeout(() => {
-                const audioEndTime = performance.now();
-                console.log('🔊 Speech timeout - assuming completed');
-                
-                // Track audio playback time even on timeout
-                latencyTracker.trackAudioPlayback(audioStartTime, audioEndTime);
-                
-                audio.removeEventListener('ended', handleEnded);
-                currentAudioRef.current = null;
-                resolve();
-              }, 45000); // 45 second timeout - optimized for speed
-            });
-          }
-          
-        } catch (voiceError) {
-          console.error('🔊 Voice error:', voiceError);
         }
+      } finally {
+        reader.releaseLock();
       }
+      
+      const apiEndTime = performance.now();
+      latencyTracker.trackApiResponse(apiStartTime, apiEndTime);
+      
+      console.log('🤖 AI Streaming complete:', fullResponse.substring(0, 50) + '...');
+
+      // Streaming already handled TTS - just track completion
+      console.log('🔊 [STREAMING] TTS already handled during streaming');
+      
+      // Small delay to ensure last TTS chunk completes
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
       // Save Harper's response to database (non-blocking)
       const saveHarperMessagePromise = ChatStorageService.saveMessage(
         activeSessionId,
         'Harper',
-        aiResponse.response,
+        fullResponse.trim(),
         {
           metadata: { 
             isVoiceResponse: true,
-            processingTime: aiResponse.responseTime,
-            tokensUsed: aiResponse.tokensUsed,
-            cost: aiResponse.cost
+            isStreamed: true,
+            questionCategory: categorizeQuestion(text),
+            hasConferenceData: true
           }
         }
       ).then(savedMessage => {

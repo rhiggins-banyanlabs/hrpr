@@ -162,7 +162,7 @@ export const useChat = ({
     }
   }, [sessionId]);
 
-  // Optimized sendMessage without console logs
+  // STREAMING sendMessage with instant TTS and wake lock
   const sendMessage = useCallback(async (text: string, isVoiceInput: boolean = false) => {
     if (isProcessingRef.current || !text.trim() || !sessionId) {
       return;
@@ -175,6 +175,10 @@ export const useChat = ({
 
     isProcessingRef.current = true;
     setIsLoading(true);
+    
+    // Acquire wake lock to prevent iOS audio blocking
+    console.log('🔒 [STREAMING] Requesting iOS wake lock...');
+    await iosAudioService.requestWakeLock();
     
     if (unlockAudio) {
       await unlockAudio();
@@ -232,40 +236,26 @@ export const useChat = ({
         // Silently fail
       }
 
-      // Ensure keep-alive is running in persistent mode for long conversations
-      console.log('🎯 [CHAT] Enabling persistent keep-alive for conversation flow');
-      iosAudioService.startKeepAlive(true); // Force persistent mode
+      // Start persistent keep-alive AND play filler response
+      console.log('🎯 [STREAMING] Starting streaming with keep-alive + filler');
+      iosAudioService.startKeepAlive(true);
 
-      // Get and play filler response immediately for better UX
       let fillerAudioPromise: Promise<any> | null = null;
       const fillerResponse = IntentDetectorService.getFillerResponse(text);
       if (fillerResponse && speakText) {
-        console.log('🎯 [CHAT] Playing filler response:', fillerResponse);
-        // Try to pass flag to NOT stop keep-alive during filler
-        // Handle both function signatures
-        try {
-          // Try new signature first
-          fillerAudioPromise = (speakText as any)(fillerResponse, { isWaitingForAPI: true }).catch((error: any) => {
-            console.error('🎯 [CHAT] Filler response failed:', error);
-            return null;
-          });
-        } catch (e) {
-          // Fall back to old signature
-          fillerAudioPromise = speakText(fillerResponse).catch((error: any) => {
-            console.error('🎯 [CHAT] Filler response failed:', error);
-            return null;
-          });
-        }
+        console.log('🎯 [STREAMING] Playing filler while streaming starts:', fillerResponse);
+        fillerAudioPromise = (speakText as any)(fillerResponse, { isWaitingForAPI: true }).catch(() => null);
       }
 
       // Show thinking dots
       setIsBotThinking(true);
 
-      // Create new abort controller for this request
+      // Create new abort controller for streaming
       abortControllerRef.current = new AbortController();
 
-      // Call OpenAI Chat API
-      const response = await fetch('/api/chat', {
+      // ✨ USE STREAMING ENDPOINT for instant TTS ✨
+      console.log('🎯 [STREAMING] Starting OpenAI streaming...');
+      const response = await fetch('/api/chat-stream', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -278,77 +268,130 @@ export const useChat = ({
       });
 
       if (!response.ok) {
-        throw new Error(`Chat API request failed: ${response.status}`);
+        throw new Error(`Streaming API request failed: ${response.status}`);
       }
 
-      const data = await response.json();
-      
-      // DON'T stop keep-alive yet - we still need to play TTS and handle feedback
-      console.log('🎯 [CHAT] API response received, keeping keep-alive running for TTS/feedback');
-      
-      if (!data.success || !data.response) {
-        throw new Error(data.error || 'No response from OpenAI');
-      }
-      
-      const responseText = data.response;
+      // Process streaming response
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('No response body for streaming');
 
-      // Create bot message for UI
+      let fullText = '';
+      let currentSentence = '';
+      let isFirstChunk = true;
+      
+      // Create initial bot message
       const botMessage: Message = {
         id: `Harper-${Date.now()}`,
         sender: "Harper",
-        text: responseText,
+        text: '',
         timestamp: new Date(),
       };
-
-      // Add bot message to UI immediately
       setMessages(prevMessages => [...prevMessages, botMessage]);
+      
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-      // Start TTS and database save in parallel for better performance
-      const ttsPromise = playVoiceResponse(responseText, fillerAudioPromise);
-      const dbPromise = (async () => {
-        try {
-          const savedBotMessage = await ChatStorageService.saveMessage(
-            sessionId,
-            'Harper',
-            botMessage.text,
-            {
-              selectedVoice,
-              metadata: {
-                timestamp: new Date().toISOString(),
-                messageId: botMessage.id,
-                provider: data.provider,
-                cost: data.cost,
-                responseTime: data.responseTime,
-                tokensUsed: data.tokensUsed,
-                questionCategory: categorizeQuestion(text.trim()),
-                hasConferenceData: true
+          const chunk = new TextDecoder().decode(value);
+          const lines = chunk.split('\n');
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6);
+              
+              try {
+                const parsed = JSON.parse(data);
+                
+                if (parsed.type === 'sentence') {
+                  const sentence = parsed.content;
+                  fullText += sentence + ' ';
+                  
+                  console.log('🎯 [STREAMING] Got sentence chunk:', sentence);
+                  
+                  // Wait for filler to complete on first chunk
+                  if (isFirstChunk && fillerAudioPromise) {
+                    console.log('🎯 [STREAMING] Waiting for filler to complete...');
+                    await fillerAudioPromise;
+                    setIsBotThinking(false);
+                    isFirstChunk = false;
+                  }
+                  
+                  // Update UI with accumulating text
+                  setMessages(prev => prev.map(msg => 
+                    msg.id === botMessage.id 
+                      ? { ...msg, text: fullText.trim() }
+                      : msg
+                  ));
+                  
+                  // 🚀 INSTANTLY send sentence to TTS (this is the magic!)
+                  if (speakText && sentence.trim()) {
+                    console.log('🎯 [STREAMING] 🚀 INSTANT TTS for sentence:', sentence);
+                    speakText(sentence.trim()).catch(error => {
+                      console.error('🎯 [STREAMING] TTS error for sentence:', error);
+                    });
+                  }
+                  
+                } else if (parsed.type === 'complete') {
+                  console.log('🎯 [STREAMING] Stream complete. Full text:', parsed.fullText);
+                  fullText = parsed.fullText;
+                  
+                  // Update final message
+                  setMessages(prev => prev.map(msg => 
+                    msg.id === botMessage.id 
+                      ? { ...msg, text: fullText.trim() }
+                      : msg
+                  ));
+                  
+                } else if (parsed.type === 'error') {
+                  throw new Error(parsed.error);
+                }
+                
+              } catch (parseError) {
+                console.error('🎯 [STREAMING] Parse error:', parseError);
               }
             }
-          );
-        
-          // Update the local message with the saved ID
-          if (savedBotMessage) {
-            setMessages(prev => prev.map(msg => 
-              msg.id === botMessage.id 
-                ? { ...msg, id: savedBotMessage.id }
-                : msg
-            ));
           }
-        } catch (saveError) {
-          // Silently fail
         }
-      })();
+      } finally {
+        reader.releaseLock();
+      }
 
-      // Wait for both TTS and database save to complete
-      await Promise.all([ttsPromise, dbPromise]);
+      // Save final message to database
+      try {
+        const savedBotMessage = await ChatStorageService.saveMessage(
+          sessionId,
+          'Harper',
+          fullText.trim(),
+          {
+            selectedVoice,
+            metadata: {
+              timestamp: new Date().toISOString(),
+              messageId: botMessage.id,
+              isStreamed: true,
+              questionCategory: categorizeQuestion(text.trim()),
+              hasConferenceData: true
+            }
+          }
+        );
+        
+        if (savedBotMessage) {
+          setMessages(prev => prev.map(msg => 
+            msg.id === botMessage.id 
+              ? { ...msg, id: savedBotMessage.id }
+              : msg
+          ));
+        }
+      } catch (saveError) {
+        console.error('🎯 [STREAMING] DB save error:', saveError);
+      }
       
-      // Don't stop keep-alive here - let it persist for feedback sessions and follow-ups
-      console.log('🎯 [CHAT] TTS and DB save complete, keeping keep-alive running for potential feedback/follow-ups');
+      console.log('🎯 [STREAMING] ✅ Streaming complete with instant TTS!');
 
     } catch (error: any) {
-      // Always stop keep-alive on error
-      console.log('🎯 [CHAT] Stopping keep-alive due to error');
+      console.log('🎯 [STREAMING] ❌ Error, cleaning up...');
       iosAudioService.stopKeepAlive();
+      iosAudioService.releaseWakeLock();
       
       if (error.name === 'AbortError') {
         return;
@@ -376,6 +419,11 @@ export const useChat = ({
       }
       isProcessingRef.current = false;
       abortControllerRef.current = null;
+      
+      // Release wake lock when done
+      setTimeout(() => {
+        iosAudioService.releaseWakeLock();
+      }, 5000); // Keep wake lock for 5 more seconds after completion
     }
   }, [sessionId, selectedVoice, speakText, unlockAudio]);
 

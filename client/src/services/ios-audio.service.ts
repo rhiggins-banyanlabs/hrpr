@@ -18,6 +18,7 @@ export class IOSAudioService {
   private gestureAudio: HTMLAudioElement | null = null; // Audio element created during gesture
   private speechSynthesis: SpeechSynthesis | null = null; // iOS native speech synthesis
   private currentUtterance: SpeechSynthesisUtterance | null = null;
+  private wakeLock: any = null; // Screen Wake Lock API for iOS
   
   // Singleton pattern
   public static getInstance(): IOSAudioService {
@@ -937,6 +938,42 @@ export class IOSAudioService {
   // Utility delay function
   private delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+  
+  // iOS Wake Lock to prevent audio blocking
+  public async requestWakeLock(): Promise<boolean> {
+    try {
+      if ('wakeLock' in navigator) {
+        this.wakeLock = await (navigator as any).wakeLock.request('screen');
+        console.log('🔒 iOS wake lock acquired successfully');
+        
+        this.wakeLock.addEventListener('release', () => {
+          console.log('🔒 iOS wake lock released');
+        });
+        
+        return true;
+      } else {
+        console.log('🔒 Wake Lock API not supported on this device');
+        return false;
+      }
+    } catch (error) {
+      console.error('🔒 Failed to acquire wake lock:', error);
+      return false;
+    }
+  }
+  
+  // Release wake lock
+  public releaseWakeLock(): void {
+    if (this.wakeLock) {
+      this.wakeLock.release();
+      this.wakeLock = null;
+      console.log('🔒 Wake lock manually released');
+    }
+  }
+  
+  // Check if wake lock is active
+  public isWakeLockActive(): boolean {
+    return this.wakeLock !== null && !this.wakeLock.released;
   }
   
   // Speak text with iOS compatibility - SPEED OPTIMIZED
