@@ -556,7 +556,7 @@ export class IOSAudioService {
   }
   
   // Use iOS native speech synthesis as fallback
-  private async speakWithNativeSynthesis(
+  public async speakWithNativeSynthesis(
     text: string,
     options: {
       onStart?: () => void;

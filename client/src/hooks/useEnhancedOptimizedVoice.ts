@@ -145,39 +145,92 @@ export const useEnhancedOptimizedVoice = () => {
         }
       }
       
-      // ALWAYS use iOS-compatible audio service for iOS devices (includes FFmpeg conversion)
+      // TRY iOS native speech synthesis first, fallback to OpenAI TTS if needed
       if (isCurrentlyIOS) {
-        console.log('🍎 Using iOS audio service for TTS audio');
-        console.log('🍎 Is waiting for API:', isWaitingForAPI);
+        console.log('🍎 Trying iOS NATIVE speech synthesis first');
+        console.log('🍎 speechSynthesis available:', 'speechSynthesis' in window);
+        
         return new Promise<void>((resolve, reject) => {
-          // Set a timeout to prevent getting stuck in speaking state
-          const timeoutId = setTimeout(() => {
-            console.warn('🔊 iOS TTS timeout - forcing stop');
-            setIsSpeaking(false);
-            iosAudioService.stopSpeaking();
-            reject(new Error('TTS timeout'));
-          }, 10000); // 10 second timeout - if TTS takes longer than this, something is wrong
-          
-          iosAudioService.speakText(text, {
-            voice,
-            isWaitingForAPI,
+          // Use the native speech synthesis method directly
+          iosAudioService.speakWithNativeSynthesis(text, {
             onStart: () => {
-              console.log('🔊 iOS TTS started (with FFmpeg conversion)');
+              console.log('🔊 iOS Native TTS started successfully');
               setIsSpeaking(true);
             },
             onEnd: () => {
-              console.log('🔊 iOS TTS ended (FFmpeg converted audio)');
-              clearTimeout(timeoutId);
+              console.log('🔊 iOS Native TTS ended successfully');
               setIsSpeaking(false);
               resolve();
             },
             onError: (error) => {
-              console.error('🔊 iOS TTS error (during FFmpeg conversion):', error);
-              clearTimeout(timeoutId);
+              console.error('🔊 iOS Native TTS failed:', error);
+              console.log('🔊 Falling back to OpenAI TTS...');
               setIsSpeaking(false);
-              setError(error.message);
-              reject(error);
+              
+              // Fallback to OpenAI TTS
+              const timeoutId = setTimeout(() => {
+                console.warn('🔊 OpenAI TTS fallback timeout - forcing stop');
+                setIsSpeaking(false);
+                iosAudioService.stopSpeaking();
+                reject(new Error('TTS timeout'));
+              }, 15000);
+              
+              iosAudioService.speakText(text, {
+                voice,
+                isWaitingForAPI,
+                onStart: () => {
+                  console.log('🔊 OpenAI TTS fallback started');
+                  setIsSpeaking(true);
+                },
+                onEnd: () => {
+                  console.log('🔊 OpenAI TTS fallback ended');
+                  clearTimeout(timeoutId);
+                  setIsSpeaking(false);
+                  resolve();
+                },
+                onError: (fallbackError) => {
+                  console.error('🔊 OpenAI TTS fallback also failed:', fallbackError);
+                  clearTimeout(timeoutId);
+                  setIsSpeaking(false);
+                  setError(fallbackError.message);
+                  reject(fallbackError);
+                },
+              });
             },
+          }).catch((nativeError) => {
+            console.error('🔊 Native synthesis promise rejected:', nativeError);
+            console.log('🔊 Falling back to OpenAI TTS...');
+            setIsSpeaking(false);
+            
+            // Fallback to OpenAI TTS
+            const timeoutId = setTimeout(() => {
+              console.warn('🔊 OpenAI TTS fallback timeout - forcing stop');
+              setIsSpeaking(false);
+              iosAudioService.stopSpeaking();
+              reject(new Error('TTS timeout'));
+            }, 15000);
+            
+            iosAudioService.speakText(text, {
+              voice,
+              isWaitingForAPI,
+              onStart: () => {
+                console.log('🔊 OpenAI TTS fallback started');
+                setIsSpeaking(true);
+              },
+              onEnd: () => {
+                console.log('🔊 OpenAI TTS fallback ended');
+                clearTimeout(timeoutId);
+                setIsSpeaking(false);
+                resolve();
+              },
+              onError: (fallbackError) => {
+                console.error('🔊 OpenAI TTS fallback also failed:', fallbackError);
+                clearTimeout(timeoutId);
+                setIsSpeaking(false);
+                setError(fallbackError.message);
+                reject(fallbackError);
+              },
+            });
           });
         });
       } else {
