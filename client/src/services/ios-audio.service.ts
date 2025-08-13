@@ -594,21 +594,19 @@ export class IOSAudioService {
     let processedText = text;
     
     // FIRST: Fix iOS TTS reading "dot" for periods
-    // Remove periods at end of sentences (iOS TTS will naturally pause without saying "dot")
+    // Only remove periods at the END of sentences, keep abbreviations intact
     processedText = processedText.replace(/\.(\s*$)/g, '$1'); // Remove period at very end
     processedText = processedText.replace(/\.(\s+[A-Z])/g, '$1'); // Remove periods before new sentences
     
-    // Keep periods only in abbreviations and decimals where they belong
-    // This regex preserves: Dr. Mr. Mrs. U.S. etc. and numbers like 3.14
-    processedText = processedText.replace(/\b([A-Z][a-z]*)\.\s+([A-Z])/g, '$1 $2'); // Dr. Smith -> Dr Smith
-    processedText = processedText.replace(/\b(Mr|Mrs|Ms|Dr|Prof|St|Ave|Blvd)\./g, '$1'); // Remove common abbreviation periods
+    // Keep ALL abbreviations as they are - iOS should handle them properly
+    // We only want to remove sentence-ending periods, not abbreviation periods
     
     // Add natural pauses after sentences (using commas instead of periods to avoid "dot")
     processedText = processedText.replace(/([!?])\s+/g, '$1... ');
     
-    console.log('🗣️ [PREPROCESSING] Removed periods to prevent "dot" reading');
-    console.log('🗣️ [PREPROCESSING] Before period fix:', text);
-    console.log('🗣️ [PREPROCESSING] After period fix:', processedText);
+    console.log('🗣️ [PREPROCESSING] Removed ONLY sentence-ending periods (kept abbreviations)');
+    console.log('🗣️ [PREPROCESSING] Before:', text);
+    console.log('🗣️ [PREPROCESSING] After period cleanup:', processedText);
     
     // Add pauses after introductory words/phrases
     processedText = processedText.replace(/^(Hi|Hello|Well|So|Now|Actually|However|Furthermore|Additionally|Meanwhile|Therefore|Consequently),?\s*/g, '$1, ');
