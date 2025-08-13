@@ -593,8 +593,22 @@ export class IOSAudioService {
   private preprocessTextForNaturalSpeech(text: string): string {
     let processedText = text;
     
-    // Add natural pauses after sentences
-    processedText = processedText.replace(/([.!?])\s+/g, '$1... ');
+    // FIRST: Fix iOS TTS reading "dot" for periods
+    // Remove periods at end of sentences (iOS TTS will naturally pause without saying "dot")
+    processedText = processedText.replace(/\.(\s*$)/g, '$1'); // Remove period at very end
+    processedText = processedText.replace(/\.(\s+[A-Z])/g, '$1'); // Remove periods before new sentences
+    
+    // Keep periods only in abbreviations and decimals where they belong
+    // This regex preserves: Dr. Mr. Mrs. U.S. etc. and numbers like 3.14
+    processedText = processedText.replace(/\b([A-Z][a-z]*)\.\s+([A-Z])/g, '$1 $2'); // Dr. Smith -> Dr Smith
+    processedText = processedText.replace(/\b(Mr|Mrs|Ms|Dr|Prof|St|Ave|Blvd)\./g, '$1'); // Remove common abbreviation periods
+    
+    // Add natural pauses after sentences (using commas instead of periods to avoid "dot")
+    processedText = processedText.replace(/([!?])\s+/g, '$1... ');
+    
+    console.log('🗣️ [PREPROCESSING] Removed periods to prevent "dot" reading');
+    console.log('🗣️ [PREPROCESSING] Before period fix:', text);
+    console.log('🗣️ [PREPROCESSING] After period fix:', processedText);
     
     // Add pauses after introductory words/phrases
     processedText = processedText.replace(/^(Hi|Hello|Well|So|Now|Actually|However|Furthermore|Additionally|Meanwhile|Therefore|Consequently),?\s*/g, '$1, ');
@@ -619,12 +633,15 @@ export class IOSAudioService {
       }).join(' ');
     }
     
-    // Clean up multiple pauses
+    // Clean up multiple pauses and final period cleanup
     processedText = processedText.replace(/[,]{2,}/g, ',');
     processedText = processedText.replace(/\.{4,}/g, '...');
     
-    console.log('🗣️ [PREPROCESSING] Original:', text);
-    console.log('🗣️ [PREPROCESSING] Processed:', processedText);
+    // Final pass: remove any remaining sentence-ending periods to prevent "dot"
+    processedText = processedText.replace(/\.(\s*$)/g, '$1'); // Remove final period
+    processedText = processedText.replace(/\.\s*$/g, ''); // Remove trailing period with any whitespace
+    
+    console.log('🗣️ [PREPROCESSING] Final result (no dots):', processedText);
     
     return processedText;
   }
