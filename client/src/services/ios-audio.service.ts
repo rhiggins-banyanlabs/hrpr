@@ -796,26 +796,37 @@ export class IOSAudioService {
       if (this.speechSynthesis) {
         const voices = this.speechSynthesis.getVoices();
         
-        // iOS Native Voices - prioritize guaranteed local voices that never cause delays
+        // iOS Native Voices - prioritize Siri and highest quality voices
         const preferredVoiceNames = [
-          // Tier 1: Core iOS voices (always local, never download)
-          'Samantha',     // Female US - most natural iOS voice
-          'Alex',         // Male US - classic iOS voice, very reliable
-          'Victoria',     // Female US - professional, clear
+          // Tier 0: Siri voices (highest quality neural voices)
+          'Siri Voice 4',  // The actual Siri voice name
+          'Siri Voice 3',  // Alternative Siri voices
+          'Siri Voice 2',
+          'Siri Voice 1',
+          'Siri Female',   // Generic Siri voice names
+          'Siri Male',     
+          'Nicky',         // Often Siri-related voice
+          'Fiona',         // High-quality neural voice
+          'Evan',          // High-quality male neural voice
+          
+          // Tier 1: Premium iOS neural voices (closest to Siri quality)
+          'Samantha',      // Female US - most natural iOS voice
+          'Alex',          // Male US - classic iOS voice, very reliable
+          'Victoria',      // Female US - professional, clear
+          'Allison',       // Female US - warm, natural (often neural)
+          'Ava',           // Female US - modern, clear (often neural)
           
           // Tier 2: Standard iOS voices (local, reliable)
-          'Allison',      // Female US - warm, natural
-          'Ava',          // Female US - modern, clear
-          'Susan',        // Female US - classic
-          'Vicki',        // Female US - friendly
-          'Bruce',        // Male US - deep, clear
-          'Fred',         // Male US - standard
+          'Susan',         // Female US - classic
+          'Vicki',         // Female US - friendly
+          'Bruce',         // Male US - deep, clear
+          'Fred',          // Male US - standard
           
-          // Tier 3: International but usually local
-          'Daniel',       // Male UK - British accent
-          'Kate',         // Female UK - British
-          'Karen',        // Female AU - Australian
-          'Moira',        // Female IE - Irish
+          // Tier 3: International premium voices
+          'Daniel',        // Male UK - British accent
+          'Kate',          // Female UK - British
+          'Karen',         // Female AU - Australian
+          'Moira',         // Female IE - Irish
         ];
         
         let selectedVoice = null;
@@ -828,14 +839,42 @@ export class IOSAudioService {
         
         console.log('🗣️ [NATURAL] Local voices available:', localVoices.map(v => `${v.name} (local: ${v.localService})`));
         
-        // Try to find the best LOCAL voice from our preferred list
-        for (const voiceName of preferredVoiceNames) {
-          selectedVoice = localVoices.find(voice => 
-            voice.name === voiceName || voice.name.includes(voiceName)
-          );
-          if (selectedVoice) {
-            console.log('🗣️ [NATURAL] Found preferred LOCAL voice:', selectedVoice.name);
-            break;
+        // Look for Siri voices specifically (prioritize "Siri Voice 4")
+        const possibleSiriVoices = localVoices.filter(voice => 
+          voice.name.includes('Siri Voice') ||
+          voice.name.toLowerCase().includes('siri') ||
+          voice.voiceURI.toLowerCase().includes('siri') ||
+          voice.name.toLowerCase().includes('neural') ||
+          voice.name.toLowerCase().includes('premium')
+        );
+        
+        // Sort to prioritize "Siri Voice 4" first
+        possibleSiriVoices.sort((a, b) => {
+          if (a.name === 'Siri Voice 4') return -1;
+          if (b.name === 'Siri Voice 4') return 1;
+          if (a.name.includes('Siri Voice')) return -1;
+          if (b.name.includes('Siri Voice')) return 1;
+          return 0;
+        });
+        
+        if (possibleSiriVoices.length > 0) {
+          console.log('🗣️ [SIRI] Found potential Siri/Neural voices:', possibleSiriVoices.map(v => `${v.name} (${v.voiceURI})`));
+        }
+        
+        // PRIORITIZE Siri/Neural voices if found
+        if (possibleSiriVoices.length > 0) {
+          selectedVoice = possibleSiriVoices[0]; // Use first Siri/Neural voice found
+          console.log('🗣️ [SIRI] Using Siri/Neural voice:', selectedVoice.name, selectedVoice.voiceURI);
+        } else {
+          // Try to find the best LOCAL voice from our preferred list
+          for (const voiceName of preferredVoiceNames) {
+            selectedVoice = localVoices.find(voice => 
+              voice.name === voiceName || voice.name.includes(voiceName)
+            );
+            if (selectedVoice) {
+              console.log('🗣️ [NATURAL] Found preferred LOCAL voice:', selectedVoice.name);
+              break;
+            }
           }
         }
         
