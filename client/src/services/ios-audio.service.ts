@@ -153,87 +153,47 @@ export class IOSAudioService {
   private async createAudioElement(audioBuffer: ArrayBuffer): Promise<HTMLAudioElement> {
     let audioBlob: Blob;
     
-    // For iOS, convert MP3 to a more compatible format using FFmpeg
-    if (this.isIOSDevice()) {
-      try {
-        console.log('🎵 Converting TTS audio for iOS playback...');
-        console.log('🎵 Audio buffer size:', audioBuffer.byteLength, 'bytes');
+    // For iOS, use MP3 directly - FFmpeg conversion causes timing issues with Safari's autoplay restrictions
+    console.log('🎵 Creating audio blob for iOS - using MP3 directly for better timing');
+    audioBlob = new Blob([audioBuffer], { type: 'audio/mpeg' });
+    console.log('🎵 Audio blob created, size:', audioBlob.size, 'bytes')
+    
+    try {
+      console.log('🎵 Creating audio URL from blob...');
+      const audioUrl = URL.createObjectURL(audioBlob);
+      console.log('🎵 Audio URL created successfully');
+      
+      console.log('🎵 Creating Audio element...');
+      const audio = new Audio(audioUrl);
+      
+      // iOS-specific audio settings for better compatibility
+      if (this.isIOSDevice()) {
+        console.log('🎵 Applying iOS-specific audio settings...');
+        audio.preload = 'auto';
+        audio.controls = false;
+        audio.autoplay = false; // Explicitly disable autoplay
         
-        // Import audio converter dynamically to avoid SSR issues
-        const { audioConverter } = await import('@/services/audio-converter.service');
+        // Load the audio immediately to prepare it
+        console.log('🎵 Preloading audio for iOS...');
+        audio.load();
         
-        // Check if FFmpeg is ready
-        const isFFmpegReady = audioConverter.isReady();
-        console.log('🎵 FFmpeg ready status:', isFFmpegReady);
-        
-        if (!isFFmpegReady) {
-          console.log('🎵 FFmpeg not ready, preloading...');
+        // Set audio session category for iOS
+        if ('webkitAudioContext' in window) {
           try {
-            await audioConverter.preload();
-            console.log('🎵 FFmpeg preload completed successfully');
-            
-            // Double-check it's actually ready after preload
-            const isNowReady = audioConverter.isReady();
-            console.log('🎵 FFmpeg ready after preload:', isNowReady);
-            
-            if (!isNowReady) {
-              throw new Error('FFmpeg failed to initialize after preload');
-            }
-          } catch (preloadError) {
-            console.error('🎵 FFmpeg preload failed:', preloadError);
-            throw new Error(`FFmpeg initialization failed: ${preloadError instanceof Error ? preloadError.message : String(preloadError)}`);
+            (audio as any).webkitPreservesPitch = false;
+            console.log('🎵 WebKit audio settings applied');
+          } catch (e) {
+            console.log('🎵 WebKit audio settings not supported');
           }
         }
-        
-        // Create MP3 blob from buffer
-        const mp3Blob = new Blob([audioBuffer], { type: 'audio/mpeg' });
-        console.log('🎵 Created MP3 blob, size:', mp3Blob.size, 'bytes');
-        
-        // Convert MP3 to WAV for better iOS compatibility
-        console.log('🎵 Starting MP3 to WAV conversion...');
-        const wavBlob = await audioConverter.convertToWAV(mp3Blob, 'mp3');
-        console.log('🎵 Conversion successful, WAV blob size:', wavBlob.size, 'bytes');
-        
-        audioBlob = wavBlob;
-        console.log('✅ TTS audio converted to WAV for iOS');
-      } catch (conversionError) {
-        console.error('❌ TTS audio conversion failed:', conversionError);
-        if (conversionError instanceof Error) {
-          console.error('❌ Full conversion error details:', {
-            name: conversionError.name,
-            message: conversionError.message,
-            stack: conversionError.stack
-          });
-        }
-        
-        // Fall back to original MP3
-        console.log('⚠️ Falling back to original MP3 format');
-        audioBlob = new Blob([audioBuffer], { type: 'audio/mpeg' });
       }
-    } else {
-      // For non-iOS, use MP3 directly
-      audioBlob = new Blob([audioBuffer], { type: 'audio/mpeg' });
-    }
-    
-    const audioUrl = URL.createObjectURL(audioBlob);
-    const audio = new Audio(audioUrl);
-    
-    // iOS-specific audio settings
-    if (this.isIOSDevice()) {
-      audio.preload = 'auto';
-      audio.controls = false;
       
-      // Set audio session category for iOS
-      if ('webkitAudioContext' in window) {
-        try {
-          (audio as any).webkitPreservesPitch = false;
-        } catch (e) {
-          // Ignore if not supported
-        }
-      }
+      console.log('🎵 Audio element setup complete');
+      return audio;
+    } catch (audioError) {
+      console.error('❌ Failed to create audio element:', audioError);
+      throw new Error(`Failed to create audio element: ${audioError instanceof Error ? audioError.message : String(audioError)}`);
     }
-    
-    return audio;
   }
   
   // Speak text with iOS compatibility
@@ -254,24 +214,23 @@ export class IOSAudioService {
       // Stop current speech if playing
       this.stopSpeaking();
       
-      // Ensure audio is unlocked (required for iOS)
+      // For iOS, just check if we have a basic audio context - don't over-refresh
       if (this.isIOSDevice()) {
-        console.log('🔓 Ensuring audio is unlocked for iOS playback...');
-        if (!this.isUnlocked) {
-          console.warn('🔊 Audio not unlocked - attempting manual unlock');
-          const unlocked = await this.manualUnlock();
-          if (!unlocked) {
-            throw new Error('Audio is locked. Please tap anywhere on the screen first.');
-          }
-        } else {
-          // Even if marked as unlocked, refresh the audio context to be sure
-          console.log('🔓 Refreshing audio context for reliable playback...');
+        console.log('🔓 Checking audio context for iOS...');
+        if (!this.audioContext || this.audioContext.state === 'closed') {
+          console.log('🔓 Creating fresh audio context...');
           try {
-            await this.manualUnlock(); // This will refresh the context
-          } catch (refreshError) {
-            console.warn('🔓 Audio context refresh failed:', refreshError);
+            this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+            if (this.audioContext.state === 'suspended') {
+              await this.audioContext.resume();
+            }
+            this.isUnlocked = true;
+          } catch (error) {
+            console.error('🔓 Failed to create audio context:', error);
+            throw new Error('Audio context creation failed. Please try again.');
           }
         }
+        console.log('🔓 Audio context ready, state:', this.audioContext.state);
       }
       
       // Get audio from TTS API
