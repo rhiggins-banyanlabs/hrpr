@@ -101,7 +101,7 @@ export class AudioConverterService {
   }
 
   // Convert audio blob to WAV format for better compatibility
-  public async convertToWAV(audioBlob: Blob, inputFormat: string = 'aac'): Promise<Blob> {
+  public async convertToWAV(audioBlob: Blob, inputFormat: string = 'mp3'): Promise<Blob> {
     if (!this.ffmpeg || typeof window === 'undefined') {
       throw new Error('FFmpeg not available (browser environment required)');
     }

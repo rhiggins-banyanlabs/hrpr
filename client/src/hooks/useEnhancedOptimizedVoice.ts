@@ -193,7 +193,7 @@ export const useEnhancedOptimizedVoice = () => {
               text,
               voice,
               model: 'tts-1',
-              response_format: 'aac',
+              response_format: 'mp3',
               speed: parseFloat(process.env.NEXT_PUBLIC_TTS_SPEED || '1.0'),
             }),
           })
@@ -204,7 +204,7 @@ export const useEnhancedOptimizedVoice = () => {
             return response.arrayBuffer();
           })
           .then(audioBuffer => {
-            const blob = new Blob([audioBuffer], { type: 'audio/aac' });
+            const blob = new Blob([audioBuffer], { type: 'audio/mpeg' });
             const audioUrl = URL.createObjectURL(blob);
             const audio = new Audio(audioUrl);
             
@@ -289,7 +289,7 @@ export const useEnhancedOptimizedVoice = () => {
           text,
           voice: 'nova',
           model: 'tts-1',
-          response_format: 'aac',
+          response_format: 'mp3',
           speed: parseFloat(process.env.NEXT_PUBLIC_TTS_SPEED || '1.0'),
         }),
       });
