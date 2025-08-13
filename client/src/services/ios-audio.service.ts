@@ -137,7 +137,7 @@ export class IOSAudioService {
         text,
         voice,
         model: 'tts-1',
-        response_format: 'mp3',
+        response_format: 'aac',
         speed: parseFloat(process.env.NEXT_PUBLIC_TTS_SPEED || '1.0')
       }),
     });
@@ -161,22 +161,22 @@ export class IOSAudioService {
         // Import audio converter dynamically to avoid SSR issues
         const { audioConverter } = await import('@/services/audio-converter.service');
         
-        // Create MP3 blob from buffer
-        const mp3Blob = new Blob([audioBuffer], { type: 'audio/mpeg' });
+        // Create AAC blob from buffer (OpenAI now returns AAC)
+        const aacBlob = new Blob([audioBuffer], { type: 'audio/aac' });
         
-        // Convert MP3 to WAV for better iOS compatibility
-        const wavBlob = await audioConverter.convertToWAV(mp3Blob, 'mp3');
+        // Convert AAC to WAV for better iOS compatibility
+        const wavBlob = await audioConverter.convertToWAV(aacBlob, 'aac');
         audioBlob = wavBlob;
         
         console.log('🎵 TTS audio converted to WAV for iOS');
       } catch (conversionError) {
-        console.warn('⚠️ TTS audio conversion failed, using original MP3:', conversionError);
-        // Fall back to original MP3
-        audioBlob = new Blob([audioBuffer], { type: 'audio/mpeg' });
+        console.warn('⚠️ TTS audio conversion failed, using original AAC:', conversionError);
+        // Fall back to original AAC
+        audioBlob = new Blob([audioBuffer], { type: 'audio/aac' });
       }
     } else {
-      // For non-iOS, use MP3 directly
-      audioBlob = new Blob([audioBuffer], { type: 'audio/mpeg' });
+      // For non-iOS, use AAC directly (better than MP3)
+      audioBlob = new Blob([audioBuffer], { type: 'audio/aac' });
     }
     
     const audioUrl = URL.createObjectURL(audioBlob);

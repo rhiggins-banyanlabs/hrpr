@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
       text, 
       voice = 'nova', // Default to nova - energetic, friendly voice
       model = 'tts-1', // Use standard model for consistent speed
-      response_format = 'mp3',
+      response_format = 'aac', // Use AAC for better iOS compatibility
       speed = 1.0 // Normal speed
     } = await req.json();
 
@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
       return new NextResponse(cached.data, {
         status: 200,
         headers: {
-          'Content-Type': 'audio/mpeg',
+          'Content-Type': 'audio/aac',
           'Content-Disposition': 'inline; filename="speech.mp3"',
           'Cache-Control': 'public, max-age=31536000',
         },
@@ -124,8 +124,8 @@ export async function POST(req: NextRequest) {
     return new NextResponse(audioBuffer, {
       status: 200,
       headers: {
-        'Content-Type': 'audio/mpeg',
-        'Content-Disposition': 'inline; filename="speech.mp3"',
+        'Content-Type': 'audio/aac',
+        'Content-Disposition': 'inline; filename="speech.aac"',
         'Cache-Control': 'public, max-age=31536000',
       },
     });
