@@ -26,6 +26,7 @@ export class ChunkedOpenAITTSService {
   async playText(text: string, voice: string = 'nova', onStart?: () => void, onEnd?: () => void, onError?: (error: Error) => void): Promise<void> {
     try {
       console.log('🔊 [CHUNKED-TTS] Starting chunked playback for:', text.substring(0, 50));
+      console.log('🔊 [CHUNKED-TTS] Text length:', text.length, 'iOS:', this.isiOS);
       
       // Stop any current playback
       this.stopPlayback();
@@ -33,8 +34,14 @@ export class ChunkedOpenAITTSService {
       onStart?.();
       
       if (this.isiOS && text.length > 200) {
-        console.log('🔊 [CHUNKED-TTS] Long text on iOS - using sentence-by-sentence chunking');
-        await this.playLongTextWithChunking(text, voice);
+        console.log('🔊 [CHUNKED-TTS] Long text on iOS - attempting sentence-by-sentence chunking');
+        try {
+          await this.playLongTextWithChunking(text, voice);
+        } catch (chunkingError) {
+          console.warn('🔊 [CHUNKED-TTS] Chunking failed, falling back to single request:', chunkingError);
+          // Fallback to single request if chunking fails
+          await this.playSingleRequest(text, voice);
+        }
       } else {
         console.log('🔊 [CHUNKED-TTS] Short text or non-iOS - using single request');
         await this.playSingleRequest(text, voice);
@@ -42,7 +49,7 @@ export class ChunkedOpenAITTSService {
       
       onEnd?.();
     } catch (error) {
-      console.error('🔊 [CHUNKED-TTS] Playback failed:', error);
+      console.error('🔊 [CHUNKED-TTS] All playback methods failed:', error);
       onError?.(error instanceof Error ? error : new Error('TTS playback failed'));
       throw error;
     }
@@ -53,25 +60,53 @@ export class ChunkedOpenAITTSService {
     const sentences = this.splitIntoSentences(text);
     console.log(`🔊 [CHUNKED-TTS] Split into ${sentences.length} sentences`);
     
-    // Queue all TTS requests
+    if (sentences.length === 0) {
+      throw new Error('No sentences found to chunk');
+    }
+    
+    let successfulChunks = 0;
+    
+    // Queue all TTS requests with error recovery
     for (let i = 0; i < sentences.length; i++) {
       const sentence = sentences[i];
       if (sentence.trim()) {
         console.log(`🔊 [CHUNKED-TTS] Queueing sentence ${i + 1}/${sentences.length}: "${sentence.substring(0, 30)}..."`);
-        await this.queueAudioChunk(sentence.trim(), voice);
+        try {
+          await this.queueAudioChunk(sentence.trim(), voice);
+          successfulChunks++;
+        } catch (chunkError) {
+          console.error(`🔊 [CHUNKED-TTS] Failed to queue chunk ${i + 1}:`, chunkError);
+          // Continue trying other chunks instead of failing completely
+          continue;
+        }
       }
     }
     
+    if (successfulChunks === 0) {
+      throw new Error('Failed to queue any audio chunks');
+    }
+    
+    console.log(`🔊 [CHUNKED-TTS] Successfully queued ${successfulChunks}/${sentences.length} chunks`);
+    
     // Start playback queue
-    if (!this.isPlaying) {
+    if (!this.isPlaying && this.audioQueue.length > 0) {
       this.playNextChunk();
     }
     
     // Wait for all chunks to complete
     return new Promise((resolve, reject) => {
+      const startTime = Date.now();
+      
       const checkComplete = () => {
+        const elapsed = Date.now() - startTime;
+        
         if (!this.isPlaying && this.audioQueue.length === 0) {
+          console.log(`🔊 [CHUNKED-TTS] All chunks completed in ${elapsed}ms`);
           resolve();
+        } else if (elapsed > 30000) {
+          console.error('🔊 [CHUNKED-TTS] Timeout waiting for chunks to complete');
+          this.stopPlayback(); // Clean up
+          reject(new Error('Chunked playback timeout'));
         } else {
           setTimeout(checkComplete, 100);
         }
@@ -79,9 +114,6 @@ export class ChunkedOpenAITTSService {
       
       // Start checking after a short delay
       setTimeout(checkComplete, 500);
-      
-      // Timeout protection
-      setTimeout(() => reject(new Error('Chunked playback timeout')), 30000);
     });
   }
   
@@ -89,45 +121,78 @@ export class ChunkedOpenAITTSService {
   private async playSingleRequest(text: string, voice: string): Promise<void> {
     console.log('🔊 [CHUNKED-TTS] Making single TTS request');
     
-    const response = await fetch('/api/tts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        text: text,
-        voice: voice,
-        model: 'tts-1',
-        response_format: 'mp3',
-        speed: 1.3
-      }),
-    });
-    
-    if (!response.ok) {
-      throw new Error(`TTS API failed: ${response.status}`);
-    }
-    
-    const blob = await response.blob();
-    const audioUrl = URL.createObjectURL(blob);
-    const audio = new Audio(audioUrl);
-    
-    // Apply iOS timeout prevention
-    if (this.isiOS) {
-      this.addTimeoutPrevention(audio);
-    }
-    
-    // Play and wait for completion
-    return new Promise((resolve, reject) => {
-      audio.onended = () => {
-        URL.revokeObjectURL(audioUrl);
-        resolve();
-      };
+    try {
+      const response = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: text,
+          voice: voice,
+          model: 'tts-1',
+          response_format: 'mp3',
+          speed: 1.3
+        }),
+      });
       
-      audio.onerror = (event) => {
-        URL.revokeObjectURL(audioUrl);
-        reject(new Error('Audio playback failed'));
-      };
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('🔊 [CHUNKED-TTS] TTS API error:', response.status, errorText);
+        throw new Error(`TTS API failed: ${response.status} - ${errorText}`);
+      }
       
-      audio.play().catch(reject);
-    });
+      const blob = await response.blob();
+      console.log('🔊 [CHUNKED-TTS] Got audio blob, size:', blob.size, 'bytes');
+      
+      if (blob.size === 0) {
+        throw new Error('Received empty audio blob from TTS API');
+      }
+      
+      const audioUrl = URL.createObjectURL(blob);
+      const audio = new Audio(audioUrl);
+      
+      // Apply iOS timeout prevention
+      if (this.isiOS) {
+        this.addTimeoutPrevention(audio);
+      }
+      
+      // Play and wait for completion
+      return new Promise((resolve, reject) => {
+        const timeoutId = setTimeout(() => {
+          console.error('🔊 [CHUNKED-TTS] Single request timeout');
+          URL.revokeObjectURL(audioUrl);
+          reject(new Error('Audio playback timeout'));
+        }, 15000);
+        
+        audio.onended = () => {
+          console.log('🔊 [CHUNKED-TTS] Single request audio ended');
+          clearTimeout(timeoutId);
+          URL.revokeObjectURL(audioUrl);
+          resolve();
+        };
+        
+        audio.onerror = (event) => {
+          console.error('🔊 [CHUNKED-TTS] Single request audio error:', event);
+          clearTimeout(timeoutId);
+          URL.revokeObjectURL(audioUrl);
+          reject(new Error('Audio playback failed'));
+        };
+        
+        audio.oncanplaythrough = () => {
+          console.log('🔊 [CHUNKED-TTS] Single request audio ready, starting playback');
+          audio.play().catch(playError => {
+            console.error('🔊 [CHUNKED-TTS] Single request play failed:', playError);
+            clearTimeout(timeoutId);
+            URL.revokeObjectURL(audioUrl);
+            reject(playError);
+          });
+        };
+        
+        audio.load();
+      });
+    } catch (error) {
+      console.error('🔊 [CHUNKED-TTS] Single request failed:', error);
+      throw error;
+    }
   }
   
   // Split text into sentences for chunking
@@ -174,15 +239,30 @@ export class ChunkedOpenAITTSService {
           response_format: 'mp3',
           speed: 1.3
         }),
+        signal: AbortSignal.timeout(10000) // 10 second timeout per chunk
       });
       
       if (!response.ok) {
-        throw new Error(`TTS API failed for chunk: ${response.status}`);
+        const errorText = await response.text();
+        console.error(`🔊 [CHUNKED-TTS] TTS API failed for chunk: ${response.status} - ${errorText}`);
+        throw new Error(`TTS API failed for chunk: ${response.status} - ${errorText}`);
       }
       
       const blob = await response.blob();
+      
+      if (blob.size === 0) {
+        console.error('🔊 [CHUNKED-TTS] Received empty blob for chunk');
+        throw new Error('Received empty audio blob for chunk');
+      }
+      
+      console.log(`🔊 [CHUNKED-TTS] Got chunk audio blob, size: ${blob.size} bytes`);
+      
       const audioUrl = URL.createObjectURL(blob);
       const audio = new Audio(audioUrl);
+      
+      // Preload the audio
+      audio.preload = 'auto';
+      audio.load();
       
       // Apply iOS fixes
       if (this.isiOS) {
@@ -215,27 +295,65 @@ export class ChunkedOpenAITTSService {
     
     console.log(`🔊 [CHUNKED-TTS] Playing chunk, ${this.audioQueue.length} remaining in queue`);
     
-    audio.addEventListener('ended', () => {
+    // Set up event handlers
+    const onEnded = () => {
       console.log('🔊 [CHUNKED-TTS] Chunk completed');
-      URL.revokeObjectURL(audio.src); // Clean up
-      setTimeout(() => this.playNextChunk(), 50); // Small gap between chunks
-    });
-    
-    audio.addEventListener('error', (e) => {
-      console.error('🔊 [CHUNKED-TTS] Chunk playback error:', e);
       URL.revokeObjectURL(audio.src);
-      setTimeout(() => this.playNextChunk(), 100); // Skip to next chunk
-    });
+      // Continue to next chunk
+      setTimeout(() => this.playNextChunk(), 50);
+    };
     
-    // Ensure audio is ready before playing
-    audio.addEventListener('canplaythrough', () => {
-      audio.play().catch(e => {
-        console.error('🔊 [CHUNKED-TTS] Chunk play failed:', e);
-        setTimeout(() => this.playNextChunk(), 100);
+    const onError = (e: Event) => {
+      console.error('🔊 [CHUNKED-TTS] Chunk playback error:', e);
+      console.error('🔊 [CHUNKED-TTS] Audio state:', {
+        readyState: audio.readyState,
+        networkState: audio.networkState,
+        error: audio.error
       });
-    }, { once: true });
+      URL.revokeObjectURL(audio.src);
+      // Skip to next chunk on error
+      setTimeout(() => this.playNextChunk(), 100);
+    };
     
-    audio.load();
+    audio.addEventListener('ended', onEnded, { once: true });
+    audio.addEventListener('error', onError, { once: true });
+    
+    // Try to play immediately if already loaded, otherwise wait for canplaythrough
+    if (audio.readyState >= 4) { // HAVE_ENOUGH_DATA
+      console.log('🔊 [CHUNKED-TTS] Audio already loaded, playing immediately');
+      audio.play().catch(e => {
+        console.error('🔊 [CHUNKED-TTS] Immediate play failed:', e);
+        onError(e);
+      });
+    } else {
+      console.log('🔊 [CHUNKED-TTS] Waiting for audio to load...');
+      
+      const onCanPlay = () => {
+        console.log('🔊 [CHUNKED-TTS] Audio ready, starting playback');
+        audio.play().catch(e => {
+          console.error('🔊 [CHUNKED-TTS] Delayed play failed:', e);
+          onError(e);
+        });
+      };
+      
+      audio.addEventListener('canplaythrough', onCanPlay, { once: true });
+      
+      // Fallback timeout in case canplaythrough never fires
+      const fallbackTimeout = setTimeout(() => {
+        console.warn('🔊 [CHUNKED-TTS] canplaythrough timeout, trying to play anyway');
+        audio.removeEventListener('canplaythrough', onCanPlay);
+        audio.play().catch(e => {
+          console.error('🔊 [CHUNKED-TTS] Fallback play failed:', e);
+          onError(e);
+        });
+      }, 3000);
+      
+      audio.addEventListener('canplaythrough', () => {
+        clearTimeout(fallbackTimeout);
+      }, { once: true });
+      
+      audio.load();
+    }
   }
   
   // iOS-specific timeout prevention
