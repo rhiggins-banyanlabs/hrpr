@@ -308,8 +308,15 @@ export default function Home() {
         setIsHarperActivated(false)
       }
     } else {
-      // Already activated - start recording for questions
+      // Already activated - ensure audio is still unlocked, then start recording
       console.log('🎤 Starting voice recording for question')
+      
+      // For iOS, refresh audio unlock on each interaction
+      if (isIOS) {
+        console.log('🔓 Refreshing audio unlock for iOS...')
+        await unlockAudio()
+      }
+      
       setIsVoiceInputActive(true)
       unifiedVoice.startListening()
     }
@@ -363,11 +370,14 @@ export default function Home() {
     preCacheIntroMessage()
     
     // Preload FFmpeg for iOS devices to speed up first audio conversion
+    // This is CRITICAL for TTS audio playback on iOS
     if (isIOS) {
-      console.log('🍎 Preloading FFmpeg for iOS audio conversion...')
-      audioConverter.preload().catch(error => {
-        console.warn('⚠️ FFmpeg preload failed (will try again on first use):', error)
-      })
+      console.log('🍎 Preloading FFmpeg for iOS TTS audio conversion...')
+      audioConverter.preload()
+        .then(() => console.log('✅ FFmpeg ready for TTS conversion'))
+        .catch(error => {
+          console.error('❌ FFmpeg preload failed - TTS may not work:', error)
+        })
     }
   }, [preCacheIntroMessage, isIOS])
 

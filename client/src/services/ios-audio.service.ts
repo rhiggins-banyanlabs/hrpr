@@ -100,6 +100,19 @@ export class IOSAudioService {
   
   // Manually unlock audio (call this on user interaction)
   public async manualUnlock(): Promise<boolean> {
+    // Always try to unlock/refresh on iOS to ensure it's ready
+    if (this.isIOSDevice()) {
+      console.log('🔓 iOS: Refreshing audio unlock...');
+      try {
+        await this.unlockAudioContext();
+        return this.isUnlocked;
+      } catch (error) {
+        console.error('🔓 Manual unlock failed:', error);
+        return false;
+      }
+    }
+    
+    // For non-iOS, only unlock if not already unlocked
     if (this.isUnlocked) return true;
     
     try {
@@ -137,10 +150,36 @@ export class IOSAudioService {
   }
   
   // Create audio element with iOS-compatible settings
-  private createAudioElement(audioBuffer: ArrayBuffer): HTMLAudioElement {
-    const blob = new Blob([audioBuffer], { type: 'audio/mpeg' });
-    const audioUrl = URL.createObjectURL(blob);
+  private async createAudioElement(audioBuffer: ArrayBuffer): Promise<HTMLAudioElement> {
+    let audioBlob: Blob;
     
+    // For iOS, convert MP3 to a more compatible format using FFmpeg
+    if (this.isIOSDevice()) {
+      try {
+        console.log('🎵 Converting TTS audio for iOS playback...');
+        
+        // Import audio converter dynamically to avoid SSR issues
+        const { audioConverter } = await import('@/services/audio-converter.service');
+        
+        // Create MP3 blob from buffer
+        const mp3Blob = new Blob([audioBuffer], { type: 'audio/mpeg' });
+        
+        // Convert MP3 to WAV for better iOS compatibility
+        const wavBlob = await audioConverter.convertToWAV(mp3Blob, 'mp3');
+        audioBlob = wavBlob;
+        
+        console.log('🎵 TTS audio converted to WAV for iOS');
+      } catch (conversionError) {
+        console.warn('⚠️ TTS audio conversion failed, using original MP3:', conversionError);
+        // Fall back to original MP3
+        audioBlob = new Blob([audioBuffer], { type: 'audio/mpeg' });
+      }
+    } else {
+      // For non-iOS, use MP3 directly
+      audioBlob = new Blob([audioBuffer], { type: 'audio/mpeg' });
+    }
+    
+    const audioUrl = URL.createObjectURL(audioBlob);
     const audio = new Audio(audioUrl);
     
     // iOS-specific audio settings
@@ -191,8 +230,8 @@ export class IOSAudioService {
       // Get audio from TTS API
       const audioBuffer = await this.getTTSAudio(text, voice);
       
-      // Create audio element
-      const audio = this.createAudioElement(audioBuffer);
+      // Create audio element (now async for conversion)
+      const audio = await this.createAudioElement(audioBuffer);
       this.currentAudio = audio;
       this.isSpeaking = true;
       
@@ -226,23 +265,46 @@ export class IOSAudioService {
         onError?.(new Error('Audio playback failed'));
       };
       
-      // For iOS, we need to play immediately after creating the audio element
-      // to ensure it's within the user interaction context
-      if (this.isIOSDevice()) {
-        // Try to play immediately - if it fails, clean up properly
-        try {
-          await audio.play();
-        } catch (playError) {
-          console.error('🔊 iOS audio play failed:', playError);
-          this.isSpeaking = false;
-          this.currentAudio = null;
-          URL.revokeObjectURL(audio.src);
-          onError?.(playError instanceof Error ? playError : new Error('Audio playback failed'));
-          return;
+      // Try to play the audio
+      try {
+        // For iOS, ensure audio context is running
+        if (this.isIOSDevice() && this.audioContext) {
+          if (this.audioContext.state === 'suspended') {
+            console.log('🔊 Resuming suspended audio context before playback...');
+            await this.audioContext.resume();
+          }
         }
-      } else {
-        // For other platforms, play immediately
-        await audio.play();
+        
+        // Play the audio
+        console.log('🔊 Starting audio playback...');
+        const playPromise = audio.play();
+        
+        if (playPromise !== undefined) {
+          await playPromise;
+          console.log('🔊 Audio playback started successfully');
+        }
+      } catch (playError: any) {
+        console.error('🔊 Audio play failed:', playError);
+        console.error('🔊 Error details:', {
+          name: playError.name,
+          message: playError.message,
+          audioSrc: audio.src ? 'exists' : 'missing',
+          audioState: this.audioContext?.state
+        });
+        
+        // Clean up
+        this.isSpeaking = false;
+        this.currentAudio = null;
+        URL.revokeObjectURL(audio.src);
+        
+        // Try to reset audio context for next attempt
+        if (this.isIOSDevice()) {
+          console.log('🔊 Resetting iOS audio for next attempt...');
+          this.isUnlocked = false;
+        }
+        
+        onError?.(playError instanceof Error ? playError : new Error('Audio playback failed'));
+        return;
       }
       
     } catch (error) {

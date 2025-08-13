@@ -100,7 +100,7 @@ export class AudioConverterService {
     }
   }
 
-  // Convert audio blob to WAV format for Mozilla/Firefox compatibility
+  // Convert audio blob to WAV format for better compatibility
   public async convertToWAV(audioBlob: Blob, inputFormat: string = 'webm'): Promise<Blob> {
     if (!this.ffmpeg || typeof window === 'undefined') {
       throw new Error('FFmpeg not available (browser environment required)');
@@ -110,7 +110,7 @@ export class AudioConverterService {
       // Initialize FFmpeg if not already loaded
       await this.initialize();
 
-      console.log('🎵 Converting audio to WAV format for Mozilla...');
+      console.log(`🎵 Converting ${inputFormat} to WAV format...`);
       
       // Write input file to FFmpeg virtual filesystem
       const inputFileName = `input.${inputFormat}`;
@@ -119,11 +119,12 @@ export class AudioConverterService {
       await this.ffmpeg.writeFile(inputFileName, await fetchFile(audioBlob));
 
       // Convert to WAV format (widely supported)
+      // Use higher quality settings for TTS audio
       await this.ffmpeg.exec([
         '-i', inputFileName,
         '-acodec', 'pcm_s16le',   // PCM 16-bit little-endian
-        '-ar', '16000',           // 16kHz sample rate (good for speech)
-        '-ac', '1',               // Mono audio
+        '-ar', '44100',           // 44.1kHz sample rate for better quality
+        '-ac', '2',               // Stereo for TTS
         outputFileName
       ]);
 
