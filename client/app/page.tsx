@@ -436,13 +436,18 @@ export default function Home() {
               isChatOpen={false}
               isHarperSpeaking={isHarperSpeaking}
               isHarperActivated={isHarperActivated}
-              isThinking={isThinking}
+              isThinking={isProcessing} // Pass processing state as thinking
             />
           </div>
 
           {/* Status text */}
           <div className="min-h-[3rem] flex items-center justify-center">
-            {unifiedVoice.isProcessing ? (
+            {isProcessing ? (
+              <MorphingText
+                texts={['🧠 Thinking...', '🔍 Searching database...', '📊 Analyzing data...']}
+                className="text-purple-300 text-lg"
+              />
+            ) : unifiedVoice.isProcessing ? (
               <MorphingText
                 texts={['Processing...', 'Transcribing...', 'Understanding...']}
                 className="text-blue-300 text-lg"
@@ -473,11 +478,6 @@ export default function Home() {
                   </button>
                 )}
               </div>
-            ) : isProcessing ? (
-              <MorphingText
-                texts={['Thinking...', 'Analyzing...', 'Preparing response...']}
-                className="text-purple-300 text-lg"
-              />
             ) : isVoiceInputActive ? (
               <div className="text-center">
                 <p className="text-red-300 text-lg animate-pulse">🎤 Recording - Speak now</p>
