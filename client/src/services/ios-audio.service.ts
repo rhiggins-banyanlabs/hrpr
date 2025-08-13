@@ -157,21 +157,57 @@ export class IOSAudioService {
     if (this.isIOSDevice()) {
       try {
         console.log('🎵 Converting TTS audio for iOS playback...');
+        console.log('🎵 Audio buffer size:', audioBuffer.byteLength, 'bytes');
         
         // Import audio converter dynamically to avoid SSR issues
         const { audioConverter } = await import('@/services/audio-converter.service');
         
+        // Check if FFmpeg is ready
+        const isFFmpegReady = audioConverter.isReady();
+        console.log('🎵 FFmpeg ready status:', isFFmpegReady);
+        
+        if (!isFFmpegReady) {
+          console.log('🎵 FFmpeg not ready, preloading...');
+          try {
+            await audioConverter.preload();
+            console.log('🎵 FFmpeg preload completed successfully');
+            
+            // Double-check it's actually ready after preload
+            const isNowReady = audioConverter.isReady();
+            console.log('🎵 FFmpeg ready after preload:', isNowReady);
+            
+            if (!isNowReady) {
+              throw new Error('FFmpeg failed to initialize after preload');
+            }
+          } catch (preloadError) {
+            console.error('🎵 FFmpeg preload failed:', preloadError);
+            throw new Error(`FFmpeg initialization failed: ${preloadError instanceof Error ? preloadError.message : String(preloadError)}`);
+          }
+        }
+        
         // Create MP3 blob from buffer
         const mp3Blob = new Blob([audioBuffer], { type: 'audio/mpeg' });
+        console.log('🎵 Created MP3 blob, size:', mp3Blob.size, 'bytes');
         
         // Convert MP3 to WAV for better iOS compatibility
+        console.log('🎵 Starting MP3 to WAV conversion...');
         const wavBlob = await audioConverter.convertToWAV(mp3Blob, 'mp3');
-        audioBlob = wavBlob;
+        console.log('🎵 Conversion successful, WAV blob size:', wavBlob.size, 'bytes');
         
-        console.log('🎵 TTS audio converted to WAV for iOS');
+        audioBlob = wavBlob;
+        console.log('✅ TTS audio converted to WAV for iOS');
       } catch (conversionError) {
-        console.warn('⚠️ TTS audio conversion failed, using original MP3:', conversionError);
+        console.error('❌ TTS audio conversion failed:', conversionError);
+        if (conversionError instanceof Error) {
+          console.error('❌ Full conversion error details:', {
+            name: conversionError.name,
+            message: conversionError.message,
+            stack: conversionError.stack
+          });
+        }
+        
         // Fall back to original MP3
+        console.log('⚠️ Falling back to original MP3 format');
         audioBlob = new Blob([audioBuffer], { type: 'audio/mpeg' });
       }
     } else {
@@ -218,12 +254,23 @@ export class IOSAudioService {
       // Stop current speech if playing
       this.stopSpeaking();
       
-      // Check if audio is unlocked (required for iOS)
-      if (this.isIOSDevice() && !this.isUnlocked) {
-        console.warn('🔊 Audio not unlocked - attempting manual unlock');
-        const unlocked = await this.manualUnlock();
-        if (!unlocked) {
-          throw new Error('Audio is locked. Please tap anywhere on the screen first.');
+      // Ensure audio is unlocked (required for iOS)
+      if (this.isIOSDevice()) {
+        console.log('🔓 Ensuring audio is unlocked for iOS playback...');
+        if (!this.isUnlocked) {
+          console.warn('🔊 Audio not unlocked - attempting manual unlock');
+          const unlocked = await this.manualUnlock();
+          if (!unlocked) {
+            throw new Error('Audio is locked. Please tap anywhere on the screen first.');
+          }
+        } else {
+          // Even if marked as unlocked, refresh the audio context to be sure
+          console.log('🔓 Refreshing audio context for reliable playback...');
+          try {
+            await this.manualUnlock(); // This will refresh the context
+          } catch (refreshError) {
+            console.warn('🔓 Audio context refresh failed:', refreshError);
+          }
         }
       }
       
@@ -289,8 +336,23 @@ export class IOSAudioService {
           name: playError.name,
           message: playError.message,
           audioSrc: audio.src ? 'exists' : 'missing',
-          audioState: this.audioContext?.state
+          audioState: this.audioContext?.state,
+          isUnlocked: this.isUnlocked
         });
+        
+        // Special handling for NotAllowedError
+        if (playError.name === 'NotAllowedError') {
+          console.error('🔊 NotAllowedError: User interaction required or autoplay blocked');
+          console.error('🔊 This usually means audio context needs user interaction');
+          
+          // Force reset audio unlock status
+          this.isUnlocked = false;
+          this.audioContext = null;
+          
+          const errorMessage = 'Audio playback blocked. Please tap the voice button again to enable audio.';
+          onError?.(new Error(errorMessage));
+          return;
+        }
         
         // Clean up
         this.isSpeaking = false;
