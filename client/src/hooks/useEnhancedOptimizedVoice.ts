@@ -58,10 +58,11 @@ export const useEnhancedOptimizedVoice = () => {
   
   // Unlock audio on user interaction (iOS requirement)
   const unlockAudio = useCallback(async (): Promise<boolean> => {
-    console.log('🔓 Unlocking audio for iOS...');
+    console.log('🔓 Unlocking audio...');
     
     try {
-      if (isIOSRef.current) {
+      const isCurrentlyIOS = isIOSDevice();
+      if (isCurrentlyIOS) {
         const success = await iosAudioService.manualUnlock();
         console.log('🔓 iOS audio unlock result:', success);
         setIsUnlocked(success);
@@ -110,10 +111,19 @@ export const useEnhancedOptimizedVoice = () => {
   const speakText = useCallback(async (text: string, voice: string = 'nova'): Promise<void> => {
     try {
       console.log(`🔊 Speaking text (iOS: ${isIOSRef.current}):`, text.substring(0, 100));
+      console.log('🔊 Full iOS detection check:', {
+        isIOSRef: isIOSRef.current,
+        currentDetection: isIOSDevice(),
+        userAgent: typeof window !== 'undefined' ? navigator.userAgent : 'SSR',
+        platform: typeof window !== 'undefined' ? navigator.platform : 'SSR'
+      });
       setError(null);
       
+      // Check iOS status fresh each time to ensure proper routing to FFmpeg conversion
+      const isCurrentlyIOS = isIOSDevice();
+      
       // For iOS, always ensure audio is unlocked before speaking
-      if (isIOSRef.current) {
+      if (isCurrentlyIOS) {
         console.log('🔓 Checking iOS audio unlock status:', isUnlocked);
         if (!isUnlocked) {
           // Try to unlock audio in current user interaction context
@@ -130,8 +140,9 @@ export const useEnhancedOptimizedVoice = () => {
         }
       }
       
-      if (isIOSRef.current) {
-        // Use iOS-compatible audio service
+      // ALWAYS use iOS-compatible audio service for iOS devices (includes FFmpeg conversion)
+      if (isCurrentlyIOS) {
+        console.log('🍎 Using iOS audio service with FFmpeg conversion for ALL TTS audio');
         return new Promise<void>((resolve, reject) => {
           // Set a timeout to prevent getting stuck in speaking state
           const timeoutId = setTimeout(() => {
@@ -144,17 +155,17 @@ export const useEnhancedOptimizedVoice = () => {
           iosAudioService.speakText(text, {
             voice,
             onStart: () => {
-              console.log('🔊 iOS TTS started');
+              console.log('🔊 iOS TTS started (with FFmpeg conversion)');
               setIsSpeaking(true);
             },
             onEnd: () => {
-              console.log('🔊 iOS TTS ended');
+              console.log('🔊 iOS TTS ended (FFmpeg converted audio)');
               clearTimeout(timeoutId);
               setIsSpeaking(false);
               resolve();
             },
             onError: (error) => {
-              console.error('🔊 iOS TTS error:', error);
+              console.error('🔊 iOS TTS error (during FFmpeg conversion):', error);
               clearTimeout(timeoutId);
               setIsSpeaking(false);
               setError(error.message);
@@ -244,7 +255,8 @@ export const useEnhancedOptimizedVoice = () => {
   const stopSpeaking = useCallback(() => {
     console.log('🔊 Stopping speech');
     
-    if (isIOSRef.current) {
+    const isCurrentlyIOS = isIOSDevice();
+    if (isCurrentlyIOS) {
       iosAudioService.stopSpeaking();
     } else {
       if (currentAudioRef.current) {
@@ -295,7 +307,8 @@ export const useEnhancedOptimizedVoice = () => {
   
   // Check speaking state from iOS service
   useEffect(() => {
-    if (!isIOSRef.current) return;
+    const isCurrentlyIOS = isIOSDevice();
+    if (!isCurrentlyIOS) return;
     
     const checkSpeakingState = () => {
       const iosSpeaking = iosAudioService.isTTSSpeaking();
@@ -317,7 +330,8 @@ export const useEnhancedOptimizedVoice = () => {
   useEffect(() => {
     return () => {
       stopSpeaking();
-      if (isIOSRef.current) {
+      const isCurrentlyIOS = isIOSDevice();
+      if (isCurrentlyIOS) {
         iosAudioService.cleanup();
       }
     };
@@ -331,6 +345,6 @@ export const useEnhancedOptimizedVoice = () => {
     isSpeaking,
     isUnlocked,
     error,
-    isIOS: isIOSRef.current,
+    isIOS: isIOSDevice(), // Always return current iOS detection
   };
 };
