@@ -159,7 +159,12 @@ export default function Home() {
     sessionId: currentSession?.id || null,
     speakText,
     onSpeakingChange: handleSpeakingChange,
-    onSessionReset: handleSessionReset
+    onSessionReset: handleSessionReset,
+    startListening: useCallback(() => {
+      console.log('🎧 Auto-starting listening after Harper response')
+      setIsVoiceInputActive(true) // Update UI state when auto-starting
+      unifiedVoice.startListening()
+    }, [unifiedVoice])
   })
 
   // Forward declaration for speech recognition

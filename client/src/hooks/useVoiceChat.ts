@@ -16,13 +16,15 @@ interface UseVoiceChatProps {
   speakText?: (text: string) => Promise<any>;
   onSpeakingChange?: (isSpeaking: boolean) => void;
   onSessionReset?: () => void;
+  startListening?: () => void; // Add this to start active listening
 }
 
 export const useVoiceChat = ({ 
   sessionId,
   speakText,
   onSpeakingChange,
-  onSessionReset
+  onSessionReset,
+  startListening
 }: UseVoiceChatProps) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -953,15 +955,24 @@ export const useVoiceChat = ({
             const checkSpeaking = setInterval(() => {
               if (!isSpeaking) {
                 clearInterval(checkSpeaking);
-                console.log('🔊 Voice response finished, starting silence detection for follow-up response');
+                console.log('🔊 Voice response finished, starting active listening immediately');
                 
-                // Add a 5-second delay to let user start speaking after responses
-                setTimeout(() => {
-                  // Only start silence detection if still idle and not processing
-                  if (feedbackStateMachine.getCurrentState() === FeedbackState.IDLE && 
-                      !isProcessingRef.current && !isSpeaking) {
-                    console.log('🔇 Starting 30-second silence detection for user response');
+                // Start listening immediately after Harper finishes speaking
+                if (feedbackStateMachine.getCurrentState() === FeedbackState.IDLE && 
+                    !isProcessingRef.current && !isSpeaking) {
+                  
+                  // After Harper speaks, start actively listening for the next user response
+                  if (startListening) {
+                    console.log('🎧 Starting active listening for user response');
+                    startListening();
                     
+                    // Add a small delay and then verify listening state
+                    setTimeout(() => {
+                      console.log('🎧 Listening state after startListening call');
+                    }, 100);
+                  } else {
+                    // Fallback to silence detection if startListening is not available
+                    console.log('🔇 Starting 30-second silence detection for user response');
                     startSilenceDetection(30000, () => {
                       // After silence timeout, user didn't respond to Harper's natural follow-up question
                       // Go directly to satisfaction question
@@ -971,10 +982,10 @@ export const useVoiceChat = ({
                         feedbackStateMachine.transition('timeout'); // This should trigger satisfaction question
                       }
                     });
-                  } else {
-                    console.log('🔇 Not starting silence detection - user or system is active');
                   }
-                }, 5000); // 5 second delay to let user start speaking after responses
+                } else {
+                  console.log('🔇 Not starting listening - user or system is active');
+                }
               }
             }, 100); // Check every 100ms if still speaking
           }

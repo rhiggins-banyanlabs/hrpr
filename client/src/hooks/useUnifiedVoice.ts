@@ -17,6 +17,8 @@ export const useUnifiedVoice = ({ onHarperDetected, onError }: UseUnifiedVoicePr
   
   // Ref to track if we're processing to prevent multiple triggers
   const isProcessingRef = useRef(false);
+  // Ref to prevent state sync from overriding manual listening state changes
+  const manualListeningChangeRef = useRef(false);
   
   // Harper variations for detection
   const HARPER_VARIATIONS = [
@@ -114,6 +116,9 @@ export const useUnifiedVoice = ({ onHarperDetected, onError }: UseUnifiedVoicePr
   const startListening = useCallback(() => {
     console.log(`🎤 Starting unified voice (iOS: ${isIOS})`);
     setUnifiedError(null);
+    
+    // Set flag to prevent immediate state sync override
+    manualListeningChangeRef.current = true;
     setUnifiedListening(true);
     
     if (isIOS) {
@@ -123,6 +128,11 @@ export const useUnifiedVoice = ({ onHarperDetected, onError }: UseUnifiedVoicePr
       // Use standard Web Speech API
       webSpeechActions.startListening();
     }
+    
+    // Clear the flag after a short delay to allow underlying state to catch up
+    setTimeout(() => {
+      manualListeningChangeRef.current = false;
+    }, 500);
   }, [isIOS, iosVoice, webSpeechActions]);
   
   // Unified stop listening
@@ -176,6 +186,12 @@ export const useUnifiedVoice = ({ onHarperDetected, onError }: UseUnifiedVoicePr
   
   // Sync state from platform-specific implementations
   useEffect(() => {
+    // Don't sync listening state if we're in the middle of a manual change
+    if (manualListeningChangeRef.current) {
+      console.log('🎤 Skipping state sync - manual listening change in progress');
+      return;
+    }
+    
     if (!isIOS) {
       // Sync Web Speech API state
       setUnifiedListening(webSpeechState.listening);

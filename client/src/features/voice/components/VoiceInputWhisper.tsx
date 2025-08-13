@@ -5,6 +5,7 @@ interface VoiceInputWhisperProps {
   onTranscriptUpdate?: (transcript: string, isInterim: boolean) => void;
   isListening: boolean;
   onListeningChange: (isListening: boolean) => void;
+  onError?: (error: string) => void;
 }
 
 const VoiceInputWhisper: React.FC<VoiceInputWhisperProps> = ({
@@ -12,6 +13,7 @@ const VoiceInputWhisper: React.FC<VoiceInputWhisperProps> = ({
   onTranscriptUpdate,
   isListening,
   onListeningChange,
+  onError,
 }) => {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -101,7 +103,11 @@ const VoiceInputWhisper: React.FC<VoiceInputWhisperProps> = ({
       // Check if we're in a secure context (HTTPS or localhost)
       if (!window.isSecureContext) {
         console.error('🎤 Not in secure context - microphone access requires HTTPS');
-        throw new Error('Microphone access requires HTTPS connection');
+        const errorMsg = 'Voice input requires a secure connection (HTTPS). Please use HTTPS or try on a different device.';
+        if (onError) onError(errorMsg);
+        onListeningChange(false);
+        isRecordingRef.current = false;
+        return;
       }
 
       // Get microphone access with iOS-optimized settings
@@ -124,21 +130,27 @@ const VoiceInputWhisper: React.FC<VoiceInputWhisperProps> = ({
       } catch (error: any) {
         console.error('🎤 Microphone permission error:', error);
         
-        // Handle specific error cases
+        // Handle specific error cases with user-friendly messages
+        let errorMessage = '';
+        
         if (error.name === 'NotAllowedError') {
           // Permission denied
           if (isIOS) {
-            alert('Microphone access denied. Please go to Settings > Safari > Microphone and allow access for this website.');
+            errorMessage = 'Microphone access denied. Please go to Settings > Safari > Microphone and allow access for this website, then try again.';
           } else {
-            alert('Microphone access denied. Please allow microphone access in your browser settings.');
+            errorMessage = 'Microphone access denied. Please allow microphone access in your browser settings and try again.';
           }
         } else if (error.name === 'NotFoundError') {
-          alert('No microphone found. Please connect a microphone and try again.');
+          errorMessage = 'No microphone found. Please connect a microphone and try again.';
         } else if (error.name === 'NotReadableError') {
-          alert('Microphone is already in use by another application.');
+          errorMessage = 'Microphone is already in use by another application. Please close other apps using the microphone and try again.';
+        } else if (error.name === 'OverconstrainedError') {
+          errorMessage = 'Microphone settings are not supported on this device. Please try again or use a different device.';
         } else {
-          alert(`Unable to access microphone: ${error.message}`);
+          errorMessage = `Unable to access microphone: ${error.message}. Please check your device settings and try again.`;
         }
+        
+        if (onError) onError(errorMessage);
         
         onListeningChange(false);
         isRecordingRef.current = false;
@@ -164,18 +176,26 @@ const VoiceInputWhisper: React.FC<VoiceInputWhisperProps> = ({
       let mimeType = 'audio/webm';
       
       if (isIOS) {
-        // iOS Safari supports limited formats
-        if (MediaRecorder.isTypeSupported('audio/mp4')) {
-          mimeType = 'audio/mp4';
-        } else if (MediaRecorder.isTypeSupported('audio/webm')) {
-          mimeType = 'audio/webm';
+        // iOS Safari supports limited formats - test in order of preference
+        const iosFormats = ['audio/mp4', 'audio/webm', 'audio/wav'];
+        for (const format of iosFormats) {
+          if (MediaRecorder.isTypeSupported(format)) {
+            mimeType = format;
+            console.log('🎤 iOS: Selected supported format:', format);
+            break;
+          } else {
+            console.log('🎤 iOS: Format not supported:', format);
+          }
         }
-        console.log('🎤 iOS detected, using mimeType:', mimeType);
+        console.log('🎤 iOS final mimeType:', mimeType);
       } else {
         // Other browsers - use best available codec
         if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
           mimeType = 'audio/webm;codecs=opus';
+        } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+          mimeType = 'audio/webm';
         }
+        console.log('🎤 Desktop final mimeType:', mimeType);
       }
       
       const mediaRecorder = new MediaRecorder(stream, { 
@@ -183,6 +203,9 @@ const VoiceInputWhisper: React.FC<VoiceInputWhisperProps> = ({
         audioBitsPerSecond: isIOS ? 128000 : undefined // Set bitrate for iOS
       });
       mediaRecorderRef.current = mediaRecorder;
+      
+      console.log('🎤 MediaRecorder created with mimeType:', mediaRecorder.mimeType);
+      console.log('🎤 MediaRecorder state:', mediaRecorder.state);
 
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
@@ -233,6 +256,8 @@ const VoiceInputWhisper: React.FC<VoiceInputWhisperProps> = ({
 
     } catch (error) {
       console.error('🎤 Error starting recording:', error);
+      const errorMsg = `Failed to start voice recording: ${error}. Please try again or check your device settings.`;
+      if (onError) onError(errorMsg);
       onListeningChange(false);
       isRecordingRef.current = false;
     }
@@ -266,12 +291,74 @@ const VoiceInputWhisper: React.FC<VoiceInputWhisperProps> = ({
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
                     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
       
-      // Create audio blob with appropriate type
-      const blobType = isIOS && MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : 'audio/webm';
-      const audioBlob = new Blob(audioChunksRef.current, { type: blobType });
-      const filename = isIOS ? 'recording.mp4' : 'recording.webm';
+      // Get the actual mimeType used by the MediaRecorder
+      const mediaRecorder = mediaRecorderRef.current;
+      let actualMimeType = 'audio/webm';
+      let filename = 'recording.webm';
+      let fileExtension = 'webm';
       
-      console.log(`🎤 Processing audio - iOS: ${isIOS}, Type: ${blobType}, Size: ${audioBlob.size} bytes`);
+      if (mediaRecorder && mediaRecorder.mimeType) {
+        actualMimeType = mediaRecorder.mimeType;
+        console.log('🎤 Actual MediaRecorder mimeType:', actualMimeType);
+        
+        // Determine file extension based on actual mime type
+        if (actualMimeType.includes('mp4')) {
+          filename = 'recording.mp4';
+          fileExtension = 'mp4';
+        } else if (actualMimeType.includes('webm')) {
+          filename = 'recording.webm';
+          fileExtension = 'webm';
+        } else if (actualMimeType.includes('wav')) {
+          filename = 'recording.wav';
+          fileExtension = 'wav';
+        } else if (actualMimeType.includes('ogg')) {
+          filename = 'recording.ogg';
+          fileExtension = 'ogg';
+        }
+      } else {
+        // Fallback logic
+        if (isIOS && MediaRecorder.isTypeSupported('audio/mp4')) {
+          actualMimeType = 'audio/mp4';
+          filename = 'recording.mp4';
+          fileExtension = 'mp4';
+        }
+      }
+      
+      // Create audio blob with the actual recorded format
+      const audioBlob = new Blob(audioChunksRef.current, { type: actualMimeType });
+      
+      console.log(`🎤 Processing audio - iOS: ${isIOS}, Type: ${actualMimeType}, Extension: ${fileExtension}, Size: ${audioBlob.size} bytes`);
+      
+      // Verify the format is supported by Whisper
+      const supportedFormats = ['flac', 'm4a', 'mp3', 'mp4', 'mpeg', 'mpga', 'oga', 'ogg', 'wav', 'webm'];
+      if (!supportedFormats.includes(fileExtension)) {
+        console.warn('🎤 Unsupported format for Whisper:', fileExtension, '- attempting conversion');
+        
+        // Try to force a supported format
+        if (isIOS) {
+          // For iOS, try mp4 or webm
+          if (MediaRecorder.isTypeSupported('audio/mp4')) {
+            actualMimeType = 'audio/mp4';
+            filename = 'recording.mp4';
+            fileExtension = 'mp4';
+          } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+            actualMimeType = 'audio/webm';
+            filename = 'recording.webm';
+            fileExtension = 'webm';
+          } else {
+            throw new Error('No supported audio format available on this device. Please try using a different browser or device.');
+          }
+        } else {
+          // For other platforms, default to webm
+          actualMimeType = 'audio/webm';
+          filename = 'recording.webm';
+          fileExtension = 'webm';
+        }
+        
+        // Recreate blob with supported format
+        const convertedBlob = new Blob(audioChunksRef.current, { type: actualMimeType });
+        console.log(`🎤 Converted to supported format: ${actualMimeType}`);
+      }
       
       // Send to Whisper API
       const formData = new FormData();
@@ -305,6 +392,20 @@ const VoiceInputWhisper: React.FC<VoiceInputWhisperProps> = ({
 
     } catch (error) {
       console.error('🎤 Error processing audio:', error);
+      
+      // Provide user-friendly error message
+      let errorMessage = 'Failed to process voice recording. ';
+      
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        errorMessage += 'Please check your internet connection and try again.';
+      } else if (error instanceof Error && error.message.includes('Transcription failed')) {
+        errorMessage += 'The voice transcription service is temporarily unavailable. Please try again later.';
+      } else {
+        errorMessage += 'Please try again or check your device settings.';
+      }
+      
+      if (onError) onError(errorMessage);
+      
     } finally {
       setIsProcessing(false);
       // Don't call onListeningChange here - already called in stopRecording

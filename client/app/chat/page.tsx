@@ -27,6 +27,8 @@ function ChatPageContent() {
   // Voice input state
   const [isVoiceInputActive, setIsVoiceInputActive] = useState(false);
   const [voiceTranscript, setVoiceTranscript] = useState("");
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [showIOSVoiceHelp, setShowIOSVoiceHelp] = useState(false);
   
   // Voice hooks
   const { speakText, isSpeaking, selectedVoice, setSelectedVoice, unlockAudio } = useOptimizedVoice();
@@ -102,11 +104,63 @@ function ChatPageContent() {
 
   const handleVoiceInputToggle = useCallback(() => {
     console.log('🎤 🔄 Voice input toggle called, current state:', isVoiceInputActive);
+    
+    // Clear any previous errors when starting
+    if (!isVoiceInputActive) {
+      setVoiceError(null);
+      
+      // Check if user is on iOS and show help if needed
+      const userAgent = navigator.userAgent;
+      const isIOS = /iPad|iPhone|iPod/.test(userAgent) || 
+                    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      
+      if (isIOS && location.protocol !== 'https:' && location.hostname !== 'localhost') {
+        setShowIOSVoiceHelp(true);
+        return;
+      }
+    }
+    
     setIsVoiceInputActive(!isVoiceInputActive);
     if (isVoiceInputActive) {
       setVoiceTranscript('');
     }
   }, [isVoiceInputActive]);
+
+  // Handle voice input errors
+  const handleVoiceError = useCallback((error: string) => {
+    console.log('🎤 ❌ Voice error:', error);
+    
+    // Check if user is on iOS for enhanced error messages
+    const userAgent = navigator.userAgent;
+    const isIOS = /iPad|iPhone|iPod/.test(userAgent) || 
+                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    
+    let enhancedError = error;
+    
+    // Add iOS-specific guidance for common issues
+    if (isIOS) {
+      if (error.includes('denied') || error.includes('not-allowed')) {
+        enhancedError += '\n\n📱 iOS Tip: Go to Settings > Safari > Microphone and ensure this website is allowed to access your microphone.';
+      } else if (error.includes('HTTPS') || error.includes('secure')) {
+        enhancedError += '\n\n📱 iOS Tip: Voice input requires a secure connection. Please use HTTPS or try again later.';
+      } else if (error.includes('not supported')) {
+        enhancedError += '\n\n📱 iOS Tip: Try using Safari browser for the best voice input experience.';
+      }
+    }
+    
+    setVoiceError(enhancedError);
+    setIsVoiceInputActive(false);
+    setVoiceTranscript('');
+    
+    // Log error event
+    if (currentSession) {
+      logEvent('voice_error', {
+        error_message: error,
+        user_agent: navigator.userAgent,
+        is_ios: isIOS
+      });
+    }
+  }, [currentSession, logEvent]);
 
   // FIXED: Proper session initialization with duplicate prevention
   useEffect(() => {
@@ -331,7 +385,65 @@ function ChatPageContent() {
         onTranscriptUpdate={handleVoiceTranscript}
         isListening={isVoiceInputActive}
         onListeningChange={setIsVoiceInputActive}
+        onError={handleVoiceError}
       />
+
+      {/* iOS Voice Help */}
+      {showIOSVoiceHelp && (
+        <div className="absolute bottom-32 left-4 right-4 z-20 max-w-md mx-auto">
+          <div className="bg-blue-900/80 backdrop-blur-sm border border-blue-500/30 rounded-lg p-4 text-blue-200">
+            <div className="flex items-start gap-3">
+              <span className="text-blue-400 text-lg flex-shrink-0">📱</span>
+              <div className="flex-1">
+                <p className="text-sm font-medium mb-2">iOS Voice Input Help</p>
+                <p className="text-xs text-blue-300 mb-3">
+                  For the best voice input experience on iOS:
+                  <br />• Use Safari browser
+                  <br />• Ensure you're on a secure connection (HTTPS)
+                  <br />• Allow microphone permissions when prompted
+                  <br />• Speak clearly after tapping the microphone button
+                </p>
+                <button
+                  onClick={() => setShowIOSVoiceHelp(false)}
+                  className="text-xs bg-blue-800/50 hover:bg-blue-700/50 px-2 py-1 rounded border border-blue-600/30 transition-colors mr-2"
+                >
+                  Got it
+                </button>
+                <button
+                  onClick={() => {
+                    setShowIOSVoiceHelp(false);
+                    setIsVoiceInputActive(true);
+                  }}
+                  className="text-xs bg-blue-700/50 hover:bg-blue-600/50 px-2 py-1 rounded border border-blue-600/30 transition-colors"
+                >
+                  Try Voice Input
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Voice Error Display */}
+      {voiceError && (
+        <div className="absolute bottom-32 left-4 right-4 z-20 max-w-md mx-auto">
+          <div className="bg-red-900/80 backdrop-blur-sm border border-red-500/30 rounded-lg p-4 text-red-200">
+            <div className="flex items-start gap-3">
+              <span className="text-red-400 text-lg flex-shrink-0">⚠️</span>
+              <div className="flex-1">
+                <p className="text-sm font-medium mb-2">Voice Input Error</p>
+                <div className="text-xs text-red-300 mb-3 whitespace-pre-line">{voiceError}</div>
+                <button
+                  onClick={() => setVoiceError(null)}
+                  className="text-xs bg-red-800/50 hover:bg-red-700/50 px-2 py-1 rounded border border-red-600/30 transition-colors"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Debug info (remove in production) */}
       {process.env.NODE_ENV === 'development' && (
@@ -339,6 +451,9 @@ function ChatPageContent() {
           <div>Session: {currentSession?.id?.substring(0, 8) || 'None'}</div>
           <div>Active: {currentSession?.is_active ? 'Yes' : 'No'}</div>
           <div>Messages: {messages.length}</div>
+          <div>iOS: {/iPad|iPhone|iPod/.test(navigator.userAgent) ? 'Yes' : 'No'}</div>
+          <div>HTTPS: {location.protocol === 'https:' ? 'Yes' : 'No'}</div>
+          <div>WebSpeech: {!!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition) ? 'Yes' : 'No'}</div>
         </div>
       )}
     </div>
