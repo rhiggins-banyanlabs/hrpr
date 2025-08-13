@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { iosAudioService } from '@/services/ios-audio.service';
+import { OpenAIVoice } from '@/features/voice/types/voice.types';
 
 // Detect iOS devices with enhanced debugging
 const isIOSDevice = (): boolean => {
@@ -39,6 +40,7 @@ export const useEnhancedOptimizedVoice = () => {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedVoice, setSelectedVoice] = useState<OpenAIVoice>('nova');
   
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const isIOSRef = useRef(isIOSDevice());
@@ -110,7 +112,7 @@ export const useEnhancedOptimizedVoice = () => {
   // Speak text with platform-specific handling
   const speakText = useCallback(async (text: string, voiceOrOptions?: string | { voice?: string; isWaitingForAPI?: boolean }): Promise<void> => {
     // Handle both old signature (voice as string) and new signature (options object)
-    const voice = typeof voiceOrOptions === 'string' ? voiceOrOptions : (voiceOrOptions?.voice || 'nova');
+    const voice = typeof voiceOrOptions === 'string' ? voiceOrOptions : (voiceOrOptions?.voice || selectedVoice);
     const isWaitingForAPI = typeof voiceOrOptions === 'object' ? voiceOrOptions.isWaitingForAPI : false;
     try {
       console.log(`🔊 Speaking text (iOS: ${isIOSRef.current}):`, text.substring(0, 100));
@@ -254,7 +256,7 @@ export const useEnhancedOptimizedVoice = () => {
       setError(errorMessage);
       throw error;
     }
-  }, [isUnlocked, checkAudioUnlock, unlockAudio]);
+  }, [isUnlocked, checkAudioUnlock, unlockAudio, selectedVoice]);
   
   // Stop speaking
   const stopSpeaking = useCallback(() => {
@@ -350,6 +352,8 @@ export const useEnhancedOptimizedVoice = () => {
     isSpeaking,
     isUnlocked,
     error,
+    selectedVoice,
+    setSelectedVoice,
     isIOS: isIOSDevice(), // Always return current iOS detection
   };
 };

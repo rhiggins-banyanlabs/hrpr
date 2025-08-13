@@ -16,6 +16,8 @@ export class IOSAudioService {
   private isPreparingAudio = false; // Prevent concurrent TTS calls
   private lastUserGesture = 0; // Timestamp of last user interaction
   private gestureAudio: HTMLAudioElement | null = null; // Audio element created during gesture
+  private speechSynthesis: SpeechSynthesis | null = null; // iOS native speech synthesis
+  private currentUtterance: SpeechSynthesisUtterance | null = null;
   
   // Singleton pattern
   public static getInstance(): IOSAudioService {
@@ -28,6 +30,17 @@ export class IOSAudioService {
   private constructor() {
     if (typeof window !== 'undefined') {
       this.setupEventListeners();
+      this.setupSpeechSynthesis();
+    }
+  }
+  
+  // Set up iOS native speech synthesis
+  private setupSpeechSynthesis(): void {
+    if ('speechSynthesis' in window) {
+      this.speechSynthesis = window.speechSynthesis;
+      console.log('🗣️ iOS Speech Synthesis available');
+    } else {
+      console.log('🗣️ Speech Synthesis not available');
     }
   }
   
@@ -542,6 +555,95 @@ export class IOSAudioService {
     return audio;
   }
   
+  // Use iOS native speech synthesis as fallback
+  private async speakWithNativeSynthesis(
+    text: string,
+    options: {
+      onStart?: () => void;
+      onEnd?: () => void;
+      onError?: (error: Error) => void;
+    } = {}
+  ): Promise<void> {
+    const { onStart, onEnd, onError } = options;
+    
+    if (!this.speechSynthesis) {
+      throw new Error('Speech synthesis not available');
+    }
+    
+    return new Promise<void>((resolve, reject) => {
+      try {
+        console.log('🗣️ [NATIVE] Using iOS native speech synthesis');
+        
+        // Stop any current speech
+        if (this.speechSynthesis) {
+          this.speechSynthesis.cancel();
+        }
+        
+        // Create utterance
+        const utterance = new SpeechSynthesisUtterance(text);
+        this.currentUtterance = utterance;
+        
+        // Configure utterance for better quality
+        utterance.rate = 1.2; // Slightly faster than default
+        utterance.pitch = 1.0;
+        utterance.volume = 1.0;
+        
+        // Try to find a good voice
+        if (this.speechSynthesis) {
+          const voices = this.speechSynthesis.getVoices();
+          const preferredVoice = voices.find(voice => 
+            voice.lang.startsWith('en') && 
+            (voice.name.includes('Samantha') || voice.name.includes('Alex') || voice.default)
+          );
+          
+          if (preferredVoice) {
+            utterance.voice = preferredVoice;
+            console.log('🗣️ [NATIVE] Using voice:', preferredVoice.name);
+          }
+        }
+        
+        // Set up event listeners
+        utterance.onstart = () => {
+          console.log('🗣️ [NATIVE] Speech started');
+          this.isSpeaking = true;
+          onStart?.();
+        };
+        
+        utterance.onend = () => {
+          console.log('🗣️ [NATIVE] Speech ended');
+          this.isSpeaking = false;
+          this.currentUtterance = null;
+          onEnd?.();
+          resolve();
+        };
+        
+        utterance.onerror = (event) => {
+          console.error('🗣️ [NATIVE] Speech error:', event.error);
+          this.isSpeaking = false;
+          this.currentUtterance = null;
+          const error = new Error(`Speech synthesis error: ${event.error}`);
+          onError?.(error);
+          reject(error);
+        };
+        
+        // Start speaking
+        if (this.speechSynthesis) {
+          this.speechSynthesis.speak(utterance);
+        } else {
+          throw new Error('Speech synthesis not available');
+        }
+        
+      } catch (error) {
+        console.error('🗣️ [NATIVE] Failed to start speech synthesis:', error);
+        this.isSpeaking = false;
+        this.currentUtterance = null;
+        const err = error instanceof Error ? error : new Error('Speech synthesis failed');
+        onError?.(err);
+        reject(err);
+      }
+    });
+  }
+  
   // Speak text with iOS compatibility - SPEED OPTIMIZED
   public async speakText(
     text: string,
@@ -560,6 +662,11 @@ export class IOSAudioService {
       console.log(`🔊 [SPEED] Starting TTS for: "${text.substring(0, 50)}..."`);
       console.log(`🔊 [SPEED] iOS device: ${this.isIOSDevice()}, waiting for API: ${isWaitingForAPI}`);
       
+      if (this.isIOSDevice()) {
+        console.log('🗣️ [iOS SOLUTION] Using native iOS TTS to eliminate audio timeout/blocking issues');
+        console.log('🗣️ [iOS SOLUTION] Native TTS starts instantly and is never blocked by iOS audio restrictions');
+      }
+      
       // Prevent concurrent TTS calls that could cause issues
       if (this.isPreparingAudio) {
         console.log('🔊 [SPEED] Already preparing audio, stopping current...');
@@ -568,6 +675,35 @@ export class IOSAudioService {
       
       // Stop current speech if playing
       this.stopSpeaking();
+      
+      // FOR iOS: ALWAYS use native speech synthesis (instant, never blocked, better reliability)
+      if (this.isIOSDevice() && this.speechSynthesis) {
+        console.log('🗣️ [NATIVE] Using iOS native speech synthesis for ALL responses (filler, main, feedback)');
+        console.log('🗣️ [NATIVE] This ensures instant playback without audio blocking issues');
+        
+        try {
+          await this.speakWithNativeSynthesis(text, {
+            onStart,
+            onEnd: () => {
+              this.isPreparingAudio = false;
+              onEnd?.();
+            },
+            onError: (error) => {
+              console.error('🗣️ [NATIVE] Native synthesis failed:', error);
+              // For iOS, we'll still try to fall back to OpenAI TTS if native fails
+              // But native should virtually never fail on iOS devices
+            }
+          });
+          
+          // If we get here, native synthesis succeeded
+          console.log('🗣️ [NATIVE] Native synthesis completed successfully - no audio blocking!');
+          return;
+          
+        } catch (nativeError) {
+          console.warn('🗣️ [NATIVE] Native synthesis failed (rare), falling back to OpenAI TTS:', nativeError);
+          // Continue to OpenAI TTS fallback below (this should be very rare)
+        }
+      }
       
       // Stop keep-alive if it's running (we're about to play real audio)
       // UNLESS we're waiting for API (filler response)
@@ -773,6 +909,14 @@ export class IOSAudioService {
   
   // Stop current speech
   public stopSpeaking(): void {
+    // Stop native iOS speech synthesis if active
+    if (this.currentUtterance && this.speechSynthesis) {
+      console.log('🔊 Stopping native iOS speech synthesis');
+      this.speechSynthesis.cancel();
+      this.currentUtterance = null;
+    }
+    
+    // Stop OpenAI TTS audio if active
     if (this.currentAudio) {
       console.log('🔊 Stopping current audio');
       this.currentAudio.pause();
@@ -780,6 +924,7 @@ export class IOSAudioService {
       URL.revokeObjectURL(this.currentAudio.src);
       this.currentAudio = null;
     }
+    
     this.isSpeaking = false;
     this.isPreparingAudio = false;
   }
@@ -822,6 +967,12 @@ export class IOSAudioService {
       this.audioContext.close();
       this.audioContext = null;
     }
+    
+    // Clean up native speech synthesis
+    if (this.speechSynthesis && this.speechSynthesis.speaking) {
+      this.speechSynthesis.cancel();
+    }
+    this.currentUtterance = null;
     
     this.isUnlocked = false;
     this.keepAliveActive = false;

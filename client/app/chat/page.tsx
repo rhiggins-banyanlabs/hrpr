@@ -3,7 +3,7 @@
 
 import { useEffect, useRef, useCallback, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useOptimizedVoice } from "@/hooks/useOptimizedVoice";
+import { useEnhancedOptimizedVoice } from "@/hooks/useEnhancedOptimizedVoice";
 import { useChat } from "@/hooks/useChat";
 import { useChatStorage } from "@/hooks/useChatStorage";
 import { VoiceSelector, VoiceInput } from "@/features/voice";
@@ -28,8 +28,13 @@ function ChatPageContent() {
   const [isVoiceInputActive, setIsVoiceInputActive] = useState(false);
   const [voiceTranscript, setVoiceTranscript] = useState("");
   
-  // Voice hooks
-  const { speakText, isSpeaking, selectedVoice, setSelectedVoice, unlockAudio } = useOptimizedVoice();
+  // Voice hooks - using enhanced version with iOS audio service integration
+  const { speakText, isSpeaking, selectedVoice, setSelectedVoice, unlockAudio: unlockAudioBoolean, isIOS } = useEnhancedOptimizedVoice();
+  
+  // Wrapper to match expected interface
+  const unlockAudio = useCallback(async (): Promise<void> => {
+    await unlockAudioBoolean();
+  }, [unlockAudioBoolean]);
   
   // Chat hook - gets session ID from storage
   const {
@@ -290,7 +295,12 @@ function ChatPageContent() {
           Chat with Harper
           {isSpeaking && (
             <span className="ml-2 text-sm text-green-400 animate-pulse">
-              🔊 Speaking
+              🔊 {isIOS ? 'iOS Native' : 'Speaking'}
+            </span>
+          )}
+          {isIOS && !isSpeaking && (
+            <span className="ml-2 text-xs text-blue-400">
+              📱 iOS Native TTS
             </span>
           )}
         </h1>
