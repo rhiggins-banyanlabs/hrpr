@@ -708,7 +708,7 @@ export class IOSAudioService {
     return chunks.filter(chunk => chunk.length > 0);
   }
 
-  // Use iOS native speech synthesis as fallback
+  // DISABLED: Use iOS native speech synthesis as fallback (now using OpenAI TTS exclusively)
   public async speakWithNativeSynthesis(
     text: string,
     options: {
@@ -719,53 +719,15 @@ export class IOSAudioService {
   ): Promise<void> {
     const { onStart, onEnd, onError } = options;
     
-    console.log('🗣️ [NATURAL] Starting natural iOS speech synthesis');
-    console.log('🗣️ [NATURAL] Text length:', text.length, 'characters');
+    console.log('🗣️ [DISABLED] Native iOS speech synthesis disabled - using OpenAI TTS exclusively');
     
-    if (!this.speechSynthesis) {
-      const error = new Error('Speech synthesis not available');
-      console.error('🗣️ [NATURAL] Speech synthesis not available');
-      throw error;
-    }
-    
-    try {
-      // Stop any current speech
-      this.speechSynthesis.cancel();
-      this.isSpeaking = false;
-      
-      // Create natural speech chunks with preprocessing
-      const chunks = this.createNaturalSpeechChunks(text);
-      console.log('🗣️ [NATURAL] Created', chunks.length, 'natural chunks');
-      
-      if (chunks.length === 0) {
-        console.warn('🗣️ [NATURAL] No chunks created, nothing to speak');
-        onEnd?.();
-        return;
-      }
-      
-      // Signal start
-      onStart?.();
-      this.isSpeaking = true;
-      
-      // Process chunks with natural pauses
-      await this.processNaturalChunks(chunks);
-      
-      // Signal end
-      console.log('🗣️ [NATURAL] All natural chunks completed successfully');
-      this.isSpeaking = false;
-      onEnd?.();
-      
-    } catch (error) {
-      console.error('🗣️ [NATURAL] Natural speech synthesis failed:', error);
-      this.isSpeaking = false;
-      this.currentUtterance = null;
-      const err = error instanceof Error ? error : new Error('Natural speech synthesis failed');
-      onError?.(err);
-      throw err;
-    }
+    // Immediately throw error to force fallback to OpenAI TTS
+    const error = new Error('Native synthesis disabled - using OpenAI TTS');
+    onError?.(error);
+    throw error;
   }
   
-  // Process natural chunks with micro-pauses for better flow
+  // DISABLED: Process natural chunks with micro-pauses for better flow (only used by native synthesis)
   private async processNaturalChunks(chunks: string[]): Promise<void> {
     let chunkIndex = 0;
     
@@ -795,7 +757,7 @@ export class IOSAudioService {
     }
   }
   
-  // Speak a single natural chunk with enhanced voice settings
+  // DISABLED: Speak a single natural chunk with enhanced voice settings (only used by native synthesis)
   private async speakNaturalChunk(text: string, chunkIndex: number): Promise<void> {
     return new Promise<void>((resolve, reject) => {
       // Natural timeout (8 seconds should be enough for any chunk)

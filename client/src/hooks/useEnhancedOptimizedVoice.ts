@@ -115,16 +115,16 @@ export const useEnhancedOptimizedVoice = () => {
     const voice = typeof voiceOrOptions === 'string' ? voiceOrOptions : (voiceOrOptions?.voice || selectedVoice);
     const isWaitingForAPI = typeof voiceOrOptions === 'object' ? voiceOrOptions.isWaitingForAPI : false;
     try {
-      console.log(`🔊 Speaking text (iOS: ${isIOSRef.current}):`, text.substring(0, 100));
-      console.log('🔊 Full iOS detection check:', {
+      console.log(`🔊 Speaking text with OpenAI TTS (iOS: ${isIOSRef.current}):`, text.substring(0, 100));
+      console.log('🔊 Using OpenAI TTS for all devices:', {
         isIOSRef: isIOSRef.current,
         currentDetection: isIOSDevice(),
-        userAgent: typeof window !== 'undefined' ? navigator.userAgent : 'SSR',
-        platform: typeof window !== 'undefined' ? navigator.platform : 'SSR'
+        voice: voice,
+        userAgent: typeof window !== 'undefined' ? navigator.userAgent : 'SSR'
       });
       setError(null);
       
-      // Check iOS status fresh each time to ensure proper routing to FFmpeg conversion
+      // Check iOS status fresh each time for enhanced audio handling
       const isCurrentlyIOS = isIOSDevice();
       
       // For iOS, always ensure audio is unlocked before speaking
@@ -136,110 +136,53 @@ export const useEnhancedOptimizedVoice = () => {
             const unlocked = await unlockAudio();
             console.log('🔓 Audio unlock result:', unlocked);
             if (!unlocked) {
-              throw new Error('Audio is locked. Please tap the voice button again to enable audio.');
+              throw new Error('Audio is locked. Please tap the voice button again to enable OpenAI TTS audio.');
             }
           } catch (unlockError) {
             console.error('🔓 Audio unlock failed:', unlockError);
-            throw new Error('Could not unlock audio for playback. Please try tapping again.');
+            throw new Error('Could not unlock audio for OpenAI TTS playback. Please try tapping again.');
           }
         }
       }
       
-      // TRY iOS native speech synthesis first, fallback to OpenAI TTS if needed
+      // Use OpenAI TTS exclusively (no more iOS native TTS)
       if (isCurrentlyIOS) {
-        console.log('🍎 Trying iOS NATIVE speech synthesis first');
-        console.log('🍎 speechSynthesis available:', 'speechSynthesis' in window);
-        
-        // Debug: List all available voices to find Siri Voice 4
-        setTimeout(() => {
-          iosAudioService.listAvailableVoices();
-        }, 1000); // Delay to ensure voices are loaded
+        console.log('🍎 Using OpenAI TTS for iOS with enhanced audio handling');
         
         return new Promise<void>((resolve, reject) => {
-          // Use the native speech synthesis method directly
-          iosAudioService.speakWithNativeSynthesis(text, {
+          const timeoutId = setTimeout(() => {
+            console.warn('🔊 OpenAI TTS timeout - forcing stop');
+            setIsSpeaking(false);
+            iosAudioService.stopSpeaking();
+            reject(new Error('TTS timeout'));
+          }, 15000);
+          
+          iosAudioService.speakText(text, {
+            voice,
+            isWaitingForAPI,
             onStart: () => {
-              console.log('🔊 iOS Native TTS started successfully');
+              console.log('🔊 OpenAI TTS started');
               setIsSpeaking(true);
             },
             onEnd: () => {
-              console.log('🔊 iOS Native TTS ended successfully');
+              console.log('🔊 OpenAI TTS ended');
+              clearTimeout(timeoutId);
               setIsSpeaking(false);
               resolve();
             },
             onError: (error) => {
-              console.error('🔊 iOS Native TTS failed:', error);
-              console.log('🔊 Falling back to OpenAI TTS...');
+              console.error('🔊 OpenAI TTS failed:', error);
+              clearTimeout(timeoutId);
               setIsSpeaking(false);
-              
-              // Fallback to OpenAI TTS
-              const timeoutId = setTimeout(() => {
-                console.warn('🔊 OpenAI TTS fallback timeout - forcing stop');
-                setIsSpeaking(false);
-                iosAudioService.stopSpeaking();
-                reject(new Error('TTS timeout'));
-              }, 15000);
-              
-              iosAudioService.speakText(text, {
-                voice,
-                isWaitingForAPI,
-                onStart: () => {
-                  console.log('🔊 OpenAI TTS fallback started');
-                  setIsSpeaking(true);
-                },
-                onEnd: () => {
-                  console.log('🔊 OpenAI TTS fallback ended');
-                  clearTimeout(timeoutId);
-                  setIsSpeaking(false);
-                  resolve();
-                },
-                onError: (fallbackError) => {
-                  console.error('🔊 OpenAI TTS fallback also failed:', fallbackError);
-                  clearTimeout(timeoutId);
-                  setIsSpeaking(false);
-                  setError(fallbackError.message);
-                  reject(fallbackError);
-                },
-              });
+              setError(error.message);
+              reject(error);
             },
-          }).catch((nativeError) => {
-            console.error('🔊 Native synthesis promise rejected:', nativeError);
-            console.log('🔊 Falling back to OpenAI TTS...');
-            setIsSpeaking(false);
-            
-            // Fallback to OpenAI TTS
-            const timeoutId = setTimeout(() => {
-              console.warn('🔊 OpenAI TTS fallback timeout - forcing stop');
-              setIsSpeaking(false);
-              iosAudioService.stopSpeaking();
-              reject(new Error('TTS timeout'));
-            }, 15000);
-            
-            iosAudioService.speakText(text, {
-              voice,
-              isWaitingForAPI,
-              onStart: () => {
-                console.log('🔊 OpenAI TTS fallback started');
-                setIsSpeaking(true);
-              },
-              onEnd: () => {
-                console.log('🔊 OpenAI TTS fallback ended');
-                clearTimeout(timeoutId);
-                setIsSpeaking(false);
-                resolve();
-              },
-              onError: (fallbackError) => {
-                console.error('🔊 OpenAI TTS fallback also failed:', fallbackError);
-                clearTimeout(timeoutId);
-                setIsSpeaking(false);
-                setError(fallbackError.message);
-                reject(fallbackError);
-              },
-            });
           });
         });
       } else {
-        // Use standard Web Audio API for non-iOS
+        // Use OpenAI TTS for non-iOS devices too
+        console.log('💻 Using OpenAI TTS for non-iOS device');
+        
         return new Promise<void>((resolve, reject) => {
           // Stop any current audio
           if (currentAudioRef.current) {
@@ -248,7 +191,7 @@ export const useEnhancedOptimizedVoice = () => {
             URL.revokeObjectURL(currentAudioRef.current.src);
           }
           
-          // Get TTS audio from API
+          // Get TTS audio from OpenAI API
           fetch('/api/tts', {
             method: 'POST',
             headers: {
@@ -264,7 +207,7 @@ export const useEnhancedOptimizedVoice = () => {
           })
           .then(response => {
             if (!response.ok) {
-              throw new Error(`TTS API failed: ${response.statusText}`);
+              throw new Error(`OpenAI TTS API failed: ${response.statusText}`);
             }
             return response.arrayBuffer();
           })
@@ -276,12 +219,12 @@ export const useEnhancedOptimizedVoice = () => {
             currentAudioRef.current = audio;
             
             audio.onplay = () => {
-              console.log('🔊 Non-iOS audio started');
+              console.log('🔊 OpenAI TTS audio started');
               setIsSpeaking(true);
             };
             
             audio.onended = () => {
-              console.log('🔊 Non-iOS audio ended');
+              console.log('🔊 OpenAI TTS audio ended');
               setIsSpeaking(false);
               URL.revokeObjectURL(audioUrl);
               currentAudioRef.current = null;
@@ -289,11 +232,11 @@ export const useEnhancedOptimizedVoice = () => {
             };
             
             audio.onerror = (event) => {
-              console.error('🔊 Non-iOS audio error:', event);
+              console.error('🔊 OpenAI TTS audio error:', event);
               setIsSpeaking(false);
               URL.revokeObjectURL(audioUrl);
               currentAudioRef.current = null;
-              const error = new Error('Audio playback failed');
+              const error = new Error('OpenAI TTS playback failed');
               setError(error.message);
               reject(error);
             };
@@ -301,7 +244,7 @@ export const useEnhancedOptimizedVoice = () => {
             return audio.play();
           })
           .catch(error => {
-            console.error('🔊 Non-iOS TTS error:', error);
+            console.error('🔊 OpenAI TTS error:', error);
             setError(error.message);
             reject(error);
           });
@@ -316,9 +259,9 @@ export const useEnhancedOptimizedVoice = () => {
     }
   }, [isUnlocked, checkAudioUnlock, unlockAudio, selectedVoice]);
   
-  // Stop speaking
+  // Stop speaking (OpenAI TTS)
   const stopSpeaking = useCallback(() => {
-    console.log('🔊 Stopping speech');
+    console.log('🔊 Stopping OpenAI TTS speech');
     
     const isCurrentlyIOS = isIOSDevice();
     if (isCurrentlyIOS) {
@@ -342,7 +285,7 @@ export const useEnhancedOptimizedVoice = () => {
     try {
       const text = introText || "Hello! I'm Harper, your AI conference assistant. You can ask me about speakers, sessions, locations, and more. How can I help you today?";
       
-      console.log('🚀 Pre-caching intro message...');
+      console.log('🚀 Pre-caching OpenAI TTS intro message...');
       
       // Make a request to cache the intro message
       const response = await fetch('/api/tts', {
@@ -352,7 +295,7 @@ export const useEnhancedOptimizedVoice = () => {
         },
         body: JSON.stringify({
           text,
-          voice: 'nova',
+          voice: selectedVoice || 'nova',
           model: 'tts-1',
           response_format: 'mp3',
           speed: parseFloat(process.env.NEXT_PUBLIC_TTS_SPEED || '1.0'),
@@ -363,14 +306,14 @@ export const useEnhancedOptimizedVoice = () => {
         // Just cache it, don't play it
         await response.arrayBuffer();
         introMessageCachedRef.current = true;
-        console.log('🚀 Intro message cached successfully');
+        console.log('🚀 OpenAI TTS intro message cached successfully');
       }
     } catch (error) {
-      console.error('🚀 Failed to cache intro message:', error);
+      console.error('🚀 Failed to cache OpenAI TTS intro message:', error);
     }
-  }, []);
+  }, [selectedVoice]);
   
-  // Check speaking state from iOS service
+  // Check speaking state from iOS service (for OpenAI TTS)
   useEffect(() => {
     const isCurrentlyIOS = isIOSDevice();
     if (!isCurrentlyIOS) return;
