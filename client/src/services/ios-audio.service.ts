@@ -6,6 +6,8 @@ export class IOSAudioService {
   private audioQueue: HTMLAudioElement[] = [];
   private currentAudio: HTMLAudioElement | null = null;
   private isSpeaking = false;
+  private keepAliveInterval: NodeJS.Timeout | null = null;
+  private silentOscillator: OscillatorNode | null = null;
   
   // Singleton pattern
   public static getInstance(): IOSAudioService {
@@ -96,6 +98,58 @@ export class IOSAudioService {
   // Check if audio is unlocked
   public isAudioUnlocked(): boolean {
     return this.isUnlocked;
+  }
+  
+  // Start keep-alive to prevent iOS audio suspension
+  public startKeepAlive(): void {
+    if (!this.isIOSDevice() || !this.audioContext || this.keepAliveInterval) {
+      return;
+    }
+    
+    console.log('🔊 Starting iOS audio keep-alive');
+    
+    // Create a silent oscillator
+    try {
+      this.silentOscillator = this.audioContext.createOscillator();
+      const gainNode = this.audioContext.createGain();
+      gainNode.gain.value = 0.001; // Nearly silent
+      
+      this.silentOscillator.connect(gainNode);
+      gainNode.connect(this.audioContext.destination);
+      
+      this.silentOscillator.frequency.value = 20; // Below audible range
+      this.silentOscillator.start();
+      
+      // Also ping the context periodically
+      this.keepAliveInterval = setInterval(() => {
+        if (this.audioContext && this.audioContext.state === 'suspended') {
+          console.log('🔊 Resuming suspended audio context');
+          this.audioContext.resume();
+        }
+      }, 1000);
+    } catch (error) {
+      console.error('🔊 Failed to start keep-alive:', error);
+    }
+  }
+  
+  // Stop keep-alive
+  public stopKeepAlive(): void {
+    console.log('🔊 Stopping iOS audio keep-alive');
+    
+    if (this.silentOscillator) {
+      try {
+        this.silentOscillator.stop();
+        this.silentOscillator.disconnect();
+      } catch (e) {
+        // Already stopped
+      }
+      this.silentOscillator = null;
+    }
+    
+    if (this.keepAliveInterval) {
+      clearInterval(this.keepAliveInterval);
+      this.keepAliveInterval = null;
+    }
   }
   
   // Manually unlock audio (call this on user interaction)
@@ -204,9 +258,10 @@ export class IOSAudioService {
       onStart?: () => void;
       onEnd?: () => void;
       onError?: (error: Error) => void;
+      isWaitingForAPI?: boolean;
     } = {}
   ): Promise<void> {
-    const { voice = 'nova', onStart, onEnd, onError } = options;
+    const { voice = 'nova', onStart, onEnd, onError, isWaitingForAPI = false } = options;
     
     try {
       console.log(`🔊 Speaking text (iOS: ${this.isIOSDevice()}):`, text);
@@ -214,23 +269,47 @@ export class IOSAudioService {
       // Stop current speech if playing
       this.stopSpeaking();
       
-      // For iOS, just check if we have a basic audio context - don't over-refresh
+      // Stop keep-alive if it's running (we're about to play real audio)
+      if (!isWaitingForAPI) {
+        this.stopKeepAlive();
+      }
+      
+      // For iOS, ensure audio context is ready and reactivate if needed
       if (this.isIOSDevice()) {
-        console.log('🔓 Checking audio context for iOS...');
-        if (!this.audioContext || this.audioContext.state === 'closed') {
-          console.log('🔓 Creating fresh audio context...');
+        console.log('🔓 Preparing audio context for iOS playback...');
+        
+        // Always try to reactivate the context before playback
+        if (this.audioContext) {
           try {
-            this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-            if (this.audioContext.state === 'suspended') {
+            // Force reactivation
+            if (this.audioContext.state === 'suspended' || this.audioContext.state === 'interrupted') {
+              console.log('🔓 Reactivating suspended/interrupted audio context...');
               await this.audioContext.resume();
             }
-            this.isUnlocked = true;
+            
+            // Double-check it's running
+            if (this.audioContext.state !== 'running') {
+              console.log('🔓 Creating new audio context (old one in state:', this.audioContext.state, ')');
+              this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+              await this.audioContext.resume();
+            }
           } catch (error) {
-            console.error('🔓 Failed to create audio context:', error);
-            throw new Error('Audio context creation failed. Please try again.');
+            console.error('🔓 Failed to reactivate audio context:', error);
+            // Create a fresh context
+            this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+            await this.audioContext.resume();
+          }
+        } else {
+          // No context exists, create one
+          console.log('🔓 Creating fresh audio context...');
+          this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+          if (this.audioContext.state === 'suspended') {
+            await this.audioContext.resume();
           }
         }
-        console.log('🔓 Audio context ready, state:', this.audioContext.state);
+        
+        this.isUnlocked = true;
+        console.log('🔓 Audio context ready, final state:', this.audioContext.state);
       }
       
       // Get audio from TTS API
@@ -356,6 +435,7 @@ export class IOSAudioService {
   // Clean up resources
   public cleanup(): void {
     this.stopSpeaking();
+    this.stopKeepAlive();
     
     if (this.audioContext) {
       this.audioContext.close();

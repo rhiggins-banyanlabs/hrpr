@@ -3,6 +3,7 @@ import { useState, useRef, useCallback } from 'react';
 import { ChatStorageService } from '@/lib/supabase/chatStorage';
 import { IntentDetectorService } from '@/services/intent-detector.service';
 import { NameExtractorService } from '@/services/name-extractor.service';
+import { iosAudioService } from '@/services/ios-audio.service';
 
 interface Message {
   id: string;
@@ -243,6 +244,9 @@ export const useChat = ({
       // Show thinking dots
       setIsBotThinking(true);
 
+      // Start keep-alive for iOS during API call
+      iosAudioService.startKeepAlive();
+
       // Create new abort controller for this request
       abortControllerRef.current = new AbortController();
 
@@ -264,6 +268,9 @@ export const useChat = ({
       }
 
       const data = await response.json();
+      
+      // Stop keep-alive once we have the response
+      iosAudioService.stopKeepAlive();
       
       if (!data.success || !data.response) {
         throw new Error(data.error || 'No response from OpenAI');
@@ -322,6 +329,9 @@ export const useChat = ({
       await Promise.all([ttsPromise, dbPromise]);
 
     } catch (error: any) {
+      // Always stop keep-alive on error
+      iosAudioService.stopKeepAlive();
+      
       if (error.name === 'AbortError') {
         return;
       }
