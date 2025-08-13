@@ -594,9 +594,10 @@ export class IOSAudioService {
       });
     } else {
       console.log('❌ No Enhanced voices found in available voices');
-      console.log('🔍 Searching for voices containing "Samantha", "neural", "premium":');
+      console.log('🔍 Searching for voices containing "Ava", "Premium", "neural":');
       
       const alternativeVoices = voices.filter(v =>
+        v.name.includes('Ava') ||
         v.name.includes('Samantha') ||
         v.name.toLowerCase().includes('neural') ||
         v.name.toLowerCase().includes('premium') ||
@@ -832,7 +833,11 @@ export class IOSAudioService {
         // iOS Native Voices - prioritize Enhanced/Premium downloaded voices
         const preferredVoiceNames = [
           // Tier 0: Enhanced/Premium voices (highest quality downloaded voices)
-          'Samantha (Enhanced)',  // Enhanced version - highest quality
+          'Ava Premium',          // Premium Ava - top priority
+          'Ava (Premium)',        // Alternative naming
+          'Ava Enhanced',         // Enhanced version
+          'Ava (Enhanced)',       // Alternative naming
+          'Samantha (Enhanced)',  // Enhanced version - secondary
           'Samantha Enhanced',    // Alternative naming
           'Alex (Enhanced)',      // Enhanced male voice
           'Alex Enhanced',        
@@ -840,8 +845,6 @@ export class IOSAudioService {
           'Victoria Enhanced',
           'Allison (Enhanced)',   // Enhanced warm voice
           'Allison Enhanced',
-          'Ava (Enhanced)',       // Enhanced modern voice
-          'Ava Enhanced',
           
           // Tier 1: Standard Premium iOS voices
           'Samantha',      // Female US - most natural iOS voice
@@ -883,12 +886,14 @@ export class IOSAudioService {
           voice.voiceURI.toLowerCase().includes('premium')
         );
         
-        // Sort to prioritize "Samantha Enhanced" first
+        // Sort to prioritize "Ava Premium" first
         enhancedVoices.sort((a, b) => {
+          if (a.name.includes('Ava') && (a.name.includes('Premium') || a.name.includes('Enhanced'))) return -1;
+          if (b.name.includes('Ava') && (b.name.includes('Premium') || b.name.includes('Enhanced'))) return 1;
           if (a.name.includes('Samantha') && a.name.includes('Enhanced')) return -1;
           if (b.name.includes('Samantha') && b.name.includes('Enhanced')) return 1;
-          if (a.name.includes('Enhanced')) return -1;
-          if (b.name.includes('Enhanced')) return 1;
+          if (a.name.includes('Enhanced') || a.name.includes('Premium')) return -1;
+          if (b.name.includes('Enhanced') || b.name.includes('Premium')) return 1;
           return 0;
         });
         
