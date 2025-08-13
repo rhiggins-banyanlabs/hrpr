@@ -8,7 +8,28 @@ interface UseUnifiedVoiceProps {
 }
 
 export const useUnifiedVoice = ({ onHarperDetected, onError }: UseUnifiedVoiceProps) => {
-  const [isIOS] = useState(() => isIOSDevice());
+  const [isIOS] = useState(() => {
+    if (typeof window === 'undefined') {
+      console.log('🍎 iOS Detection: Window undefined (SSR)');
+      return false; // Default to false during SSR
+    }
+    
+    const result = isIOSDevice();
+    console.log('🔍 Unified Voice - iOS Detection Result:', result);
+    console.log('🔍 User Agent:', navigator.userAgent);
+    console.log('🔍 Platform:', navigator.platform);
+    console.log('🔍 Max Touch Points:', navigator.maxTouchPoints);
+    
+    // If this is an iPad (regardless of browser), use iOS voice system
+    // because Web Speech API is unreliable on iOS Chrome and Safari has MediaDevices issues
+    if (/iPad/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
+      console.log('🍎 iPad detected - forcing iOS voice system for maximum compatibility');
+      return true;
+    }
+    
+    return result;
+  });
+  
   const [unifiedListening, setUnifiedListening] = useState(false);
   const [unifiedTranscript, setUnifiedTranscript] = useState('');
   const [unifiedError, setUnifiedError] = useState<string | null>(null);
@@ -38,14 +59,15 @@ export const useUnifiedVoice = ({ onHarperDetected, onError }: UseUnifiedVoicePr
     );
   };
   
-  // Extract query from Harper wake word
+  // Extract query from transcript after Harper detection
   const extractQueryFromTranscript = (fullTranscript: string): string => {
     const lowerTranscript = fullTranscript.toLowerCase();
-    let query = "";
     
-    // Try with "hey" prefix first
+    // Try to find "hey harper" or similar first
+    let query = "";
     for (const variation of HARPER_VARIATIONS) {
-      if (lowerTranscript.includes(`hey ${variation}`)) {
+      const heyVariation = `hey ${variation}`;
+      if (lowerTranscript.includes(heyVariation)) {
         const parts = fullTranscript.split(new RegExp(`hey ${variation}`, 'i'));
         query = parts[1]?.trim() || "";
         break;
@@ -184,25 +206,21 @@ export const useUnifiedVoice = ({ onHarperDetected, onError }: UseUnifiedVoicePr
     }
   }, [isIOS, iosVoice, startListening]);
   
-  // Sync state from platform-specific implementations
+  // Sync state between implementations
   useEffect(() => {
-    // Don't sync listening state if we're in the middle of a manual change
-    if (manualListeningChangeRef.current) {
-      console.log('🎤 Skipping state sync - manual listening change in progress');
-      return;
-    }
-    
-    if (!isIOS) {
-      // Sync Web Speech API state
-      setUnifiedListening(webSpeechState.listening);
-      setUnifiedTranscript(webSpeechState.transcript);
-      setUnifiedError(webSpeechState.permissionError);
-      setHarperDetected(webSpeechState.HarperDetected);
-      setIsNavigating(webSpeechState.isNavigating);
-    } else {
-      // Sync iOS state
-      setUnifiedListening(iosVoice.isListening);
-      // Transcript and errors are handled via callbacks
+    if (!manualListeningChangeRef.current) {
+      if (!isIOS) {
+        // Sync Web Speech API state
+        setUnifiedListening(webSpeechState.listening);
+        setUnifiedTranscript(webSpeechState.transcript);
+        setUnifiedError(webSpeechState.permissionError);
+        setHarperDetected(webSpeechState.HarperDetected);
+        setIsNavigating(webSpeechState.isNavigating);
+      } else {
+        // Sync iOS state
+        setUnifiedListening(iosVoice.isListening);
+        // Transcript and errors are handled via callbacks
+      }
     }
   }, [
     isIOS,
@@ -231,5 +249,21 @@ export const useUnifiedVoice = ({ onHarperDetected, onError }: UseUnifiedVoicePr
     toggleListening,
     resetStates,
     requestPermission,
+    
+    // Debug helpers
+    debugInfo: {
+      usingIOSVoice: isIOS,
+      iosVoiceState: {
+        isListening: iosVoice.isListening,
+        isProcessing: iosVoice.isProcessing,
+        permissionStatus: iosVoice.permissionStatus,
+        transcript: iosVoice.transcript
+      },
+      webSpeechState: {
+        listening: webSpeechState.listening,
+        transcript: webSpeechState.transcript,
+        permissionError: webSpeechState.permissionError
+      }
+    }
   };
 };

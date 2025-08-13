@@ -8,16 +8,36 @@ export const isIOSDevice = (): boolean => {
   const userAgent = navigator.userAgent;
   const platform = navigator.platform;
   
-  // Check for iOS devices (iPhone, iPad, iPod)
+  // Check for iOS devices (iPhone, iPad, iPod) - including Chrome on iOS
   const isIOS = /iPad|iPhone|iPod/.test(userAgent) && !(window as any).MSStream;
   
   // Check for iPad on iOS 13+ (reports as MacIntel)
   const isIPadOS = platform === 'MacIntel' && navigator.maxTouchPoints > 1;
   
-  // Check for iOS Safari specifically
-  const isIOSSafari = isIOS && /Safari/.test(userAgent) && !/CriOS/.test(userAgent);
+  // Additional iPad detection for newer iPadOS versions
+  const isIPadUserAgent = /iPad/.test(userAgent);
   
-  return isIOS || isIPadOS || isIOSSafari;
+  // For iPads, we should ALWAYS use iOS-compatible voice system regardless of browser
+  // because Web Speech API is unreliable/disabled on iOS Chrome and Safari has MediaDevices issues
+  const result = isIOS || isIPadOS || isIPadUserAgent;
+  
+  console.log('🍎 iOS Detection Debug:', {
+    userAgent: userAgent.substring(0, 100),
+    platform,
+    maxTouchPoints: navigator.maxTouchPoints,
+    isIOS,
+    isIPadOS,
+    isIPadUserAgent,
+    finalResult: result,
+    hasMediaDevices: !!navigator.mediaDevices,
+    hasGetUserMedia: !!(navigator.mediaDevices?.getUserMedia),
+    isChrome: /Chrome/.test(userAgent),
+    isChromeOrCriOS: /Chrome|CriOS/.test(userAgent),
+    isSafari: /Safari/.test(userAgent),
+    detailedUA: userAgent
+  });
+  
+  return result;
 };
 
 interface UseIOSCompatibleVoiceProps {
@@ -95,29 +115,133 @@ export const useIOSCompatibleVoice = ({ onTranscript, onError }: UseIOSCompatibl
     try {
       console.log('🎤 Requesting microphone permission for iOS...');
       
-      // For iOS, use the simplest possible constraints
-      const constraints = isIOSDevice() ? {
-        audio: true  // Simplest possible constraint for iOS
-      } : {
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
+      // CRITICAL: iOS requires this to be called within a user gesture event
+      // Check if we're in a secure context (HTTPS required for iOS)
+      if (isIOSDevice() && location.protocol !== 'https:' && location.hostname !== 'localhost') {
+        console.error('❌ HTTPS required for iOS microphone access');
+        const errorMsg = 'Microphone access on iOS requires a secure connection (HTTPS). Please use HTTPS.';
+        onError?.(errorMsg);
+        return false;
+      }
+      
+      // Step 1: Initialize Audio Context for iOS (MUST be done in user gesture)
+      if (isIOSDevice() && !audioContextRef.current) {
+        console.log('🎵 Initializing AudioContext for iOS in user gesture...');
+        try {
+          audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+          
+          // Resume AudioContext immediately (iOS requirement)
+          if (audioContextRef.current.state === 'suspended') {
+            await audioContextRef.current.resume();
+            console.log('🎵 AudioContext resumed');
+          }
+          
+          // Create a silent audio buffer to "unlock" iOS audio
+          const buffer = audioContextRef.current.createBuffer(1, 1, 22050);
+          const source = audioContextRef.current.createBufferSource();
+          source.buffer = buffer;
+          source.connect(audioContextRef.current.destination);
+          source.start();
+          
+          console.log('🎵 iOS audio session unlocked');
+        } catch (audioError) {
+          console.warn('⚠️ AudioContext initialization failed:', audioError);
+          // Continue anyway, might still work
         }
-      };
+      }
       
-      console.log('🎤 Using constraints:', constraints);
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      // Step 2: Try modern MediaDevices API first
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        console.log('🎤 Trying modern MediaDevices API...');
+        
+        // Use the most basic constraints for iOS compatibility
+        const constraints = {
+          audio: isIOSDevice() ? {
+            // Minimal constraints for maximum iOS compatibility
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false
+          } : {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          }
+        };
+        
+        console.log('🎤 Using constraints:', constraints);
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        
+        console.log('🎤 Modern getUserMedia permission granted');
+        // Test the stream briefly
+        const tracks = stream.getAudioTracks();
+        console.log('🎤 Audio tracks received:', tracks.length, tracks);
+        
+        // Stop the stream immediately (we just needed permission)
+        stream.getTracks().forEach(track => {
+          console.log('🛑 Stopping track:', track.label);
+          track.stop();
+        });
+        
+        setPermissionStatus('granted');
+        console.log('✅ Microphone permission granted via modern API');
+        return true;
+      }
       
-      // Store the stream for later use
-      streamRef.current = stream;
+      // Step 3: Fallback to legacy getUserMedia for older iOS versions
+      console.log('🎤 MediaDevices not available, trying legacy getUserMedia...');
       
-      // Stop the stream immediately (we just needed permission)
-      stream.getTracks().forEach(track => track.stop());
+      const legacyGetUserMedia = (navigator as any).getUserMedia || 
+                               (navigator as any).webkitGetUserMedia || 
+                               (navigator as any).mozGetUserMedia || 
+                               (navigator as any).msGetUserMedia;
       
-      setPermissionStatus('granted');
-      console.log('🎤 Microphone permission granted');
-      return true;
+      if (!legacyGetUserMedia) {
+        const errorMsg = 'Microphone access is not supported in this browser version. Please update to Safari 11+ or use a supported browser.';
+        onError?.(errorMsg);
+        return false;
+      }
+      
+      // Use legacy API with promise wrapper
+      return new Promise<boolean>((resolve) => {
+        const constraints = { audio: true };
+        console.log('🎤 Using legacy getUserMedia with constraints:', constraints);
+        
+        legacyGetUserMedia.call(navigator, 
+          constraints, 
+          (stream: MediaStream) => {
+            console.log('🎤 Legacy getUserMedia permission granted');
+            console.log('🎤 Legacy stream tracks:', stream.getAudioTracks());
+            
+            // Stop the stream immediately
+            stream.getTracks().forEach(track => {
+              console.log('🛑 Stopping legacy track:', track.label);
+              track.stop();
+            });
+            
+            setPermissionStatus('granted');
+            console.log('✅ Microphone permission granted via legacy API');
+            resolve(true);
+          },
+          (error: any) => {
+            console.error('🎤 Legacy getUserMedia permission error:', error);
+            
+            let message = 'Microphone access denied.';
+            if (error.name === 'NotAllowedError') {
+              message = 'Please allow microphone access when prompted by your browser. You may need to check your browser settings.';
+            } else if (error.name === 'NotFoundError') {
+              message = 'No microphone found. Please connect a microphone and try again.';
+            } else if (error.name === 'NotReadableError') {
+              message = 'Microphone is already in use by another application.';
+            } else if (error.name === 'NotSupportedError') {
+              message = 'Microphone access is not supported in this browser.';
+            }
+            
+            onError?.(message);
+            setPermissionStatus('denied');
+            resolve(false);
+          }
+        );
+      });
     } catch (error: any) {
       console.error('🎤 Microphone permission error:', error);
       
@@ -358,10 +482,11 @@ export const useIOSCompatibleVoice = ({ onTranscript, onError }: UseIOSCompatibl
     try {
       console.log('🎤 Starting iOS-compatible recording...');
       
-      // Check permission first
+      // CRITICAL: Ensure we have permission and it was granted in a user gesture
       const hasPermission = permissionStatus === 'granted' || await requestMicrophonePermission();
       if (!hasPermission) {
         console.log('🎤 No permission to record');
+        onError?.('Microphone permission is required. Please allow microphone access and try again.');
         return;
       }
       
@@ -373,28 +498,80 @@ export const useIOSCompatibleVoice = ({ onTranscript, onError }: UseIOSCompatibl
       setIsListening(true);
       setTranscript('');
       
-      // Get microphone stream with iOS-optimized settings
-      const constraints = isIOSDevice() ? {
-        audio: {
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false,
-          sampleRate: 48000,
-        }
-      } : {
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        }
-      };
+      console.log('🎤 Setting up microphone stream...');
       
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      // Step 1: Get microphone stream with iOS-optimized settings
+      let stream: MediaStream;
+      
+      // Try modern MediaDevices API first, fallback to legacy if needed
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        console.log('🎤 Using modern MediaDevices API for recording...');
+        
+        const constraints = isIOSDevice() ? {
+          audio: {
+            // iOS-optimized constraints for maximum compatibility
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false,
+            // Don't specify sampleRate - let iOS choose
+          }
+        } : {
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          }
+        };
+        
+        console.log('🎤 Stream constraints:', constraints);
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+      } else {
+        // Use legacy getUserMedia for older iOS/Safari versions
+        console.log('🎤 Using legacy getUserMedia for recording...');
+        const legacyGetUserMedia = (navigator as any).getUserMedia || 
+                                 (navigator as any).webkitGetUserMedia || 
+                                 (navigator as any).mozGetUserMedia || 
+                                 (navigator as any).msGetUserMedia;
+        
+        if (!legacyGetUserMedia) {
+          throw new Error('No getUserMedia implementation available');
+        }
+        
+        stream = await new Promise<MediaStream>((resolve, reject) => {
+          legacyGetUserMedia.call(navigator, 
+            { audio: true }, // Simple constraints for legacy
+            (stream: MediaStream) => resolve(stream),
+            (error: any) => reject(error)
+          );
+        });
+      }
+      
       streamRef.current = stream;
+      console.log('🎤 Microphone stream obtained:', {
+        tracks: stream.getAudioTracks().length,
+        settings: stream.getAudioTracks()[0]?.getSettings()
+      });
       
-      // Set up audio context for silence detection
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      // Step 2: Set up audio context for silence detection (iOS requires resumed context)
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      
+      // CRITICAL: Resume AudioContext for iOS
+      if (audioContextRef.current.state === 'suspended') {
+        console.log('🎵 Resuming AudioContext for iOS...');
+        await audioContextRef.current.resume();
+      }
+      
       const source = audioContextRef.current.createMediaStreamSource(stream);
+      analyserRef.current = audioContextRef.current.createAnalyser();
+      analyserRef.current.fftSize = 256;
+      source.connect(analyserRef.current);
+      
+      console.log('🎵 Audio analysis setup complete');
+      
+      // Store the stream reference for cleanup
+      streamRef.current = stream;
       analyserRef.current = audioContextRef.current.createAnalyser();
       analyserRef.current.fftSize = 256;
       source.connect(analyserRef.current);

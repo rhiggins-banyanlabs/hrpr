@@ -73,6 +73,10 @@ export default function Home() {
     } else if (isIOS && (error.includes('audio') || error.includes('locked') || error.includes('unlock'))) {
       setIOSHelperType('audio')
       setShowIOSHelper(true)
+    } else if (isIOS && (error.includes('MediaDevices') || error.includes('getUserMedia') || error.includes('not supported'))) {
+      // Special handling for MediaDevices API errors on iPad
+      setIOSHelperType('microphone')
+      setShowIOSHelper(true)
     }
   }, [isIOS])
 
@@ -405,6 +409,21 @@ export default function Home() {
             <div className="mb-1">
               Touch Points: {typeof window !== 'undefined' ? navigator.maxTouchPoints : 'SSR'}
             </div>
+            <div className="mb-1">
+              MediaDevices: {typeof window !== 'undefined' && navigator.mediaDevices ? '✅' : '❌'}
+            </div>
+            <div className="mb-1">
+              getUserMedia: {typeof window !== 'undefined' && typeof navigator.mediaDevices?.getUserMedia === 'function' ? '✅' : '❌'}
+            </div>
+            <div className="mb-1">
+              Legacy getUserMedia: {typeof window !== 'undefined' && (typeof (navigator as any).getUserMedia === 'function' || typeof (navigator as any).webkitGetUserMedia === 'function') ? '✅' : '❌'}
+            </div>
+            <div className="mb-1">
+              Chrome Test: {typeof window !== 'undefined' ? (/Chrome|CriOS/.test(navigator.userAgent) ? 'YES' : 'NO') : 'SSR'}
+            </div>
+            <div className="mb-1">
+              Safari Test: {typeof window !== 'undefined' ? (/Safari/.test(navigator.userAgent) ? 'YES' : 'NO') : 'SSR'}
+            </div>
             <div className="text-green-300">
               User Agent: {typeof window !== 'undefined' ? navigator.userAgent.substring(0, 50) + '...' : 'SSR'}
             </div>
@@ -540,6 +559,18 @@ export default function Home() {
             <div className="mt-2 text-xs text-gray-300">
               Platform: {isIOS ? 'iOS' : 'Other'} | Browser: {typeof window !== 'undefined' ? navigator.userAgent.includes('firefox') ? 'Firefox' : navigator.userAgent.includes('chrome') ? 'Chrome' : navigator.userAgent.includes('safari') ? 'Safari' : 'Other' : 'SSR'} | MediaRecorder: {typeof MediaRecorder !== 'undefined' ? '✅' : '❌'} | FFmpeg: {audioConverter.isReady() ? '✅' : '⏳'}
             </div>
+            
+            {/* Voice system debug info */}
+            <div className="mt-2 p-2 bg-blue-900 bg-opacity-50 rounded">
+              <strong>Voice System:</strong> {unifiedVoice.debugInfo?.usingIOSVoice ? 'iOS MediaRecorder' : 'Web Speech API'}
+              {unifiedVoice.debugInfo?.usingIOSVoice && (
+                <div className="text-xs mt-1">
+                  iOS State: Listening={unifiedVoice.debugInfo.iosVoiceState.isListening ? 'YES' : 'NO'}, 
+                  Permission={unifiedVoice.debugInfo.iosVoiceState.permissionStatus}
+                </div>
+              )}
+            </div>
+            
             {isIOS && (
               <div className="mt-2 text-xs text-yellow-300">
                 Recording Debug: {unifiedVoice.listening ? '🎤 Active' : '⏸️ Stopped'} | 
@@ -559,7 +590,7 @@ export default function Home() {
             )}
             
             {/* Test buttons */}
-            <div className="mt-3 flex gap-2">
+            <div className="mt-3 flex gap-2 flex-wrap">
               <button
                 onClick={async () => {
                   try {
@@ -577,6 +608,47 @@ export default function Home() {
                 className="px-3 py-1 bg-blue-600 text-white rounded text-xs"
               >
                 Test Mic
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    console.log('🧪 Testing direct iPad microphone access...')
+                    
+                    let stream: MediaStream;
+                    
+                    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                      console.log('🧪 Using modern MediaDevices API...')
+                      stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+                    } else {
+                      console.log('🧪 Using legacy getUserMedia API...')
+                      const legacyGetUserMedia = (navigator as any).getUserMedia || 
+                                               (navigator as any).webkitGetUserMedia || 
+                                               (navigator as any).mozGetUserMedia;
+                      
+                      if (!legacyGetUserMedia) {
+                        throw new Error('No getUserMedia implementation available')
+                      }
+                      
+                      stream = await new Promise<MediaStream>((resolve, reject) => {
+                        legacyGetUserMedia.call(navigator, 
+                          { audio: true }, 
+                          (stream: MediaStream) => resolve(stream),
+                          (error: any) => reject(error)
+                        );
+                      });
+                    }
+                    
+                    console.log('🧪 Microphone access successful:', stream)
+                    stream.getTracks().forEach(track => track.stop())
+                    alert('✅ Microphone access successful!')
+                  } catch (e) {
+                    console.error('🧪 Microphone test failed:', e)
+                    alert('❌ Microphone test failed: ' + (e as Error).message)
+                  }
+                }}
+                className="px-3 py-1 bg-orange-600 text-white rounded text-xs"
+              >
+                Test iPad Mic
               </button>
               <button
                 onClick={async () => {
