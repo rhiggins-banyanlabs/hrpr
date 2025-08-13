@@ -13,6 +13,7 @@ export class IOSAudioService {
   private currentKeepAliveIndex = 0;
   private audioActivityInterval: NodeJS.Timeout | null = null;
   private persistentMode = false; // When true, keep-alive won't auto-stop
+  private isPreparingAudio = false; // Prevent concurrent TTS calls
   
   // Singleton pattern
   public static getInstance(): IOSAudioService {
@@ -422,15 +423,26 @@ export class IOSAudioService {
   
   // Manually unlock audio (call this on user interaction)
   public async manualUnlock(): Promise<boolean> {
+    const unlockStartTime = performance.now();
+    
     // Always try to unlock/refresh on iOS to ensure it's ready
     if (this.isIOSDevice()) {
-      console.log('🔓 iOS: Refreshing audio unlock and pre-starting keep-alive...');
+      console.log('🔓 [SPEED] iOS: Fast unlock and context prep...');
       try {
-        await this.unlockAudioContext();
+        // Create context immediately for fastest subsequent TTS
+        this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
         
-        // Pre-start keep-alive immediately on iOS to maintain context
-        console.log('🔓 iOS: Pre-starting keep-alive on user interaction');
+        if (this.audioContext.state === 'suspended') {
+          await this.audioContext.resume();
+        }
+        
+        this.isUnlocked = true;
+        
+        // Pre-start keep-alive immediately on iOS to maintain context  
         this.startKeepAlive();
+        
+        const unlockTime = performance.now() - unlockStartTime;
+        console.log(`🔓 [SPEED] iOS unlock completed in ${unlockTime.toFixed(0)}ms`);
         
         return this.isUnlocked;
       } catch (error) {
@@ -465,7 +477,7 @@ export class IOSAudioService {
         voice,
         model: 'tts-1',
         response_format: 'mp3',
-        speed: parseFloat(process.env.NEXT_PUBLIC_TTS_SPEED || '1.0')
+        speed: parseFloat(process.env.NEXT_PUBLIC_TTS_SPEED || '1.3')
       }),
     });
     
@@ -476,54 +488,27 @@ export class IOSAudioService {
     return response.arrayBuffer();
   }
   
-  // Create audio element with iOS-compatible settings
+  // Create audio element with iOS-compatible settings - OPTIMIZED FOR SPEED
   private async createAudioElement(audioBuffer: ArrayBuffer): Promise<HTMLAudioElement> {
-    let audioBlob: Blob;
+    // Minimal blob creation for speed
+    const audioBlob = new Blob([audioBuffer], { type: 'audio/mpeg' });
+    const audioUrl = URL.createObjectURL(audioBlob);
+    const audio = new Audio(audioUrl);
     
-    // For iOS, use MP3 directly - FFmpeg conversion causes timing issues with Safari's autoplay restrictions
-    console.log('🎵 Creating audio blob for iOS - using MP3 directly for better timing');
-    audioBlob = new Blob([audioBuffer], { type: 'audio/mpeg' });
-    console.log('🎵 Audio blob created, size:', audioBlob.size, 'bytes')
-    
-    try {
-      console.log('🎵 Creating audio URL from blob...');
-      const audioUrl = URL.createObjectURL(audioBlob);
-      console.log('🎵 Audio URL created successfully');
+    // Minimal iOS settings - remove unnecessary steps
+    if (this.isIOSDevice()) {
+      audio.preload = 'auto';
+      audio.controls = false;
+      audio.autoplay = false;
       
-      console.log('🎵 Creating Audio element...');
-      const audio = new Audio(audioUrl);
-      
-      // iOS-specific audio settings for better compatibility
-      if (this.isIOSDevice()) {
-        console.log('🎵 Applying iOS-specific audio settings...');
-        audio.preload = 'auto';
-        audio.controls = false;
-        audio.autoplay = false; // Explicitly disable autoplay
-        
-        // Load the audio immediately to prepare it
-        console.log('🎵 Preloading audio for iOS...');
-        audio.load();
-        
-        // Set audio session category for iOS
-        if ('webkitAudioContext' in window) {
-          try {
-            (audio as any).webkitPreservesPitch = false;
-            console.log('🎵 WebKit audio settings applied');
-          } catch (e) {
-            console.log('🎵 WebKit audio settings not supported');
-          }
-        }
-      }
-      
-      console.log('🎵 Audio element setup complete');
-      return audio;
-    } catch (audioError) {
-      console.error('❌ Failed to create audio element:', audioError);
-      throw new Error(`Failed to create audio element: ${audioError instanceof Error ? audioError.message : String(audioError)}`);
+      // Start loading immediately but don't wait for it
+      audio.load();
     }
+    
+    return audio;
   }
   
-  // Speak text with iOS compatibility
+  // Speak text with iOS compatibility - SPEED OPTIMIZED
   public async speakText(
     text: string,
     options: {
@@ -535,9 +520,17 @@ export class IOSAudioService {
     } = {}
   ): Promise<void> {
     const { voice = 'nova', onStart, onEnd, onError, isWaitingForAPI = false } = options;
+    const startTime = performance.now();
     
     try {
-      console.log(`🔊 Speaking text (iOS: ${this.isIOSDevice()}):`, text);
+      console.log(`🔊 [SPEED] Starting TTS for: "${text.substring(0, 50)}..."`);
+      console.log(`🔊 [SPEED] iOS device: ${this.isIOSDevice()}, waiting for API: ${isWaitingForAPI}`);
+      
+      // Prevent concurrent TTS calls that could cause issues
+      if (this.isPreparingAudio) {
+        console.log('🔊 [SPEED] Already preparing audio, stopping current...');
+      }
+      this.isPreparingAudio = true;
       
       // Stop current speech if playing
       this.stopSpeaking();
@@ -551,51 +544,40 @@ export class IOSAudioService {
         console.log('🔊 Waiting for API, keeping keep-alive running during filler audio');
       }
       
-      // For iOS, ensure audio context is ready and reactivate if needed
-      if (this.isIOSDevice()) {
-        console.log('🔓 Preparing audio context for iOS playback...');
+      // Start TTS API call immediately - don't wait for context prep
+      console.log('🚀 Starting TTS API call immediately for speed');
+      const ttsPromise = this.getTTSAudio(text, voice);
+      
+      // Do context prep in parallel with TTS API call
+      const contextPromise = this.isIOSDevice() ? (async () => {
+        console.log('🔓 Preparing audio context in parallel...');
         
-        // Always try to reactivate the context before playback
-        if (this.audioContext) {
-          try {
-            // Force reactivation
-            if (this.audioContext.state === 'suspended' || this.audioContext.state === 'interrupted') {
-              console.log('🔓 Reactivating suspended/interrupted audio context...');
-              await this.audioContext.resume();
-            }
-            
-            // Double-check it's running
-            if (this.audioContext.state !== 'running') {
-              console.log('🔓 Creating new audio context (old one in state:', this.audioContext.state, ')');
-              this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-              await this.audioContext.resume();
-            }
-          } catch (error) {
-            console.error('🔓 Failed to reactivate audio context:', error);
-            // Create a fresh context
-            this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-            await this.audioContext.resume();
-          }
-        } else {
-          // No context exists, create one
-          console.log('🔓 Creating fresh audio context...');
+        // Quick context check/creation
+        if (!this.audioContext || this.audioContext.state === 'closed') {
           this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-          if (this.audioContext.state === 'suspended') {
-            await this.audioContext.resume();
-          }
+        }
+        
+        // Only resume if needed
+        if (this.audioContext.state === 'suspended') {
+          await this.audioContext.resume();
         }
         
         this.isUnlocked = true;
-        console.log('🔓 Audio context ready, final state:', this.audioContext.state);
-      }
+        console.log('🔓 Context ready:', this.audioContext.state);
+      })() : Promise.resolve();
       
-      // Get audio from TTS API
-      const audioBuffer = await this.getTTSAudio(text, voice);
+      // Wait for both TTS and context prep to complete
+      const [audioBuffer] = await Promise.all([ttsPromise, contextPromise]);
+      const ttsCompleteTime = performance.now();
+      console.log(`🔊 [SPEED] TTS API completed in ${(ttsCompleteTime - startTime).toFixed(0)}ms`);
       
-      // Create audio element (now async for conversion)
+      // Create audio element quickly
       const audio = await this.createAudioElement(audioBuffer);
       this.currentAudio = audio;
       this.isSpeaking = true;
+      
+      const audioCreatedTime = performance.now();
+      console.log(`🔊 [SPEED] Audio element created in ${(audioCreatedTime - ttsCompleteTime).toFixed(0)}ms`);
       
       // Set up event listeners
       audio.onloadstart = () => {
@@ -607,14 +589,17 @@ export class IOSAudioService {
       };
       
       audio.onplay = () => {
-        console.log('🔊 Audio playback started');
+        const playStartTime = performance.now();
+        console.log(`🔊 [SPEED] Audio playback started - total time: ${(playStartTime - startTime).toFixed(0)}ms`);
         onStart?.();
       };
       
       audio.onended = () => {
-        console.log('🔊 Audio playback ended');
+        const endTime = performance.now();
+        console.log(`🔊 [SPEED] Audio playback ended - total time: ${(endTime - startTime).toFixed(0)}ms`);
         this.isSpeaking = false;
         this.currentAudio = null;
+        this.isPreparingAudio = false;
         URL.revokeObjectURL(audio.src);
         onEnd?.();
       };
@@ -623,27 +608,18 @@ export class IOSAudioService {
         console.error('🔊 Audio playback error:', event);
         this.isSpeaking = false;
         this.currentAudio = null;
+        this.isPreparingAudio = false;
         URL.revokeObjectURL(audio.src);
         onError?.(new Error('Audio playback failed'));
       };
       
-      // Try to play the audio
+      // Try to play the audio IMMEDIATELY - no extra checks
       try {
-        // For iOS, ensure audio context is running
-        if (this.isIOSDevice() && this.audioContext) {
-          if (this.audioContext.state === 'suspended') {
-            console.log('🔊 Resuming suspended audio context before playback...');
-            await this.audioContext.resume();
-          }
-        }
-        
-        // Play the audio
-        console.log('🔊 Starting audio playback...');
+        console.log('🔊 Playing audio immediately...');
         const playPromise = audio.play();
         
         if (playPromise !== undefined) {
           await playPromise;
-          console.log('🔊 Audio playback started successfully');
         }
       } catch (playError: any) {
         console.error('🔊 Audio play failed:', playError);
@@ -672,6 +648,7 @@ export class IOSAudioService {
         // Clean up
         this.isSpeaking = false;
         this.currentAudio = null;
+        this.isPreparingAudio = false;
         URL.revokeObjectURL(audio.src);
         
         // Try to reset audio context for next attempt
@@ -688,6 +665,7 @@ export class IOSAudioService {
       console.error('🔊 TTS error:', error);
       this.isSpeaking = false;
       this.currentAudio = null;
+      this.isPreparingAudio = false;
       onError?.(error instanceof Error ? error : new Error('Unknown TTS error'));
     }
   }
@@ -702,6 +680,7 @@ export class IOSAudioService {
       this.currentAudio = null;
     }
     this.isSpeaking = false;
+    this.isPreparingAudio = false;
   }
   
   // Check if currently speaking

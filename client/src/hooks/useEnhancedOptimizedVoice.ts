@@ -154,7 +154,7 @@ export const useEnhancedOptimizedVoice = () => {
             setIsSpeaking(false);
             iosAudioService.stopSpeaking();
             reject(new Error('TTS timeout'));
-          }, 30000); // 30 second timeout
+          }, 10000); // 10 second timeout - if TTS takes longer than this, something is wrong
           
           iosAudioService.speakText(text, {
             voice,
