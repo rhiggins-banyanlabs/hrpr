@@ -216,7 +216,12 @@ export const useVoiceChat = ({
       console.log('🤖 Starting STREAMING AI response...');
       const apiStartTime = performance.now();
       
-      // Request wake lock for iOS
+      // IMMEDIATELY start aggressive keep-alive BEFORE API calls
+      console.log('🎯 [VOICE-STREAMING] IMMEDIATELY starting aggressive keep-alive');  
+      iosAudioService.startKeepAlive(true);
+      
+      // IMMEDIATELY request wake lock for iOS
+      console.log('🎯 [VOICE-STREAMING] IMMEDIATELY requesting wake lock');
       await iosAudioService.requestWakeLock();
       
       const response = await fetch('/api/chat-stream', {

@@ -25,10 +25,26 @@ export async function POST(req: NextRequest) {
       const locationService = new LocationService();
       const promptEnhancer = new PromptEnhancementService(locationService);
       
-      // Enhance the prompt with actual conference data
+      // Enhance the prompt with actual conference data (with timeout protection)
       console.log('📊 [STREAMING] Enhancing prompt with conference data...');
-      const enhancedPrompt = await promptEnhancer.createEnhancedPrompt(prompt);
-      console.log('📊 [STREAMING] Enhanced prompt created successfully');
+      const enhanceStartTime = Date.now();
+      
+      let enhancedPrompt;
+      try {
+        // Add timeout protection to prevent long database queries from blocking audio
+        const enhancePromise = promptEnhancer.createEnhancedPrompt(prompt);
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Database query timeout')), 3000) // 3 second timeout
+        );
+        
+        enhancedPrompt = await Promise.race([enhancePromise, timeoutPromise]);
+        const enhanceTime = Date.now() - enhanceStartTime;
+        console.log(`📊 [STREAMING] Enhanced prompt created successfully in ${enhanceTime}ms`);
+      } catch (error) {
+        console.warn(`📊 [STREAMING] Database enhancement failed after ${Date.now() - enhanceStartTime}ms, using basic prompt:`, error);
+        // Fallback to basic prompt to prevent audio blocking
+        enhancedPrompt = prompt;
+      }
       
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',

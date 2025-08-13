@@ -236,9 +236,16 @@ export const useChat = ({
         // Silently fail
       }
 
-      // Start persistent keep-alive AND play filler response
-      console.log('🎯 [STREAMING] Starting streaming with keep-alive + filler');
+      // IMMEDIATELY start aggressive keep-alive BEFORE any API calls
+      console.log('🎯 [STREAMING] IMMEDIATELY starting aggressive keep-alive');
       iosAudioService.startKeepAlive(true);
+      
+      // IMMEDIATELY request wake lock to prevent any suspension  
+      console.log('🎯 [STREAMING] IMMEDIATELY requesting wake lock');
+      await iosAudioService.requestWakeLock();
+      
+      // Start persistent keep-alive AND play filler response
+      console.log('🎯 [STREAMING] Starting streaming with enhanced keep-alive + filler');
 
       let fillerAudioPromise: Promise<any> | null = null;
       const fillerResponse = IntentDetectorService.getFillerResponse(text);

@@ -223,126 +223,133 @@ export class IOSAudioService {
     this.persistentMode = false;
     this.stopKeepAlive(true); // Force stop
   }
+
+  // Refresh existing keep-alive
+  private refreshKeepAlive(): void {
+    console.log('🔊 [REFRESH] Refreshing keep-alive system...');
+    
+    // Ensure audio context is running
+    if (this.audioContext && this.audioContext.state !== 'running') {
+      console.log('🔊 [REFRESH] Resuming suspended audio context');
+      this.audioContext.resume().catch(e => console.error('Context resume failed:', e));
+    }
+    
+    // Restart any paused audio elements
+    this.keepAliveAudios.forEach((audio, index) => {
+      if (audio.paused) {
+        console.log(`🔊 [REFRESH] Restarting paused audio element ${index}`);
+        audio.play().catch(e => console.error(`Audio restart failed:`, e));
+      }
+    });
+    
+    // Restart oscillator if needed
+    if (!this.silentOscillator && this.audioContext) {
+      this.createSilentOscillator();
+    }
+  }
+
+  // Create a simple silent oscillator for keep-alive
+  private createSilentOscillator(): void {
+    if (!this.audioContext) return;
+    
+    try {
+      this.silentOscillator = this.audioContext.createOscillator();
+      const gainNode = this.audioContext.createGain();
+      
+      this.silentOscillator.connect(gainNode);
+      gainNode.connect(this.audioContext.destination);
+      
+      // Ultra-quiet but still active
+      gainNode.gain.setValueAtTime(0.001, this.audioContext.currentTime);
+      this.silentOscillator.frequency.setValueAtTime(20000, this.audioContext.currentTime); // Above hearing range
+      
+      this.silentOscillator.start();
+      console.log('🔊 [OSCILLATOR] Silent oscillator created and started');
+    } catch (error) {
+      console.error('🔊 [OSCILLATOR] Failed to create oscillator:', error);
+    }
+  }
   
-  // Start keep-alive to prevent iOS audio suspension
+  // Start SIMPLIFIED keep-alive to prevent iOS audio suspension  
   public startKeepAlive(forcePersistent: boolean = false): void {
     if (forcePersistent) {
       this.persistentMode = true;
     }
     
-    console.log('🔊 [KEEP-ALIVE] Starting ULTRA-AGGRESSIVE keep-alive for 15+ second API calls');
-    console.log('🔊 [KEEP-ALIVE] Is iOS:', this.isIOSDevice());
-    console.log('🔊 [KEEP-ALIVE] Already active:', this.keepAliveActive);
-    console.log('🔊 [KEEP-ALIVE] Persistent mode:', this.persistentMode);
+    console.log('🔊 [SIMPLIFIED-KEEP-ALIVE] Starting simplified keep-alive system');
+    console.log('🔊 [SIMPLIFIED-KEEP-ALIVE] Is iOS:', this.isIOSDevice());
+    console.log('🔊 [SIMPLIFIED-KEEP-ALIVE] Already active:', this.keepAliveActive);
     
     if (!this.isIOSDevice()) {
-      console.log('🔊 [KEEP-ALIVE] Not iOS device, skipping');
+      console.log('🔊 [SIMPLIFIED-KEEP-ALIVE] Not iOS device, skipping');
       return;
     }
     
-    if (this.keepAliveActive && this.keepAliveAudios.length > 0) {
-      console.log('🔊 [KEEP-ALIVE] Already active, ensuring all audio elements are playing...');
-      // Ensure all audio elements are playing
-      this.keepAliveAudios.forEach((audio, index) => {
-        if (audio.paused) {
-          console.log(`🔊 [KEEP-ALIVE] Restarting audio element ${index}`);
-          audio.play().catch(e => console.error(`Failed to restart audio ${index}:`, e));
-        }
-      });
-      
-      // Also refresh context
-      if (this.audioContext && this.audioContext.state !== 'running') {
-        this.audioContext.resume();
-      }
+    if (this.keepAliveActive) {
+      console.log('🔊 [SIMPLIFIED-KEEP-ALIVE] Already active, refreshing...');
+      this.refreshKeepAlive();
       return;
     }
     
-    console.log('🔊 [KEEP-ALIVE] Initializing ULTRA-AGGRESSIVE multi-audio keep-alive');
+    console.log('🔊 [SIMPLIFIED-KEEP-ALIVE] Initializing SIMPLE and RELIABLE keep-alive');
     this.keepAliveActive = true;
     
-    // Create audio context first
+    // Ensure audio context exists and is running
     if (!this.audioContext || this.audioContext.state === 'closed') {
       try {
         this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-        console.log('🔊 [KEEP-ALIVE] Created audio context, state:', this.audioContext.state);
-        if (this.audioContext.state === 'suspended') {
-          this.audioContext.resume();
-        }
+        console.log('🔊 [SIMPLIFIED-KEEP-ALIVE] Created audio context, state:', this.audioContext.state);
       } catch (error) {
-        console.error('🔊 [KEEP-ALIVE] Failed to create audio context:', error);
+        console.error('🔊 [SIMPLIFIED-KEEP-ALIVE] Failed to create audio context:', error);
+        return;
       }
     }
     
-    // Method 1: Create MULTIPLE silent audio elements with different durations
-    const durations: Array<'short' | 'medium' | 'long'> = ['short', 'medium', 'long'];
+    // Always resume if suspended
+    if (this.audioContext.state === 'suspended') {
+      this.audioContext.resume();
+    }
     
+    // Create ONE simple silent audio element for keep-alive
     if (this.keepAliveAudios.length === 0) {
-      console.log('🔊 [KEEP-ALIVE] Creating 3 redundant audio elements');
+      console.log('🔊 [SIMPLIFIED-KEEP-ALIVE] Creating single reliable audio element');
       
-      durations.forEach((duration, index) => {
-        try {
-          const audio = new Audio(this.createSilentAudioDataURL(duration));
-          audio.volume = 0.001; // Nearly inaudible
-          audio.loop = true;
-          
-          // Stagger the start times slightly
-          audio.currentTime = index * 0.1;
-          
-          // Add error recovery
-          audio.addEventListener('pause', () => {
-            if (this.keepAliveActive) {
-              console.log(`🔊 [KEEP-ALIVE] Audio ${index} paused, restarting...`);
-              setTimeout(() => {
-                audio.play().catch(e => console.error(`Audio ${index} restart failed:`, e));
-              }, 50);
-            }
-          });
-          
-          audio.addEventListener('error', (e) => {
-            console.error(`🔊 [KEEP-ALIVE] Audio ${index} error:`, e);
-            // Try to recreate on error
-            if (this.keepAliveActive) {
-              setTimeout(() => {
-                audio.src = this.createSilentAudioDataURL(duration);
-                audio.play().catch(err => console.error(`Audio ${index} recovery failed:`, err));
-              }, 100);
-            }
-          });
-          
-          this.keepAliveAudios.push(audio);
-        } catch (error) {
-          console.error(`🔊 [KEEP-ALIVE] Failed to create audio ${index}:`, error);
-        }
-      });
-    }
-    
-    // Start all audio elements
-    console.log('🔊 [KEEP-ALIVE] Starting all audio elements...');
-    this.keepAliveAudios.forEach((audio, index) => {
-      audio.play()
-        .then(() => console.log(`🔊 [KEEP-ALIVE] Audio ${index} started`))
-        .catch(error => console.error(`🔊 [KEEP-ALIVE] Audio ${index} failed:`, error));
-    });
-    
-    // Method 2: Create oscillator for additional keep-alive
-    if (this.audioContext && !this.silentOscillator) {
       try {
-        this.silentOscillator = this.audioContext.createOscillator();
-        const gainNode = this.audioContext.createGain();
-        gainNode.gain.value = 0.0001; // Extremely quiet
+        const audio = new Audio(this.createSilentAudioDataURL('medium'));
+        audio.volume = 0.001; // Nearly inaudible but still active
+        audio.loop = true;
         
-        this.silentOscillator.connect(gainNode);
-        gainNode.connect(this.audioContext.destination);
-        this.silentOscillator.frequency.value = 10; // Sub-audible frequency
-        this.silentOscillator.start();
+        // Simple restart on pause
+        audio.addEventListener('pause', () => {
+          if (this.keepAliveActive) {
+            console.log('🔊 [SIMPLIFIED-KEEP-ALIVE] Audio paused, restarting...');
+            audio.play().catch(e => console.error('Audio restart failed:', e));
+          }
+        });
         
-        console.log('🔊 [KEEP-ALIVE] Oscillator started');
+        // Simple error handling
+        audio.addEventListener('error', (e) => {
+          console.error('🔊 [SIMPLIFIED-KEEP-ALIVE] Audio error:', e);
+        });
+        
+        this.keepAliveAudios.push(audio);
       } catch (error) {
-        console.error('🔊 [KEEP-ALIVE] Failed to create oscillator:', error);
+        console.error('🔊 [SIMPLIFIED-KEEP-ALIVE] Failed to create audio:', error);
       }
     }
     
-    // Method 3: AGGRESSIVE checking - every 100ms
+    // Start the audio element
+    if (this.keepAliveAudios.length > 0) {
+      console.log('🔊 [SIMPLIFIED-KEEP-ALIVE] Starting keep-alive audio...');
+      this.keepAliveAudios[0].play()
+        .then(() => console.log('🔊 [SIMPLIFIED-KEEP-ALIVE] Audio started successfully'))
+        .catch(error => console.error('🔊 [SIMPLIFIED-KEEP-ALIVE] Audio failed to start:', error));
+    }
+    
+    // Create a simple oscillator for backup keep-alive
+    this.createSilentOscillator();
+    
+    // Simple interval check - every 1 second (less aggressive but more reliable)
     if (this.keepAliveInterval) {
       clearInterval(this.keepAliveInterval);
     }
@@ -350,65 +357,25 @@ export class IOSAudioService {
     this.keepAliveInterval = setInterval(() => {
       if (!this.keepAliveActive) return;
       
-      // Check audio context
-      if (this.audioContext) {
-        const state = this.audioContext.state;
-        if (state !== 'running') {
-          console.log(`🔊 [KEEP-ALIVE-100ms] Context ${state}, resuming...`);
-          this.audioContext.resume().catch(err => {
-            console.error('🔊 [KEEP-ALIVE-100ms] Resume failed:', err);
-            // Try to recreate context
-            try {
-              this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-              this.audioContext.resume();
-            } catch (e) {
-              console.error('🔊 [KEEP-ALIVE-100ms] Context recreation failed:', e);
-            }
-          });
-        }
+      // Check and resume audio context if suspended
+      if (this.audioContext && this.audioContext.state !== 'running') {
+        console.log('🔊 [SIMPLIFIED-KEEP-ALIVE] Context suspended, resuming...');
+        this.audioContext.resume().catch(err => console.error('Context resume failed:', err));
       }
       
-      // Check all audio elements
-      let pausedCount = 0;
-      this.keepAliveAudios.forEach((audio, index) => {
-        if (audio.paused) {
-          pausedCount++;
-          audio.play().catch(e => {
-            // Silently try to restart
-          });
-        }
-      });
-      
-      if (pausedCount > 0) {
-        console.log(`🔊 [KEEP-ALIVE-100ms] Restarted ${pausedCount} paused audio(s)`);
-      }
-    }, 100); // Check every 100ms for ultra-fast recovery
-    
-    // Method 4: Additional activity timer - rotate audio elements
-    if (this.audioActivityInterval) {
-      clearInterval(this.audioActivityInterval);
-    }
-    
-    this.audioActivityInterval = setInterval(() => {
-      if (!this.keepAliveActive) return;
-      
-      // Rotate which audio is "primary" to prevent iOS from detecting pattern
-      this.currentKeepAliveIndex = (this.currentKeepAliveIndex + 1) % this.keepAliveAudios.length;
-      const primaryAudio = this.keepAliveAudios[this.currentKeepAliveIndex];
-      
-      if (primaryAudio) {
-        // Adjust volume slightly to create activity
-        primaryAudio.volume = 0.001 + (Math.random() * 0.0001);
+      // Check and restart any paused audio
+      if (this.keepAliveAudios.length > 0 && this.keepAliveAudios[0].paused) {
+        console.log('🔊 [SIMPLIFIED-KEEP-ALIVE] Audio paused, restarting...');
+        this.keepAliveAudios[0].play().catch(e => console.error('Audio restart failed:', e));
       }
       
-      console.log(`🔊 [KEEP-ALIVE-ROTATE] Active audio: ${this.currentKeepAliveIndex}, Context: ${this.audioContext?.state}`);
-    }, 2000); // Rotate every 2 seconds
+      console.log(`🔊 [SIMPLIFIED-KEEP-ALIVE] Status - Context: ${this.audioContext?.state}, Audio: ${this.keepAliveAudios.length > 0 ? (this.keepAliveAudios[0].paused ? 'paused' : 'playing') : 'none'}`);
+    }, 1000); // Check every second
     
-    console.log('🔊 [KEEP-ALIVE] ULTRA-AGGRESSIVE keep-alive fully activated with:');
-    console.log('  - 3 redundant audio elements');
-    console.log('  - 100ms check interval');
-    console.log('  - Oscillator backup');
-    console.log('  - Audio rotation every 2s');
+    console.log('🔊 [SIMPLIFIED-KEEP-ALIVE] Simple keep-alive activated with:');
+    console.log('  - 1 silent audio element (looped)');
+    console.log('  - 1 silent oscillator (backup)');  
+    console.log('  - 1 second check interval');
   }
   
   // Stop keep-alive (unless in persistent mode)
