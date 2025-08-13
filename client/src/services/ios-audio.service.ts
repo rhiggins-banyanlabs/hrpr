@@ -555,6 +555,90 @@ export class IOSAudioService {
     return audio;
   }
   
+  // Preprocess text for more natural speech
+  private preprocessTextForNaturalSpeech(text: string): string {
+    let processedText = text;
+    
+    // Add natural pauses after sentences
+    processedText = processedText.replace(/([.!?])\s+/g, '$1... ');
+    
+    // Add pauses after introductory words/phrases
+    processedText = processedText.replace(/^(Hi|Hello|Well|So|Now|Actually|However|Furthermore|Additionally|Meanwhile|Therefore|Consequently),?\s*/g, '$1, ');
+    processedText = processedText.replace(/\b(Hi|Hello|Well|So|Now|Actually|However|Furthermore|Additionally|Meanwhile|Therefore|Consequently),?\s+/g, '$1, ');
+    
+    // Add pauses after transitional phrases
+    processedText = processedText.replace(/\b(for example|such as|in fact|by the way|on the other hand|in other words|as a result),?\s*/gi, '$1, ');
+    
+    // Add emphasis pauses around important words
+    processedText = processedText.replace(/\b(important|crucial|essential|significant|remember|note that|please|exactly|specifically)\b/gi, '... $1 ...');
+    
+    // Add natural breathing pauses in long sentences (every 12-15 words)
+    const words = processedText.split(' ');
+    if (words.length > 12) {
+      let wordCount = 0;
+      processedText = words.map(word => {
+        wordCount++;
+        if (wordCount % 12 === 0 && wordCount < words.length - 3) {
+          return word + ',';
+        }
+        return word;
+      }).join(' ');
+    }
+    
+    // Clean up multiple pauses
+    processedText = processedText.replace(/[,]{2,}/g, ',');
+    processedText = processedText.replace(/\.{4,}/g, '...');
+    
+    console.log('🗣️ [PREPROCESSING] Original:', text);
+    console.log('🗣️ [PREPROCESSING] Processed:', processedText);
+    
+    return processedText;
+  }
+  
+  // Break text into natural chunks for better speech flow
+  private createNaturalSpeechChunks(text: string): string[] {
+    // First preprocess the text for natural pauses
+    const processedText = this.preprocessTextForNaturalSpeech(text);
+    
+    // Split by natural sentence boundaries
+    const sentences = processedText.match(/[^.!?]+[.!?]+/g) || [processedText];
+    const chunks: string[] = [];
+    
+    for (const sentence of sentences) {
+      const trimmed = sentence.trim();
+      if (!trimmed) continue;
+      
+      // If sentence is short enough, keep it as one chunk
+      if (trimmed.length <= 120) {
+        chunks.push(trimmed);
+      } else {
+        // Split long sentences by commas and natural pauses
+        const parts = trimmed.split(/([,;:—\-])/);
+        let currentChunk = '';
+        
+        for (const part of parts) {
+          if ((currentChunk + part).length <= 120) {
+            currentChunk += part;
+          } else {
+            if (currentChunk.trim()) {
+              chunks.push(currentChunk.trim());
+            }
+            currentChunk = part;
+          }
+        }
+        
+        if (currentChunk.trim()) {
+          chunks.push(currentChunk.trim());
+        }
+      }
+    }
+    
+    console.log('🗣️ [CHUNKING] Created', chunks.length, 'natural chunks');
+    console.log('🗣️ [CHUNKING] Chunks:', chunks);
+    
+    return chunks.filter(chunk => chunk.length > 0);
+  }
+
   // Use iOS native speech synthesis as fallback
   public async speakWithNativeSynthesis(
     text: string,
@@ -566,111 +650,174 @@ export class IOSAudioService {
   ): Promise<void> {
     const { onStart, onEnd, onError } = options;
     
+    console.log('🗣️ [NATURAL] Starting natural iOS speech synthesis');
+    console.log('🗣️ [NATURAL] Text length:', text.length, 'characters');
+    
     if (!this.speechSynthesis) {
-      throw new Error('Speech synthesis not available');
+      const error = new Error('Speech synthesis not available');
+      console.error('🗣️ [NATURAL] Speech synthesis not available');
+      throw error;
     }
     
-    return new Promise<void>((resolve, reject) => {
+    try {
+      // Stop any current speech
+      this.speechSynthesis.cancel();
+      this.isSpeaking = false;
+      
+      // Create natural speech chunks with preprocessing
+      const chunks = this.createNaturalSpeechChunks(text);
+      console.log('🗣️ [NATURAL] Created', chunks.length, 'natural chunks');
+      
+      if (chunks.length === 0) {
+        console.warn('🗣️ [NATURAL] No chunks created, nothing to speak');
+        onEnd?.();
+        return;
+      }
+      
+      // Signal start
+      onStart?.();
+      this.isSpeaking = true;
+      
+      // Process chunks with natural pauses
+      await this.processNaturalChunks(chunks);
+      
+      // Signal end
+      console.log('🗣️ [NATURAL] All natural chunks completed successfully');
+      this.isSpeaking = false;
+      onEnd?.();
+      
+    } catch (error) {
+      console.error('🗣️ [NATURAL] Natural speech synthesis failed:', error);
+      this.isSpeaking = false;
+      this.currentUtterance = null;
+      const err = error instanceof Error ? error : new Error('Natural speech synthesis failed');
+      onError?.(err);
+      throw err;
+    }
+  }
+  
+  // Process natural chunks with micro-pauses for better flow
+  private async processNaturalChunks(chunks: string[]): Promise<void> {
+    let chunkIndex = 0;
+    
+    while (chunkIndex < chunks.length) {
+      const chunk = chunks[chunkIndex];
+      console.log(`🗣️ [NATURAL] Speaking chunk ${chunkIndex + 1}/${chunks.length}: "${chunk}"`);
+      
       try {
-        console.log('🗣️ [NATIVE] Using iOS native speech synthesis');
+        await this.speakNaturalChunk(chunk, chunkIndex);
+        console.log(`🗣️ [NATURAL] Chunk ${chunkIndex + 1} completed`);
         
-        // Stop any current speech
-        if (this.speechSynthesis) {
-          this.speechSynthesis.cancel();
-        }
+        chunkIndex++;
         
-        // Create utterance
-        const utterance = new SpeechSynthesisUtterance(text);
-        this.currentUtterance = utterance;
-        
-        // Configure utterance for more natural speech
-        utterance.rate = 1.05; // Slightly faster but more natural
-        utterance.pitch = 0.95; // Slightly lower pitch for warmth
-        utterance.volume = 0.9; // Slightly softer volume
-        
-        // Try to find the most natural voice available
-        if (this.speechSynthesis) {
-          const voices = this.speechSynthesis.getVoices();
-          console.log('🗣️ [NATIVE] Available voices:', voices.map(v => `${v.name} (${v.lang})`));
-          
-          // Priority order: Enhanced voices > Premium voices > Standard voices
-          const preferredVoiceNames = [
-            'Samantha (Enhanced)', 'Samantha', // Female, very natural
-            'Alex (Enhanced)', 'Alex',         // Male, natural
-            'Victoria (Enhanced)', 'Victoria', // Female, professional
-            'Daniel (Enhanced)', 'Daniel',     // Male, British
-            'Karen (Enhanced)', 'Karen',       // Female, Australian
-            'Moira (Enhanced)', 'Moira',       // Female, Irish
-            'Tessa (Enhanced)', 'Tessa',       // Female, South African
-            'Veena (Enhanced)', 'Veena'      // Female, Indian
-          ];
-          
-          let selectedVoice = null;
-          
-          // Try to find enhanced/premium voices first
-          for (const voiceName of preferredVoiceNames) {
-            selectedVoice = voices.find(voice => 
-              voice.lang.startsWith('en') && 
-              voice.name.includes(voiceName.split(' ')[0])
-            );
-            if (selectedVoice) {
-              console.log('🗣️ [NATIVE] Found preferred voice:', selectedVoice.name);
-              break;
-            }
-          }
-          
-          // Fallback to any English voice
-          if (!selectedVoice) {
-            selectedVoice = voices.find(voice => voice.lang.startsWith('en'));
-            console.log('🗣️ [NATIVE] Using fallback voice:', selectedVoice?.name || 'default');
-          }
-          
-          if (selectedVoice) {
-            utterance.voice = selectedVoice;
-            console.log('🗣️ [NATIVE] Selected voice:', selectedVoice.name, 'Local:', selectedVoice.localService);
-          }
-        }
-        
-        // Set up event listeners
-        utterance.onstart = () => {
-          console.log('🗣️ [NATIVE] Speech started');
-          this.isSpeaking = true;
-          onStart?.();
-        };
-        
-        utterance.onend = () => {
-          console.log('🗣️ [NATIVE] Speech ended');
-          this.isSpeaking = false;
-          this.currentUtterance = null;
-          onEnd?.();
-          resolve();
-        };
-        
-        utterance.onerror = (event) => {
-          console.error('🗣️ [NATIVE] Speech error:', event.error);
-          this.isSpeaking = false;
-          this.currentUtterance = null;
-          const error = new Error(`Speech synthesis error: ${event.error}`);
-          onError?.(error);
-          reject(error);
-        };
-        
-        // Start speaking
-        if (this.speechSynthesis) {
-          this.speechSynthesis.speak(utterance);
-        } else {
-          throw new Error('Speech synthesis not available');
+        // Add micro-pause between chunks for natural flow (300-500ms)
+        if (chunkIndex < chunks.length) {
+          const pauseLength = chunk.endsWith('.') || chunk.endsWith('!') || chunk.endsWith('?') ? 500 : 300;
+          console.log(`🗣️ [NATURAL] Natural pause: ${pauseLength}ms`);
+          await this.delay(pauseLength);
         }
         
       } catch (error) {
-        console.error('🗣️ [NATIVE] Failed to start speech synthesis:', error);
-        this.isSpeaking = false;
+        console.error(`🗣️ [NATURAL] Chunk ${chunkIndex + 1} failed:`, error);
+        // Continue with next chunk instead of failing completely
+        chunkIndex++;
+        await this.delay(500); // Pause before next chunk
+      }
+    }
+  }
+  
+  // Speak a single natural chunk with enhanced voice settings
+  private async speakNaturalChunk(text: string, chunkIndex: number): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      // Natural timeout (8 seconds should be enough for any chunk)
+      const timeout = setTimeout(() => {
+        console.warn(`🗣️ [NATURAL] Chunk ${chunkIndex + 1} timed out after 8 seconds`);
+        this.speechSynthesis?.cancel();
+        reject(new Error('Natural chunk timeout'));
+      }, 8000);
+      
+      const utterance = new SpeechSynthesisUtterance(text);
+      this.currentUtterance = utterance;
+      
+      // Configure utterance for more natural speech
+      utterance.rate = 1.05; // Slightly faster but more natural
+      utterance.pitch = 0.95; // Slightly lower pitch for warmth
+      utterance.volume = 0.9; // Slightly softer volume
+      
+      // Apply enhanced voice selection to each chunk
+      if (this.speechSynthesis) {
+        const voices = this.speechSynthesis.getVoices();
+        
+        // Priority order: Enhanced voices > Premium voices > Standard voices
+        const preferredVoiceNames = [
+          'Samantha (Enhanced)', 'Samantha', // Female, very natural
+          'Alex (Enhanced)', 'Alex',         // Male, natural
+          'Victoria (Enhanced)', 'Victoria', // Female, professional
+          'Daniel (Enhanced)', 'Daniel',     // Male, British
+          'Karen (Enhanced)', 'Karen',       // Female, Australian
+          'Moira (Enhanced)', 'Moira',       // Female, Irish
+        ];
+        
+        let selectedVoice = null;
+        
+        // Try to find enhanced/premium voices first
+        for (const voiceName of preferredVoiceNames) {
+          selectedVoice = voices.find(voice => 
+            voice.lang.startsWith('en') && 
+            voice.name.includes(voiceName.split(' ')[0])
+          );
+          if (selectedVoice) break;
+        }
+        
+        // Fallback to any English voice
+        if (!selectedVoice) {
+          selectedVoice = voices.find(voice => voice.lang.startsWith('en'));
+        }
+        
+        if (selectedVoice) {
+          utterance.voice = selectedVoice;
+          if (chunkIndex === 0) { // Only log once per response
+            console.log('🗣️ [NATURAL] Using voice:', selectedVoice.name);
+          }
+        }
+      }
+      
+      utterance.onstart = () => {
+        console.log(`🗣️ [NATURAL] Chunk ${chunkIndex + 1} started`);
+      };
+      
+      utterance.onend = () => {
+        console.log(`🗣️ [NATURAL] Chunk ${chunkIndex + 1} ended`);
+        clearTimeout(timeout);
         this.currentUtterance = null;
-        const err = error instanceof Error ? error : new Error('Speech synthesis failed');
-        onError?.(err);
-        reject(err);
+        resolve();
+      };
+      
+      utterance.onerror = (event) => {
+        console.error(`🗣️ [NATURAL] Chunk ${chunkIndex + 1} error:`, event.error);
+        clearTimeout(timeout);
+        this.currentUtterance = null;
+        reject(new Error(`Natural speech error: ${event.error}`));
+      };
+      
+      try {
+        if (this.speechSynthesis) {
+          this.speechSynthesis.speak(utterance);
+        } else {
+          clearTimeout(timeout);
+          reject(new Error('Speech synthesis unavailable'));
+        }
+      } catch (speakError) {
+        clearTimeout(timeout);
+        console.error(`🗣️ [NATURAL] Error calling speak() for chunk ${chunkIndex + 1}:`, speakError);
+        reject(speakError);
       }
     });
+  }
+  
+  // Utility delay function
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
   
   // Speak text with iOS compatibility - SPEED OPTIMIZED
