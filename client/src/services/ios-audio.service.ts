@@ -584,7 +584,7 @@ export class IOSAudioService {
         this.currentUtterance = utterance;
         
         // Configure utterance for better quality
-        utterance.rate = 0.9; // Slightly slower for better comprehension
+        utterance.rate = 1.1; // Slightly faster than normal
         utterance.pitch = 1.0;
         utterance.volume = 1.0;
         
