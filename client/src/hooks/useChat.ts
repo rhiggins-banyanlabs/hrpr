@@ -19,7 +19,7 @@ interface Message {
 
 interface UseChatProps {
   // Enhanced props (from first hook)
-  speakText?: ((text: string, options?: { voice?: string; isWaitingForAPI?: boolean }) => Promise<any>) | ((text: string, voice?: any, speed?: number) => Promise<any>);
+  speakText?: ((text: string, options?: { voice?: string; isWaitingForAPI?: boolean; isStreamingChunk?: boolean }) => Promise<any>) | ((text: string, voice?: any, speed?: number) => Promise<any>);
   unlockAudio?: () => Promise<void>;
   selectedVoice?: string;
   
@@ -335,16 +335,23 @@ export const useChat = ({
                   if (speakText && sentence.trim()) {
                     console.log('🎯 [STREAMING] 🚀 INSTANT TTS for sentence:', sentence);
                     // Mark this as a streaming chunk to prevent chunked TTS overlap
-                    if (typeof speakText === 'function') {
-                      // Enhanced voice hook - pass streaming flag
-                      (speakText as any)(sentence.trim(), { isStreamingChunk: true }).catch((error: any) => {
+                    try {
+                      // Cast to the enhanced function type and call with streaming flag
+                      const enhancedSpeakText = speakText as (text: string, options?: { voice?: string; isWaitingForAPI?: boolean; isStreamingChunk?: boolean }) => Promise<any>;
+                      enhancedSpeakText(sentence.trim(), { isStreamingChunk: true }).catch((error: any) => {
                         console.error('🎯 [STREAMING] TTS error for sentence:', error);
                       });
-                    } else {
-                      // Fallback for other voice hooks
-                      speakText(sentence.trim()).catch(error => {
-                        console.error('🎯 [STREAMING] TTS error for sentence:', error);
-                      });
+                    } catch (error) {
+                      console.error('🎯 [STREAMING] TTS call error:', error);
+                      // Fallback to basic call if enhanced call fails
+                      try {
+                        const basicSpeakText = speakText as (text: string) => Promise<any>;
+                        basicSpeakText(sentence.trim()).catch((fallbackError: any) => {
+                          console.error('🎯 [STREAMING] Fallback TTS error:', fallbackError);
+                        });
+                      } catch (fallbackError) {
+                        console.error('🎯 [STREAMING] All TTS calls failed:', fallbackError);
+                      }
                     }
                   }
                   
