@@ -830,36 +830,22 @@ export class IOSAudioService {
       if (this.speechSynthesis) {
         const voices = this.speechSynthesis.getVoices();
         
-        // iOS Native Voices - prioritize Enhanced/Premium downloaded voices
+        // iOS Native Voices - prioritize the BEST sounding standard voices
         const preferredVoiceNames = [
-          // Tier 0: Enhanced/Premium voices (highest quality downloaded voices)
-          'Ava Premium',          // Premium Ava - top priority
-          'Ava (Premium)',        // Alternative naming
-          'Ava Enhanced',         // Enhanced version
-          'Ava (Enhanced)',       // Alternative naming
-          'Samantha (Enhanced)',  // Enhanced version - secondary
-          'Samantha Enhanced',    // Alternative naming
-          'Alex (Enhanced)',      // Enhanced male voice
-          'Alex Enhanced',        
-          'Victoria (Enhanced)',  // Enhanced professional voice
-          'Victoria Enhanced',
-          'Allison (Enhanced)',   // Enhanced warm voice
-          'Allison Enhanced',
-          
-          // Tier 1: Standard Premium iOS voices
-          'Samantha',      // Female US - most natural iOS voice
-          'Alex',          // Male US - classic iOS voice, very reliable
-          'Victoria',      // Female US - professional, clear
+          // Tier 0: Best sounding standard iOS voices (often better than "enhanced")
+          'Samantha',      // Female US - consistently the most natural iOS voice
+          'Ava',           // Female US - modern, clear, natural
           'Allison',       // Female US - warm, natural
-          'Ava',           // Female US - modern, clear
+          'Victoria',      // Female US - professional, clear
+          'Alex',          // Male US - classic, reliable
           
-          // Tier 2: Standard iOS voices (local, reliable)
-          'Susan',         // Female US - classic
+          // Tier 1: Other good standard voices
+          'Susan',         // Female US - classic, natural
           'Vicki',         // Female US - friendly
           'Bruce',         // Male US - deep, clear
           'Fred',          // Male US - standard
           
-          // Tier 3: International premium voices
+          // Tier 2: International voices (if needed)
           'Daniel',        // Male UK - British accent
           'Kate',          // Female UK - British
           'Karen',         // Female AU - Australian
@@ -876,52 +862,22 @@ export class IOSAudioService {
         
         console.log('🗣️ [NATURAL] Local voices available:', localVoices.map(v => `${v.name} (local: ${v.localService})`));
         
-        // Look for Enhanced/Premium voices specifically
-        const enhancedVoices = localVoices.filter(voice => 
-          voice.name.includes('Enhanced') ||
-          voice.name.includes('(Enhanced)') ||
-          voice.name.toLowerCase().includes('premium') ||
-          voice.name.toLowerCase().includes('neural') ||
-          voice.voiceURI.toLowerCase().includes('enhanced') ||
-          voice.voiceURI.toLowerCase().includes('premium')
-        );
+        // Skip Enhanced/Premium filtering - use the best STANDARD voices
+        console.log('🗣️ [SELECTION] Using standard high-quality voices (skipping Enhanced/Premium)');
         
-        // Sort to prioritize "Ava Premium" first
-        enhancedVoices.sort((a, b) => {
-          if (a.name.includes('Ava') && (a.name.includes('Premium') || a.name.includes('Enhanced'))) return -1;
-          if (b.name.includes('Ava') && (b.name.includes('Premium') || b.name.includes('Enhanced'))) return 1;
-          if (a.name.includes('Samantha') && a.name.includes('Enhanced')) return -1;
-          if (b.name.includes('Samantha') && b.name.includes('Enhanced')) return 1;
-          if (a.name.includes('Enhanced') || a.name.includes('Premium')) return -1;
-          if (b.name.includes('Enhanced') || b.name.includes('Premium')) return 1;
-          return 0;
-        });
-        
-        if (enhancedVoices.length > 0) {
-          console.log('🗣️ [ENHANCED] Found Enhanced/Premium voices:', enhancedVoices.map(v => `${v.name} (${v.voiceURI})`));
-        }
-        
-        // PRIORITIZE Enhanced/Premium voices if found
-        console.log('🗣️ [SELECTION] Enhanced voices found:', enhancedVoices.length);
-        if (enhancedVoices.length > 0) {
-          selectedVoice = enhancedVoices[0]; // Use first Enhanced voice found
-          console.log('🎯 [ENHANCED] SELECTED ENHANCED VOICE:', selectedVoice.name);
-          console.log('🎯 [ENHANCED] Voice URI:', selectedVoice.voiceURI);
-          console.log('🎯 [ENHANCED] Is Local:', selectedVoice.localService);
-        } else {
-          console.log('🗣️ [SELECTION] No Siri voices found, trying preferred list...');
-          // Try to find the best LOCAL voice from our preferred list
-          for (const voiceName of preferredVoiceNames) {
-            console.log(`🗣️ [SELECTION] Trying to find: "${voiceName}"`);
-            selectedVoice = localVoices.find(voice => 
-              voice.name === voiceName || voice.name.includes(voiceName)
-            );
-            if (selectedVoice) {
-              console.log('✅ [NATURAL] Found preferred LOCAL voice:', selectedVoice.name);
-              break;
-            } else {
-              console.log(`❌ [SELECTION] "${voiceName}" not found`);
-            }
+        // Try to find the best LOCAL voice from our preferred list
+        for (const voiceName of preferredVoiceNames) {
+          console.log(`🗣️ [SELECTION] Trying to find: "${voiceName}"`);
+          selectedVoice = localVoices.find(voice => 
+            voice.name === voiceName || voice.name.includes(voiceName)
+          );
+          if (selectedVoice) {
+            console.log('✅ [STANDARD] Found preferred LOCAL voice:', selectedVoice.name);
+            console.log('✅ [STANDARD] Voice URI:', selectedVoice.voiceURI);
+            console.log('✅ [STANDARD] Is Local:', selectedVoice.localService);
+            break;
+          } else {
+            console.log(`❌ [SELECTION] "${voiceName}" not found`);
           }
         }
         
