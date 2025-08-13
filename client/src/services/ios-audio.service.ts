@@ -583,22 +583,51 @@ export class IOSAudioService {
         const utterance = new SpeechSynthesisUtterance(text);
         this.currentUtterance = utterance;
         
-        // Configure utterance for better quality
-        utterance.rate = 1.1; // Slightly faster than normal
-        utterance.pitch = 1.0;
-        utterance.volume = 1.0;
+        // Configure utterance for more natural speech
+        utterance.rate = 1.05; // Slightly faster but more natural
+        utterance.pitch = 0.95; // Slightly lower pitch for warmth
+        utterance.volume = 0.9; // Slightly softer volume
         
-        // Try to find a good voice
+        // Try to find the most natural voice available
         if (this.speechSynthesis) {
           const voices = this.speechSynthesis.getVoices();
-          const preferredVoice = voices.find(voice => 
-            voice.lang.startsWith('en') && 
-            (voice.name.includes('Samantha') || voice.name.includes('Alex') || voice.default)
-          );
+          console.log('🗣️ [NATIVE] Available voices:', voices.map(v => `${v.name} (${v.lang})`));
           
-          if (preferredVoice) {
-            utterance.voice = preferredVoice;
-            console.log('🗣️ [NATIVE] Using voice:', preferredVoice.name);
+          // Priority order: Enhanced voices > Premium voices > Standard voices
+          const preferredVoiceNames = [
+            'Samantha (Enhanced)', 'Samantha', // Female, very natural
+            'Alex (Enhanced)', 'Alex',         // Male, natural
+            'Victoria (Enhanced)', 'Victoria', // Female, professional
+            'Daniel (Enhanced)', 'Daniel',     // Male, British
+            'Karen (Enhanced)', 'Karen',       // Female, Australian
+            'Moira (Enhanced)', 'Moira',       // Female, Irish
+            'Tessa (Enhanced)', 'Tessa',       // Female, South African
+            'Veena (Enhanced)', 'Veena'      // Female, Indian
+          ];
+          
+          let selectedVoice = null;
+          
+          // Try to find enhanced/premium voices first
+          for (const voiceName of preferredVoiceNames) {
+            selectedVoice = voices.find(voice => 
+              voice.lang.startsWith('en') && 
+              voice.name.includes(voiceName.split(' ')[0])
+            );
+            if (selectedVoice) {
+              console.log('🗣️ [NATIVE] Found preferred voice:', selectedVoice.name);
+              break;
+            }
+          }
+          
+          // Fallback to any English voice
+          if (!selectedVoice) {
+            selectedVoice = voices.find(voice => voice.lang.startsWith('en'));
+            console.log('🗣️ [NATIVE] Using fallback voice:', selectedVoice?.name || 'default');
+          }
+          
+          if (selectedVoice) {
+            utterance.voice = selectedVoice;
+            console.log('🗣️ [NATIVE] Selected voice:', selectedVoice.name, 'Local:', selectedVoice.localService);
           }
         }
         
