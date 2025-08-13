@@ -14,6 +14,8 @@ export class IOSAudioService {
   private audioActivityInterval: NodeJS.Timeout | null = null;
   private persistentMode = false; // When true, keep-alive won't auto-stop
   private isPreparingAudio = false; // Prevent concurrent TTS calls
+  private lastUserGesture = 0; // Timestamp of last user interaction
+  private gestureAudio: HTMLAudioElement | null = null; // Audio element created during gesture
   
   // Singleton pattern
   public static getInstance(): IOSAudioService {
@@ -48,6 +50,12 @@ export class IOSAudioService {
     const unlockEvents = ['touchstart', 'touchend', 'mousedown', 'keydown', 'click'];
     
     const unlockAudio = () => {
+      console.log('🔓 [GESTURE] User interaction detected - preparing audio immediately');
+      this.lastUserGesture = Date.now();
+      
+      // Create a gesture audio element immediately during user interaction
+      this.createGestureAudio();
+      
       if (this.isUnlocked) return;
       
       console.log('🔓 Unlocking iOS audio on user interaction');
@@ -63,6 +71,32 @@ export class IOSAudioService {
     unlockEvents.forEach(event => {
       document.addEventListener(event, unlockAudio, { capture: true, passive: true });
     });
+  }
+  
+  // Create an audio element during user gesture for immediate playback capability
+  private createGestureAudio(): void {
+    if (this.gestureAudio) {
+      return; // Already have one
+    }
+    
+    try {
+      // Create a silent audio element during the gesture
+      const silentData = this.createSilentAudioDataURL('short');
+      this.gestureAudio = new Audio(silentData);
+      this.gestureAudio.volume = 0.001;
+      this.gestureAudio.preload = 'auto';
+      
+      // Play it immediately to establish the gesture connection
+      this.gestureAudio.play().then(() => {
+        console.log('🔓 [GESTURE] Gesture audio established');
+        // Pause it immediately - we just needed to establish the connection
+        this.gestureAudio?.pause();
+      }).catch(err => {
+        console.error('🔓 [GESTURE] Failed to establish gesture audio:', err);
+      });
+    } catch (error) {
+      console.error('🔓 [GESTURE] Failed to create gesture audio:', error);
+    }
   }
   
   // Unlock audio context for iOS
@@ -571,8 +605,33 @@ export class IOSAudioService {
       const ttsCompleteTime = performance.now();
       console.log(`🔊 [SPEED] TTS API completed in ${(ttsCompleteTime - startTime).toFixed(0)}ms`);
       
-      // Create audio element quickly
-      const audio = await this.createAudioElement(audioBuffer);
+      // Try to reuse gesture audio element if it's recent enough (within 30 seconds)
+      const gestureAge = Date.now() - this.lastUserGesture;
+      let audio: HTMLAudioElement;
+      
+      if (this.gestureAudio && gestureAge < 30000 && this.isIOSDevice()) {
+        console.log(`🔓 [GESTURE] Reusing gesture audio (${gestureAge}ms old)`);
+        // Replace the audio source with our TTS data
+        const audioBlob = new Blob([audioBuffer], { type: 'audio/mpeg' });
+        const audioUrl = URL.createObjectURL(audioBlob);
+        
+        // Clean up old URL if exists
+        if (this.gestureAudio.src) {
+          URL.revokeObjectURL(this.gestureAudio.src);
+        }
+        
+        this.gestureAudio.src = audioUrl;
+        this.gestureAudio.load();
+        this.gestureAudio.volume = 1.0; // Full volume for actual content
+        audio = this.gestureAudio;
+        
+        // Don't null gestureAudio yet - keep it for next use
+      } else {
+        // Create new audio element
+        console.log(`🔊 Creating new audio element (gesture age: ${gestureAge}ms)`);
+        audio = await this.createAudioElement(audioBuffer);
+      }
+      
       this.currentAudio = audio;
       this.isSpeaking = true;
       
@@ -613,16 +672,58 @@ export class IOSAudioService {
         onError?.(new Error('Audio playback failed'));
       };
       
-      // Try to play the audio IMMEDIATELY - no extra checks
+      // Try to play the audio IMMEDIATELY with retry logic
       try {
-        console.log('🔊 Playing audio immediately...');
+        console.log('🔊 [PLAY] Attempting immediate playback...');
         const playPromise = audio.play();
         
         if (playPromise !== undefined) {
           await playPromise;
         }
+        console.log('🔊 [PLAY] Playback started successfully');
       } catch (playError: any) {
-        console.error('🔊 Audio play failed:', playError);
+        console.error('🔊 [PLAY] First attempt failed:', playError.message);
+        
+        // EMERGENCY RETRY LOGIC for iOS
+        if (this.isIOSDevice() && playError.name === 'NotAllowedError') {
+          console.log('🔊 [RETRY] Attempting emergency retry with fresh gesture audio...');
+          
+          try {
+            // Force create a new gesture audio and try again
+            console.log('🔊 [RETRY] Creating emergency gesture audio...');
+            const gestureAudio = new Audio(this.createSilentAudioDataURL('short'));
+            gestureAudio.volume = 0.001;
+            gestureAudio.preload = 'auto';
+            
+            // Play it immediately to establish the gesture connection
+            await gestureAudio.play();
+            gestureAudio.pause(); // Pause the silent audio
+            
+            // Now load our actual TTS content
+            const audioBlob = new Blob([audioBuffer], { type: 'audio/mpeg' });
+            const audioUrl = URL.createObjectURL(audioBlob);
+            gestureAudio.src = audioUrl;
+            gestureAudio.load();
+            gestureAudio.volume = 1.0;
+            
+            // Try to play the TTS
+            const retryPromise = gestureAudio.play();
+            if (retryPromise) {
+              await retryPromise;
+              console.log('🔊 [RETRY] Emergency retry successful!');
+              
+              // Update current audio reference and gesture audio
+              this.currentAudio = gestureAudio;
+              this.gestureAudio = gestureAudio;
+              return; // Success!
+            }
+          } catch (retryError) {
+            console.error('🔊 [RETRY] Emergency retry also failed:', retryError);
+          }
+        }
+        
+        // If we get here, both attempts failed
+        console.error('🔊 All playback attempts failed:', playError);
         console.error('🔊 Error details:', {
           name: playError.name,
           message: playError.message,
@@ -704,6 +805,19 @@ export class IOSAudioService {
     });
     this.keepAliveAudios = [];
     
+    // Clean up gesture audio
+    if (this.gestureAudio) {
+      try {
+        this.gestureAudio.pause();
+        if (this.gestureAudio.src) {
+          URL.revokeObjectURL(this.gestureAudio.src);
+        }
+      } catch (e) {
+        console.error('Error cleaning up gesture audio:', e);
+      }
+      this.gestureAudio = null;
+    }
+    
     if (this.audioContext) {
       this.audioContext.close();
       this.audioContext = null;
@@ -713,6 +827,8 @@ export class IOSAudioService {
     this.keepAliveActive = false;
     this.currentKeepAliveIndex = 0;
     this.persistentMode = false;
+    this.isPreparingAudio = false;
+    this.lastUserGesture = 0;
   }
 }
 
