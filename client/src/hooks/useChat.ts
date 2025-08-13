@@ -19,7 +19,7 @@ interface Message {
 
 interface UseChatProps {
   // Enhanced props (from first hook)
-  speakText?: (text: string) => Promise<any>;
+  speakText?: ((text: string, options?: { voice?: string; isWaitingForAPI?: boolean }) => Promise<any>) | ((text: string, voice?: any, speed?: number) => Promise<any>);
   unlockAudio?: () => Promise<void>;
   selectedVoice?: string;
   
@@ -232,20 +232,34 @@ export const useChat = ({
         // Silently fail
       }
 
+      // Start keep-alive FIRST for iOS to maintain audio context
+      console.log('🎯 [CHAT] Starting keep-alive before filler/API call');
+      iosAudioService.startKeepAlive();
+
       // Get and play filler response immediately for better UX
       let fillerAudioPromise: Promise<any> | null = null;
       const fillerResponse = IntentDetectorService.getFillerResponse(text);
       if (fillerResponse && speakText) {
-        fillerAudioPromise = speakText(fillerResponse).catch(error => {
-          return null;
-        });
+        console.log('🎯 [CHAT] Playing filler response:', fillerResponse);
+        // Try to pass flag to NOT stop keep-alive during filler
+        // Handle both function signatures
+        try {
+          // Try new signature first
+          fillerAudioPromise = (speakText as any)(fillerResponse, { isWaitingForAPI: true }).catch((error: any) => {
+            console.error('🎯 [CHAT] Filler response failed:', error);
+            return null;
+          });
+        } catch (e) {
+          // Fall back to old signature
+          fillerAudioPromise = speakText(fillerResponse).catch((error: any) => {
+            console.error('🎯 [CHAT] Filler response failed:', error);
+            return null;
+          });
+        }
       }
 
       // Show thinking dots
       setIsBotThinking(true);
-
-      // Start keep-alive for iOS during API call
-      iosAudioService.startKeepAlive();
 
       // Create new abort controller for this request
       abortControllerRef.current = new AbortController();
@@ -270,6 +284,7 @@ export const useChat = ({
       const data = await response.json();
       
       // Stop keep-alive once we have the response
+      console.log('🎯 [CHAT] Stopping keep-alive after API response');
       iosAudioService.stopKeepAlive();
       
       if (!data.success || !data.response) {
@@ -330,6 +345,7 @@ export const useChat = ({
 
     } catch (error: any) {
       // Always stop keep-alive on error
+      console.log('🎯 [CHAT] Stopping keep-alive due to error');
       iosAudioService.stopKeepAlive();
       
       if (error.name === 'AbortError') {

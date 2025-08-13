@@ -34,9 +34,9 @@ export default function Home() {
 
   // Add debug log function
   const addDebugLog = useCallback((message: string) => {
-    const timestamp = new Date().toLocaleTimeString()
+    const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 })
     const logEntry = `${timestamp}: ${message}`
-    setDebugLogs(prev => [...prev.slice(-9), logEntry]) // Keep last 10 logs
+    setDebugLogs(prev => [...prev.slice(-99), logEntry]) // Keep last 100 logs
   }, [])
 
   // Chat storage hook
@@ -717,20 +717,23 @@ export default function Home() {
 
           {/* Debug Log Panel */}
           {showDebugLogs && (
-            <div className="mt-6 bg-black bg-opacity-80 border border-yellow-500 rounded-lg p-4 max-w-4xl">
-              <div className="flex justify-between items-center mb-2">
-                <h3 className="text-yellow-300 font-bold text-sm">TTS Debug Logs</h3>
-                <button
-                  onClick={() => {
-                    setDebugLogs([])
-                    addDebugLog('Debug logs cleared')
-                  }}
-                  className="text-red-300 text-xs underline"
-                >
-                  Clear
-                </button>
+            <div className="mt-6 bg-black bg-opacity-90 border-2 border-yellow-500 rounded-lg p-4 max-w-5xl">
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="text-yellow-300 font-bold text-base">TTS/Audio Debug Logs ({debugLogs.length}/100)</h3>
+                <div className="flex gap-2">
+                  <span className="text-gray-400 text-xs">Auto-scroll | iOS: {isIOS ? '✅' : '❌'}</span>
+                  <button
+                    onClick={() => {
+                      setDebugLogs([])
+                      addDebugLog('Debug logs cleared')
+                    }}
+                    className="text-red-300 text-xs underline hover:text-red-200"
+                  >
+                    Clear All
+                  </button>
+                </div>
               </div>
-              <div className="text-xs text-white font-mono space-y-1 max-h-60 overflow-y-auto">
+              <div className="text-xs text-white font-mono space-y-0.5 max-h-96 overflow-y-auto bg-gray-900 bg-opacity-50 p-3 rounded border border-gray-700" style={{ height: '400px' }}>
                 {debugLogs.length === 0 ? (
                   <div className="text-gray-400">No logs yet. Try asking Harper a question or testing audio.</div>
                 ) : (

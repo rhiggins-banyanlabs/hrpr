@@ -102,11 +102,34 @@ export class IOSAudioService {
   
   // Start keep-alive to prevent iOS audio suspension
   public startKeepAlive(): void {
-    if (!this.isIOSDevice() || !this.audioContext || this.keepAliveInterval) {
+    console.log('🔊 [KEEP-ALIVE] Attempting to start keep-alive...');
+    console.log('🔊 [KEEP-ALIVE] Is iOS:', this.isIOSDevice());
+    console.log('🔊 [KEEP-ALIVE] Has audio context:', !!this.audioContext);
+    console.log('🔊 [KEEP-ALIVE] Audio context state:', this.audioContext?.state);
+    console.log('🔊 [KEEP-ALIVE] Already running:', !!this.keepAliveInterval);
+    
+    if (!this.isIOSDevice()) {
+      console.log('🔊 [KEEP-ALIVE] Not iOS device, skipping');
       return;
     }
     
-    console.log('🔊 Starting iOS audio keep-alive');
+    if (!this.audioContext) {
+      console.log('🔊 [KEEP-ALIVE] No audio context available, creating one');
+      try {
+        this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        console.log('🔊 [KEEP-ALIVE] Created new audio context, state:', this.audioContext.state);
+      } catch (error) {
+        console.error('🔊 [KEEP-ALIVE] Failed to create audio context:', error);
+        return;
+      }
+    }
+    
+    if (this.keepAliveInterval) {
+      console.log('🔊 [KEEP-ALIVE] Already running, skipping');
+      return;
+    }
+    
+    console.log('🔊 [KEEP-ALIVE] Starting iOS audio keep-alive');
     
     // Create a silent oscillator
     try {
@@ -122,11 +145,22 @@ export class IOSAudioService {
       
       // Also ping the context periodically
       this.keepAliveInterval = setInterval(() => {
-        if (this.audioContext && this.audioContext.state === 'suspended') {
-          console.log('🔊 Resuming suspended audio context');
-          this.audioContext.resume();
+        if (this.audioContext) {
+          const state = this.audioContext.state;
+          console.log('🔊 [KEEP-ALIVE] Ping - Audio context state:', state);
+          if (state === 'suspended' || state === 'interrupted') {
+            console.log('🔊 [KEEP-ALIVE] Context suspended/interrupted, resuming...');
+            this.audioContext.resume().then(() => {
+              console.log('🔊 [KEEP-ALIVE] Context resumed successfully');
+            }).catch(err => {
+              console.error('🔊 [KEEP-ALIVE] Failed to resume context:', err);
+            });
+          }
+        } else {
+          console.log('🔊 [KEEP-ALIVE] Warning: Audio context lost during keep-alive');
         }
       }, 1000);
+      console.log('🔊 [KEEP-ALIVE] Keep-alive started successfully');
     } catch (error) {
       console.error('🔊 Failed to start keep-alive:', error);
     }
@@ -134,7 +168,9 @@ export class IOSAudioService {
   
   // Stop keep-alive
   public stopKeepAlive(): void {
-    console.log('🔊 Stopping iOS audio keep-alive');
+    console.log('🔊 [KEEP-ALIVE] Stopping iOS audio keep-alive');
+    console.log('🔊 [KEEP-ALIVE] Has oscillator:', !!this.silentOscillator);
+    console.log('🔊 [KEEP-ALIVE] Has interval:', !!this.keepAliveInterval);
     
     if (this.silentOscillator) {
       try {
@@ -270,8 +306,12 @@ export class IOSAudioService {
       this.stopSpeaking();
       
       // Stop keep-alive if it's running (we're about to play real audio)
+      // UNLESS we're waiting for API (filler response)
       if (!isWaitingForAPI) {
+        console.log('🔊 Not waiting for API, stopping keep-alive before playback');
         this.stopKeepAlive();
+      } else {
+        console.log('🔊 Waiting for API, keeping keep-alive running during filler audio');
       }
       
       // For iOS, ensure audio context is ready and reactivate if needed

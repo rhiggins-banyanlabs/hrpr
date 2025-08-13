@@ -108,7 +108,10 @@ export const useEnhancedOptimizedVoice = () => {
   }, []);
   
   // Speak text with platform-specific handling
-  const speakText = useCallback(async (text: string, voice: string = 'nova'): Promise<void> => {
+  const speakText = useCallback(async (text: string, voiceOrOptions?: string | { voice?: string; isWaitingForAPI?: boolean }): Promise<void> => {
+    // Handle both old signature (voice as string) and new signature (options object)
+    const voice = typeof voiceOrOptions === 'string' ? voiceOrOptions : (voiceOrOptions?.voice || 'nova');
+    const isWaitingForAPI = typeof voiceOrOptions === 'object' ? voiceOrOptions.isWaitingForAPI : false;
     try {
       console.log(`🔊 Speaking text (iOS: ${isIOSRef.current}):`, text.substring(0, 100));
       console.log('🔊 Full iOS detection check:', {
@@ -142,7 +145,8 @@ export const useEnhancedOptimizedVoice = () => {
       
       // ALWAYS use iOS-compatible audio service for iOS devices (includes FFmpeg conversion)
       if (isCurrentlyIOS) {
-        console.log('🍎 Using iOS audio service with FFmpeg conversion for ALL TTS audio');
+        console.log('🍎 Using iOS audio service for TTS audio');
+        console.log('🍎 Is waiting for API:', isWaitingForAPI);
         return new Promise<void>((resolve, reject) => {
           // Set a timeout to prevent getting stuck in speaking state
           const timeoutId = setTimeout(() => {
@@ -154,6 +158,7 @@ export const useEnhancedOptimizedVoice = () => {
           
           iosAudioService.speakText(text, {
             voice,
+            isWaitingForAPI,
             onStart: () => {
               console.log('🔊 iOS TTS started (with FFmpeg conversion)');
               setIsSpeaking(true);
