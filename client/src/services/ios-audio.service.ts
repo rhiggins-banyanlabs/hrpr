@@ -564,10 +564,11 @@ export class IOSAudioService {
     
     const voices = this.speechSynthesis.getVoices();
     console.log('🗣️ [DEBUG] ===== ALL AVAILABLE iOS VOICES =====');
+    console.log(`🗣️ [DEBUG] Total voices found: ${voices.length}`);
     
-    voices.forEach(voice => {
+    voices.forEach((voice, index) => {
       if (voice.lang.startsWith('en')) {
-        console.log(`🗣️ [DEBUG] ${voice.name}`);
+        console.log(`🗣️ [DEBUG] [${index}] "${voice.name}"`);
         console.log(`   - Language: ${voice.lang}`);
         console.log(`   - Local: ${voice.localService}`);
         console.log(`   - Default: ${voice.default}`);
@@ -576,14 +577,46 @@ export class IOSAudioService {
       }
     });
     
-    // Specifically look for the most reliable voices
+    // Look specifically for Enhanced/Premium voices
+    const enhancedVoices = voices.filter(v => 
+      v.name.includes('Enhanced') ||
+      v.name.includes('(Enhanced)') ||
+      v.name.toLowerCase().includes('premium') ||
+      v.voiceURI.toLowerCase().includes('enhanced') ||
+      v.voiceURI.toLowerCase().includes('premium')
+    );
+    
+    console.log('🗣️ [DEBUG] ===== ENHANCED/PREMIUM VOICES SEARCH =====');
+    if (enhancedVoices.length > 0) {
+      console.log(`🎯 Found ${enhancedVoices.length} Enhanced/Premium voice(s):`);
+      enhancedVoices.forEach(voice => {
+        console.log(`🎤 ENHANCED: "${voice.name}" - URI: ${voice.voiceURI} - Local: ${voice.localService}`);
+      });
+    } else {
+      console.log('❌ No Enhanced voices found in available voices');
+      console.log('🔍 Searching for voices containing "Samantha", "neural", "premium":');
+      
+      const alternativeVoices = voices.filter(v =>
+        v.name.includes('Samantha') ||
+        v.name.toLowerCase().includes('neural') ||
+        v.name.toLowerCase().includes('premium') ||
+        v.voiceURI.toLowerCase().includes('neural') ||
+        v.voiceURI.toLowerCase().includes('premium')
+      );
+      
+      alternativeVoices.forEach(voice => {
+        console.log(`🔍 ALTERNATIVE: "${voice.name}" - URI: ${voice.voiceURI}`);
+      });
+    }
+    
+    // Show the most reliable fallback voices
     const reliable = voices.filter(v => 
       v.lang.startsWith('en') && 
       v.localService !== false &&
       (v.name === 'Samantha' || v.name === 'Alex' || v.name === 'Victoria')
     );
     
-    console.log('🗣️ [DEBUG] ===== MOST RELIABLE VOICES =====');
+    console.log('🗣️ [DEBUG] ===== MOST RELIABLE FALLBACK VOICES =====');
     reliable.forEach(voice => {
       console.log(`✅ ${voice.name} (${voice.lang}) - Local: ${voice.localService}`);
     });
@@ -796,25 +829,26 @@ export class IOSAudioService {
       if (this.speechSynthesis) {
         const voices = this.speechSynthesis.getVoices();
         
-        // iOS Native Voices - prioritize Siri and highest quality voices
+        // iOS Native Voices - prioritize Enhanced/Premium downloaded voices
         const preferredVoiceNames = [
-          // Tier 0: Siri voices (highest quality neural voices)
-          'Siri Voice 4',  // The actual Siri voice name
-          'Siri Voice 3',  // Alternative Siri voices
-          'Siri Voice 2',
-          'Siri Voice 1',
-          'Siri Female',   // Generic Siri voice names
-          'Siri Male',     
-          'Nicky',         // Often Siri-related voice
-          'Fiona',         // High-quality neural voice
-          'Evan',          // High-quality male neural voice
+          // Tier 0: Enhanced/Premium voices (highest quality downloaded voices)
+          'Samantha (Enhanced)',  // Enhanced version - highest quality
+          'Samantha Enhanced',    // Alternative naming
+          'Alex (Enhanced)',      // Enhanced male voice
+          'Alex Enhanced',        
+          'Victoria (Enhanced)',  // Enhanced professional voice
+          'Victoria Enhanced',
+          'Allison (Enhanced)',   // Enhanced warm voice
+          'Allison Enhanced',
+          'Ava (Enhanced)',       // Enhanced modern voice
+          'Ava Enhanced',
           
-          // Tier 1: Premium iOS neural voices (closest to Siri quality)
+          // Tier 1: Standard Premium iOS voices
           'Samantha',      // Female US - most natural iOS voice
           'Alex',          // Male US - classic iOS voice, very reliable
           'Victoria',      // Female US - professional, clear
-          'Allison',       // Female US - warm, natural (often neural)
-          'Ava',           // Female US - modern, clear (often neural)
+          'Allison',       // Female US - warm, natural
+          'Ava',           // Female US - modern, clear
           
           // Tier 2: Standard iOS voices (local, reliable)
           'Susan',         // Female US - classic
@@ -839,41 +873,49 @@ export class IOSAudioService {
         
         console.log('🗣️ [NATURAL] Local voices available:', localVoices.map(v => `${v.name} (local: ${v.localService})`));
         
-        // Look for Siri voices specifically (prioritize "Siri Voice 4")
-        const possibleSiriVoices = localVoices.filter(voice => 
-          voice.name.includes('Siri Voice') ||
-          voice.name.toLowerCase().includes('siri') ||
-          voice.voiceURI.toLowerCase().includes('siri') ||
+        // Look for Enhanced/Premium voices specifically
+        const enhancedVoices = localVoices.filter(voice => 
+          voice.name.includes('Enhanced') ||
+          voice.name.includes('(Enhanced)') ||
+          voice.name.toLowerCase().includes('premium') ||
           voice.name.toLowerCase().includes('neural') ||
-          voice.name.toLowerCase().includes('premium')
+          voice.voiceURI.toLowerCase().includes('enhanced') ||
+          voice.voiceURI.toLowerCase().includes('premium')
         );
         
-        // Sort to prioritize "Siri Voice 4" first
-        possibleSiriVoices.sort((a, b) => {
-          if (a.name === 'Siri Voice 4') return -1;
-          if (b.name === 'Siri Voice 4') return 1;
-          if (a.name.includes('Siri Voice')) return -1;
-          if (b.name.includes('Siri Voice')) return 1;
+        // Sort to prioritize "Samantha Enhanced" first
+        enhancedVoices.sort((a, b) => {
+          if (a.name.includes('Samantha') && a.name.includes('Enhanced')) return -1;
+          if (b.name.includes('Samantha') && b.name.includes('Enhanced')) return 1;
+          if (a.name.includes('Enhanced')) return -1;
+          if (b.name.includes('Enhanced')) return 1;
           return 0;
         });
         
-        if (possibleSiriVoices.length > 0) {
-          console.log('🗣️ [SIRI] Found potential Siri/Neural voices:', possibleSiriVoices.map(v => `${v.name} (${v.voiceURI})`));
+        if (enhancedVoices.length > 0) {
+          console.log('🗣️ [ENHANCED] Found Enhanced/Premium voices:', enhancedVoices.map(v => `${v.name} (${v.voiceURI})`));
         }
         
-        // PRIORITIZE Siri/Neural voices if found
-        if (possibleSiriVoices.length > 0) {
-          selectedVoice = possibleSiriVoices[0]; // Use first Siri/Neural voice found
-          console.log('🗣️ [SIRI] Using Siri/Neural voice:', selectedVoice.name, selectedVoice.voiceURI);
+        // PRIORITIZE Enhanced/Premium voices if found
+        console.log('🗣️ [SELECTION] Enhanced voices found:', enhancedVoices.length);
+        if (enhancedVoices.length > 0) {
+          selectedVoice = enhancedVoices[0]; // Use first Enhanced voice found
+          console.log('🎯 [ENHANCED] SELECTED ENHANCED VOICE:', selectedVoice.name);
+          console.log('🎯 [ENHANCED] Voice URI:', selectedVoice.voiceURI);
+          console.log('🎯 [ENHANCED] Is Local:', selectedVoice.localService);
         } else {
+          console.log('🗣️ [SELECTION] No Siri voices found, trying preferred list...');
           // Try to find the best LOCAL voice from our preferred list
           for (const voiceName of preferredVoiceNames) {
+            console.log(`🗣️ [SELECTION] Trying to find: "${voiceName}"`);
             selectedVoice = localVoices.find(voice => 
               voice.name === voiceName || voice.name.includes(voiceName)
             );
             if (selectedVoice) {
-              console.log('🗣️ [NATURAL] Found preferred LOCAL voice:', selectedVoice.name);
+              console.log('✅ [NATURAL] Found preferred LOCAL voice:', selectedVoice.name);
               break;
+            } else {
+              console.log(`❌ [SELECTION] "${voiceName}" not found`);
             }
           }
         }
