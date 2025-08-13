@@ -49,10 +49,13 @@ export default function Home() {
     console.log('🔊 Voice hook isSpeaking changed:', isSpeaking)
     setIsHarperSpeaking(isSpeaking)
     
-    // Automatically stop voice input when Harper starts speaking
-    if (isSpeaking && isVoiceInputActive) {
-      console.log('🔊 Harper started speaking, stopping voice input')
-      setIsVoiceInputActive(false)
+    // When Harper starts speaking, stop thinking state and voice input
+    if (isSpeaking) {
+      setIsThinking(false) // Stop thinking when Harper starts speaking
+      if (isVoiceInputActive) {
+        console.log('🔊 Harper started speaking, stopping voice input')
+        setIsVoiceInputActive(false)
+      }
     }
   }, [isSpeaking, isVoiceInputActive])
   
@@ -159,6 +162,7 @@ export default function Home() {
     sessionId: currentSession?.id || null,
     speakText,
     onSpeakingChange: handleSpeakingChange,
+    onThinkingChange: setIsThinking,
     onSessionReset: handleSessionReset
   })
 
@@ -235,6 +239,7 @@ export default function Home() {
       // Initial activation - unlock audio, request permission and play intro
       console.log('🎤 Initial Harper activation')
       setIsHarperActivated(true)
+      setIsThinking(true) // Show thinking state while setting up
       
       try {
         // FIRST: Unlock audio for iOS (must be in user interaction context)
@@ -246,6 +251,7 @@ export default function Home() {
             setIOSHelperType('audio')
             setShowIOSHelper(true)
             setIsHarperActivated(false)
+            setIsThinking(false)
             return
           }
           console.log('🔓 Audio unlocked successfully')
@@ -259,6 +265,7 @@ export default function Home() {
             setIOSHelperType('microphone')
             setShowIOSHelper(true)
             setIsHarperActivated(false)
+            setIsThinking(false)
             return
           }
           console.log('🎤 Microphone permission granted')
@@ -299,13 +306,15 @@ export default function Home() {
           }
         }
         
-        // Don't start recording on first tap - just play intro
+        // Stop thinking state when intro starts playing
+        setIsThinking(false)
         console.log('🎤 Intro complete, ready for questions')
         
       } catch (error) {
         console.error('🎤 Failed during activation:', error)
         handleVoiceError(error instanceof Error ? error.message : 'Failed to activate Harper')
         setIsHarperActivated(false)
+        setIsThinking(false)
       }
     } else {
       // Already activated - ensure audio is still unlocked, then start recording

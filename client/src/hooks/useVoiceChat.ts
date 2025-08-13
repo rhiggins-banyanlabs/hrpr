@@ -15,6 +15,7 @@ interface UseVoiceChatProps {
   sessionId: string | null;
   speakText?: (text: string) => Promise<any>;
   onSpeakingChange?: (isSpeaking: boolean) => void;
+  onThinkingChange?: (isThinking: boolean) => void;
   onSessionReset?: () => void;
 }
 
@@ -22,6 +23,7 @@ export const useVoiceChat = ({
   sessionId,
   speakText,
   onSpeakingChange,
+  onThinkingChange,
   onSessionReset
 }: UseVoiceChatProps) => {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -52,6 +54,13 @@ export const useVoiceChat = ({
       onSpeakingChange(isSpeaking);
     }
   }, [isSpeaking, onSpeakingChange]);
+
+  // Notify parent of thinking/processing state changes
+  useEffect(() => {
+    if (onThinkingChange) {
+      onThinkingChange(isProcessing);
+    }
+  }, [isProcessing, onThinkingChange]);
 
   // Categorize questions for analytics
   const categorizeQuestion = (question: string): string => {

@@ -296,7 +296,7 @@ const VoiceOrb: React.FC<VoiceOrbProps> = ({
           <div className="text-orange-300 animate-pulse">Processing...</div>
         ) : isListeningForWakeWord ? (
           <div className="text-blue-300">Listening for &quot;Hey Harper&quot;</div>
-        ) : isHarperActivated ? (
+        ) : isHarperActivated && !isThinkingState ? (
           <div className="text-indigo-200">Click to speak</div>
         ) : (
           <div className="text-gray-400"></div>
