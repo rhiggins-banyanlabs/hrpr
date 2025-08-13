@@ -12,6 +12,7 @@ export class IOSAudioService {
   private keepAliveActive = false;
   private currentKeepAliveIndex = 0;
   private audioActivityInterval: NodeJS.Timeout | null = null;
+  private persistentMode = false; // When true, keep-alive won't auto-stop
   
   // Singleton pattern
   public static getInstance(): IOSAudioService {
@@ -158,11 +159,36 @@ export class IOSAudioService {
     }
   }
 
+  // Enable persistent mode - keep-alive won't auto-stop until explicitly disabled
+  public enablePersistentMode(): void {
+    console.log('🔊 [KEEP-ALIVE] Enabling persistent mode - will run until explicitly stopped');
+    this.persistentMode = true;
+    this.startKeepAlive();
+  }
+  
+  // Disable persistent mode 
+  public disablePersistentMode(): void {
+    console.log('🔊 [KEEP-ALIVE] Disabling persistent mode');
+    this.persistentMode = false;
+  }
+  
+  // End conversation - stops keep-alive completely
+  public endConversation(): void {
+    console.log('🔊 [KEEP-ALIVE] Ending conversation - disabling persistent mode and stopping keep-alive');
+    this.persistentMode = false;
+    this.stopKeepAlive(true); // Force stop
+  }
+  
   // Start keep-alive to prevent iOS audio suspension
-  public startKeepAlive(): void {
+  public startKeepAlive(forcePersistent: boolean = false): void {
+    if (forcePersistent) {
+      this.persistentMode = true;
+    }
+    
     console.log('🔊 [KEEP-ALIVE] Starting ULTRA-AGGRESSIVE keep-alive for 15+ second API calls');
     console.log('🔊 [KEEP-ALIVE] Is iOS:', this.isIOSDevice());
     console.log('🔊 [KEEP-ALIVE] Already active:', this.keepAliveActive);
+    console.log('🔊 [KEEP-ALIVE] Persistent mode:', this.persistentMode);
     
     if (!this.isIOSDevice()) {
       console.log('🔊 [KEEP-ALIVE] Not iOS device, skipping');
@@ -340,11 +366,19 @@ export class IOSAudioService {
     console.log('  - Audio rotation every 2s');
   }
   
-  // Stop keep-alive
-  public stopKeepAlive(): void {
+  // Stop keep-alive (unless in persistent mode)
+  public stopKeepAlive(force: boolean = false): void {
     console.log('🔊 [KEEP-ALIVE] Stopping ULTRA-AGGRESSIVE keep-alive');
     console.log('🔊 [KEEP-ALIVE] Has audio elements:', this.keepAliveAudios.length);
     console.log('🔊 [KEEP-ALIVE] Has intervals:', !!this.keepAliveInterval, !!this.audioActivityInterval);
+    console.log('🔊 [KEEP-ALIVE] Persistent mode:', this.persistentMode);
+    console.log('🔊 [KEEP-ALIVE] Force stop:', force);
+    
+    // Don't stop if in persistent mode unless forced
+    if (this.persistentMode && !force) {
+      console.log('🔊 [KEEP-ALIVE] In persistent mode, ignoring stop request (use force=true to override)');
+      return;
+    }
     
     this.keepAliveActive = false;
     
@@ -678,7 +712,7 @@ export class IOSAudioService {
   // Clean up resources
   public cleanup(): void {
     this.stopSpeaking();
-    this.stopKeepAlive();
+    this.stopKeepAlive(true); // Force stop even in persistent mode
     
     // Clean up all keep-alive audio elements
     this.keepAliveAudios.forEach((audio, index) => {
@@ -699,6 +733,7 @@ export class IOSAudioService {
     this.isUnlocked = false;
     this.keepAliveActive = false;
     this.currentKeepAliveIndex = 0;
+    this.persistentMode = false;
   }
 }
 

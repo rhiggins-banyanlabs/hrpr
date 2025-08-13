@@ -232,9 +232,9 @@ export const useChat = ({
         // Silently fail
       }
 
-      // Ensure keep-alive is running (should already be from unlock, but double-check)
-      console.log('🎯 [CHAT] Ensuring keep-alive is active for API call');
-      iosAudioService.startKeepAlive();
+      // Ensure keep-alive is running in persistent mode for long conversations
+      console.log('🎯 [CHAT] Enabling persistent keep-alive for conversation flow');
+      iosAudioService.startKeepAlive(true); // Force persistent mode
 
       // Get and play filler response immediately for better UX
       let fillerAudioPromise: Promise<any> | null = null;
@@ -283,9 +283,8 @@ export const useChat = ({
 
       const data = await response.json();
       
-      // Stop keep-alive once we have the response
-      console.log('🎯 [CHAT] Stopping keep-alive after API response');
-      iosAudioService.stopKeepAlive();
+      // DON'T stop keep-alive yet - we still need to play TTS and handle feedback
+      console.log('🎯 [CHAT] API response received, keeping keep-alive running for TTS/feedback');
       
       if (!data.success || !data.response) {
         throw new Error(data.error || 'No response from OpenAI');
@@ -342,6 +341,9 @@ export const useChat = ({
 
       // Wait for both TTS and database save to complete
       await Promise.all([ttsPromise, dbPromise]);
+      
+      // Don't stop keep-alive here - let it persist for feedback sessions and follow-ups
+      console.log('🎯 [CHAT] TTS and DB save complete, keeping keep-alive running for potential feedback/follow-ups');
 
     } catch (error: any) {
       // Always stop keep-alive on error

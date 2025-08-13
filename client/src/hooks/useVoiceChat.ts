@@ -9,6 +9,7 @@ import { NameExtractorService } from '@/services/name-extractor.service';
 import { createSilenceDetector, SilenceDetectionService } from '@/services/silence-detection.service';
 import { FeedbackState } from '@/types/feedback.types';
 import { latencyTracker } from '@/services/latency-tracker.service';
+import { iosAudioService } from '@/services/ios-audio.service';
 // import { StreamingTTSService } from '@/services/streaming-tts.service'; // Removed for performance
 
 interface UseVoiceChatProps {
@@ -84,6 +85,10 @@ export const useVoiceChat = ({
     console.log('🎤 ===== PROCESS VOICE QUERY STARTED =====');
     console.log('🎤 Query text:', text);
     console.log('🎤 Session ID:', activeSessionId);
+    
+    // Ensure keep-alive is running in persistent mode for the entire conversation
+    console.log('🎤 [VOICE-CHAT] Enabling persistent keep-alive for voice conversation');
+    iosAudioService.startKeepAlive(true); // Force persistent mode
     
     // Cancel any pending feedback flow timer when user speaks
     if (feedbackTimeoutRef.current) {
@@ -673,6 +678,10 @@ export const useVoiceChat = ({
         return;
       }
       
+      // Ensure keep-alive is running during feedback TTS
+      console.log('🎤 [VOICE-CHAT] Ensuring keep-alive for feedback TTS');
+      iosAudioService.startKeepAlive();
+      
       try {
         const audioResult = await speakText(message);
         
@@ -724,7 +733,12 @@ export const useVoiceChat = ({
         break;
         
       case FeedbackState.THANKING_USER:
-        console.log('🙏 Thanking user - will reset session after message');
+        console.log('🙏 Thanking user - ending conversation and will reset session after message');
+        
+        // End conversation and stop keep-alive since we're done
+        console.log('🎤 [VOICE-CHAT] Conversation complete, ending keep-alive');
+        iosAudioService.endConversation();
+        
         // After thanking message is spoken, automatically trigger reset
         setTimeout(() => {
           console.log('🔄 Auto-triggering session reset after thank you message');
